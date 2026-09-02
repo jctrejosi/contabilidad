@@ -18,6 +18,7 @@ import Reprocesos from './pages/Reprocesos';
 import Cierres from './pages/Cierres';
 import Consolidacion from './pages/Consolidacion';
 import PlaceholderPage from './pages/PlaceholderPage';
+import ParametrosOperacion from './pages/ParametrosOperacion';
 
 const URGENTE_ALERTS = ALERTAS.filter(a => a.tipo === 'error').length;
 
@@ -202,14 +203,7 @@ export default function App() {
         return <TercerosPage />;
 
       case 'config/parametros':
-        return (
-          <PlaceholderPage
-            title="Parámetros de operación"
-            description="Configuración general de la contabilidad: período activo, controles y preferencias"
-            icon="⚙"
-            features={['Compañía y período activo', 'Controles de validación', 'Alertas y notificaciones', 'Decimales y formato']}
-          />
-        );
+        return <ParametrosOperacion onExit={() => navigate('dashboard')} />;
 
       case 'config/comprobantes':
         return <PlaceholderPage title="Comprobantes" description="Tipos y consecutivos de comprobante contable" icon="📋" features={['CRUD de comprobantes', 'Consecutivos por tipo', 'Control de estados']} />;
