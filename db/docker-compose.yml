@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:18
+    container_name: contabdsi-db
+    environment:
+      POSTGRES_USER: contabdsi
+      POSTGRES_PASSWORD: contabdsi
+      POSTGRES_DB: contabdsi
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema:/docker-entrypoint-initdb.d/schema:ro
+      - ./funciones.sql:/docker-entrypoint-initdb.d/20_funciones.sql:ro
+      - ./seed.sql:/docker-entrypoint-initdb.d/30_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contabdsi -d contabdsi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

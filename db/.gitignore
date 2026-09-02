@@ -1,0 +1,3 @@
+# Clúster PostgreSQL local efímero (generado por scripts/up.sh)
+.pgdata/
+.pglog
