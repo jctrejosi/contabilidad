@@ -127,7 +127,7 @@ CREATE TABLE consecutivos_comprobantes (
   consecutivo_fin   bigint,
   version           integer NOT NULL DEFAULT 0,
   CONSTRAINT consecutivos_uk UNIQUE (compania_id, anio, comprobante_id)
-);
+) WITH (fillfactor = 70); -- fila muy caliente: se actualiza en cada contabilización
 
 -- -------------------------------------------------------------------
 -- Tipos de documento y numeración.

@@ -127,7 +127,8 @@ CREATE TABLE documento_lineas (
   documento_afectado text,
   concepto        text,
   origen          text NOT NULL DEFAULT 'Manual',
-  CONSTRAINT documento_lineas_numero_uk UNIQUE (documento_id, numero_linea)
+  CONSTRAINT documento_lineas_numero_uk UNIQUE (documento_id, numero_linea),
+  CONSTRAINT documento_lineas_sin_doble_valor CHECK (debito = 0 OR credito = 0)
 );
 
 -- Disparadores de auditoría.

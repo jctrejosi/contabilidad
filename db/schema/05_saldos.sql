@@ -22,7 +22,7 @@ CREATE TABLE saldos_cuenta (
   debito        dinero NOT NULL DEFAULT 0,
   credito       dinero NOT NULL DEFAULT 0,
   CONSTRAINT saldos_cuenta_uk UNIQUE (compania_id, anio, periodo, cuenta_id)
-);
+) WITH (fillfactor = 70); -- fila caliente: se actualiza (HOT) en cada contabilización
 
 -- -------------------------------------------------------------------
 -- Saldos por cuenta + tercero.
@@ -37,7 +37,7 @@ CREATE TABLE saldos_cuenta_tercero (
   debito      dinero NOT NULL DEFAULT 0,
   credito     dinero NOT NULL DEFAULT 0,
   CONSTRAINT saldos_cuenta_tercero_uk UNIQUE (compania_id, anio, periodo, cuenta_id, tercero_id)
-);
+) WITH (fillfactor = 70);
 
 -- -------------------------------------------------------------------
 -- Saldos por cuenta + centro de costo.
@@ -52,7 +52,7 @@ CREATE TABLE saldos_cuenta_centro (
   debito          dinero NOT NULL DEFAULT 0,
   credito         dinero NOT NULL DEFAULT 0,
   CONSTRAINT saldos_cuenta_centro_uk UNIQUE (compania_id, anio, periodo, cuenta_id, centro_costo_id)
-);
+) WITH (fillfactor = 70);
 
 -- -------------------------------------------------------------------
 -- Acumulados por tercero (informes y certificados).
