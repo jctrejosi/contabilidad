@@ -21,7 +21,7 @@ CREATE TABLE formatos_exogenos (
   actualizado_en timestamptz,
   actualizado_por integer,
   version      integer NOT NULL DEFAULT 0,
-  CONSTRAINT formatos_exogenos_codigo_uk UNIQUE (compania_id, codigo)
+  CONSTRAINT formatos_exogenos_codigo_uk UNIQUE (compania_id, codigo, vigencia)
 );
 
 -- -------------------------------------------------------------------
@@ -48,18 +48,24 @@ CREATE TABLE formato_asignaciones (
 );
 
 -- -------------------------------------------------------------------
--- Generaciones de medios (versión + parámetros conservados).
+-- Generaciones de medios (número de generación + versión de edición).
+-- B08 corregido: numero_generacion identifica la generación por
+-- compañía/año; version es el control optimista del disparador.
+-- La tabla declara actualizado_en para que el trigger sea válido.
 -- -------------------------------------------------------------------
 CREATE TABLE generaciones_medios (
-  id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  compania_id   bigint NOT NULL REFERENCES companias (id),
-  anio          integer NOT NULL CHECK (anio BETWEEN 1900 AND 2999),
-  version       integer NOT NULL DEFAULT 1,
-  parametros    jsonb NOT NULL DEFAULT '{}',
-  estado        text NOT NULL DEFAULT 'Generado' CHECK (estado IN ('Generado', 'Revisado', 'Exportado')),
-  generado_por  integer,
-  generado_en   timestamptz,
-  CONSTRAINT generaciones_medios_uk UNIQUE (compania_id, anio, version)
+  id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  compania_id       bigint NOT NULL REFERENCES companias (id),
+  anio              integer NOT NULL CHECK (anio BETWEEN 1900 AND 2999),
+  numero_generacion integer NOT NULL DEFAULT 1,
+  parametros        jsonb NOT NULL DEFAULT '{}',
+  estado            text NOT NULL DEFAULT 'Generado' CHECK (estado IN ('Generado', 'Revisado', 'Exportado')),
+  generado_por      integer,
+  generado_en       timestamptz,
+  actualizado_en    timestamptz,
+  actualizado_por   integer,
+  version           integer NOT NULL DEFAULT 0,
+  CONSTRAINT generaciones_medios_uk UNIQUE (compania_id, anio, numero_generacion)
 );
 
 -- -------------------------------------------------------------------

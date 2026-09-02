@@ -86,6 +86,10 @@ CREATE TABLE parametros_operacion (
   terceros_documentos_propios boolean NOT NULL DEFAULT false,-- CTTERDOC
   controla_usuario_lotes      boolean NOT NULL DEFAULT true, -- CTPUC
   comentario_certificado      text NOT NULL DEFAULT '',      -- CTLEY1
+  fecha_operativa             date,                          -- CTFCHOY
+  observacion                 text NOT NULL DEFAULT '',      -- CTTOBS
+  documento                   text NOT NULL DEFAULT '',      -- CTDOCUM
+  leyenda2                    text NOT NULL DEFAULT '',      -- CTLEY2
   modo_retencion              text NOT NULL DEFAULT 'retencion-a-base'
                                 CHECK (modo_retencion IN ('retencion-a-base', 'base-a-retencion')),
   periodos_habilitados        jsonb NOT NULL DEFAULT '{}',   -- CT00..CT12: true=habilitado
@@ -95,6 +99,27 @@ CREATE TABLE parametros_operacion (
   actualizado_por             integer,
   version                     integer NOT NULL DEFAULT 0,
   CONSTRAINT parametros_operacion_uk UNIQUE (compania_id, anio)
+);
+
+-- -------------------------------------------------------------------
+-- Parámetros de nómina (PARAMS_NOMI / DSIGRABA6_NOM del legado).
+-- -------------------------------------------------------------------
+CREATE TABLE parametros_nomina (
+  id                    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  compania_id           bigint NOT NULL REFERENCES companias (id),
+  anio                  integer NOT NULL CHECK (anio BETWEEN 1900 AND 2999),
+  comprobante_nomina    text NOT NULL DEFAULT '',            -- CTCOMNOM1
+  documento_nomina      text NOT NULL DEFAULT '',            -- CTDOCNOM1
+  comprobante_aportes   text NOT NULL DEFAULT '',            -- CTCOMNOM2
+  documento_aportes     text NOT NULL DEFAULT '',            -- CTDOCNOM2
+  comprobante_provisiones text NOT NULL DEFAULT '',          -- CTCOMNOM3
+  documento_provisiones text NOT NULL DEFAULT '',            -- CTDOCNOM3
+  creado_en             timestamptz,
+  creado_por            integer,
+  actualizado_en        timestamptz,
+  actualizado_por       integer,
+  version               integer NOT NULL DEFAULT 0,
+  CONSTRAINT parametros_nomina_uk UNIQUE (compania_id, anio)
 );
 
 -- Disparadores de auditoría del núcleo.

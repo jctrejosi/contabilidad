@@ -27,17 +27,23 @@ CREATE TABLE presupuesto_rubros (
   grupo           text NOT NULL,
   seccion         text NOT NULL,
   codigo          text NOT NULL,
+  nombre          text NOT NULL DEFAULT '',                  -- B13: concepto/nombre del rubro
+  concepto        text NOT NULL DEFAULT '',
   centro_costo_id bigint REFERENCES centros_costos (id),
   parent_id       bigint REFERENCES presupuesto_rubros (id),
-  orden           integer NOT NULL DEFAULT 0
+  orden           integer NOT NULL DEFAULT 0,
+  CONSTRAINT presupuesto_rubros_uk UNIQUE (presupuesto_id, codigo, centro_costo_id)
 );
 
 CREATE TABLE presupuesto_valores (
   id       bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   rubro_id bigint NOT NULL REFERENCES presupuesto_rubros (id) ON DELETE CASCADE,
-  mes      integer NOT NULL CHECK (mes BETWEEN 1 AND 12),
+  periodo  text NOT NULL CHECK (periodo IN
+             ('00','01','02','03','04','05','06',
+              '07','08','09','10','11','12','13')),
+  tipo     text NOT NULL DEFAULT 'Presupuesto' CHECK (tipo IN ('Presupuesto', 'Ejecucion')),
   valor    dinero NOT NULL DEFAULT 0,
-  CONSTRAINT presupuesto_valores_uk UNIQUE (rubro_id, mes)
+  CONSTRAINT presupuesto_valores_uk UNIQUE (rubro_id, periodo, tipo)
 );
 
 CREATE TRIGGER trg_presupuestos_auditoria BEFORE UPDATE ON presupuestos
