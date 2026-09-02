@@ -189,20 +189,28 @@ export default function Shell({ currentPage, onNavigate, children, badgeAlerts =
       >
         {/* Brand */}
         <div
-          className="flex items-center gap-3 px-4 py-4 shrink-0 border-b"
+          className={`flex flex-col items-center shrink-0 border-b ${
+            collapsed ? 'px-2 py-4' : 'gap-3 px-4 py-4'
+          }`}
           style={{ borderColor: 'rgba(255,255,255,0.08)' }}
         >
-          <img
-            src="/dsi-logo.svg"
-            alt="DSI S.A."
-            className={`shrink-0 object-contain bg-white shadow-sm ${
-              collapsed ? 'w-9 rounded-md p-1' : 'w-24 rounded-lg px-2 py-1.5'
+          <div
+            className={`flex items-center justify-center bg-white shadow-sm ${
+              collapsed ? 'h-10 w-12 rounded-md px-1' : 'w-full rounded-lg px-4 py-3'
             }`}
-          />
+          >
+            <img
+              src={`${import.meta.env.BASE_URL}dsi-logo.png`}
+              alt="DSI S.A."
+              width={176}
+              height={51}
+              className={`block h-auto object-contain ${collapsed ? 'w-10' : 'w-44 max-w-full'}`}
+            />
+          </div>
           {!collapsed && (
-            <div className="min-w-0">
-              <div className="text-white font-semibold text-sm leading-tight truncate">CONTABDSI</div>
-              <div className="text-xs truncate" style={{ color: '#7BDCFB' }}>Contabilidad General</div>
+            <div className="w-full min-w-0 text-center">
+              <div className="text-white font-semibold text-sm leading-tight">CONTABDSI</div>
+              <div className="text-xs mt-1" style={{ color: '#7BDCFB' }}>Contabilidad General</div>
             </div>
           )}
         </div>
