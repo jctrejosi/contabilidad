@@ -10,8 +10,8 @@ DO $$
 DECLARE
   v_empresa bigint;
   v_anio bigint;
-  v_user_contador integer;
-  v_user_auxiliar integer;
+  v_user_contador bigint;
+  v_user_auxiliar bigint;
   v_rol_admin bigint;
   v_rol_contador bigint;
   v_rol_auxiliar bigint;
@@ -233,25 +233,28 @@ BEGIN
   RETURNING id INTO v_lote;
 
   -- Débitos (510506, requiere centro)
-  INSERT INTO lote_lineas (lote_id, numero_linea, cuenta_id, tercero_id, centro_costo_id, comprobante, documento, fecha, debito, credito, concepto, origen) VALUES
-    (v_lote, 1, c510506, NULL, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 4500000, 0, 'Sueldo febrero Administración', 'Nómina'),
-    (v_lote, 2, c510506, t_garcia, ce_ven, 'CE', 'NOM-2026-02', '2026-02-28', 3200000, 0, 'Sueldo febrero Ventas', 'Nómina'),
-    (v_lote, 3, c510506, t_martinez, NULL, 'CE', 'NOM-2026-02', '2026-02-28', 2300000, 0, 'Sueldo febrero Operaciones', 'Nómina'),
-    (v_lote, 4, c510506, t_garcia, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 800000, 0, 'Prestaciones febrero ADM', 'Nómina'),
-    (v_lote, 5, c510506, t_martinez, ce_ope, 'CE', 'NOM-2026-02', '2026-02-28', 600000, 0, 'Prestaciones febrero OPE', 'Nómina'),
-    (v_lote, 6, c510506, t_garcia, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 1200000, 0, 'Aportes seguridad social feb', 'Nómina');
+  INSERT INTO lote_lineas (lote_id, compania_id, numero_linea, cuenta_id, tercero_id, centro_costo_id, comprobante, documento, fecha, debito, credito, concepto, origen) VALUES
+    (v_lote, v_empresa, 1, c510506, NULL, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 4500000, 0, 'Sueldo febrero Administración', 'Nómina'),
+    (v_lote, v_empresa, 2, c510506, t_garcia, ce_ven, 'CE', 'NOM-2026-02', '2026-02-28', 3200000, 0, 'Sueldo febrero Ventas', 'Nómina'),
+    (v_lote, v_empresa, 3, c510506, t_martinez, NULL, 'CE', 'NOM-2026-02', '2026-02-28', 2300000, 0, 'Sueldo febrero Operaciones', 'Nómina'),
+    (v_lote, v_empresa, 4, c510506, t_garcia, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 800000, 0, 'Prestaciones febrero ADM', 'Nómina'),
+    (v_lote, v_empresa, 5, c510506, t_martinez, ce_ope, 'CE', 'NOM-2026-02', '2026-02-28', 600000, 0, 'Prestaciones febrero OPE', 'Nómina'),
+    (v_lote, v_empresa, 6, c510506, t_garcia, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 1200000, 0, 'Aportes seguridad social feb', 'Nómina');
 
   -- Créditos (250505 requiere tercero; 236540 retención)
-  INSERT INTO lote_lineas (lote_id, numero_linea, cuenta_id, tercero_id, centro_costo_id, comprobante, documento, fecha, debito, credito, concepto, origen) VALUES
-    (v_lote, 7, c250505, t_garcia, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 0, 4500000, 'Obligación nómina feb ADM', 'Nómina'),
-    (v_lote, 8, c250505, t_lopez, ce_ven, 'CE', 'NOM-2026-02', '2026-02-28', 0, 3200000, 'Obligación nómina feb VEN', 'Nómina'),
-    (v_lote, 9, c250505, NULL, ce_ope, 'CE', 'NOM-2026-02', '2026-02-28', 0, 2300000, 'Obligación nómina feb OPE', 'Nómina'),
-    (v_lote, 10, c250505, t_garcia, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 0, 800000, 'Prestaciones por pagar feb', 'Nómina'),
-    (v_lote, 11, c250505, t_martinez, ce_ope, 'CE', 'NOM-2026-02', '2026-02-28', 0, 600000, 'Prestaciones por pagar feb', 'Nómina'),
-    (v_lote, 12, c236540, NULL, NULL, 'CE', 'NOM-2026-02', '2026-02-28', 0, 1200000, 'Retención nómina febrero', 'Nómina');
+  INSERT INTO lote_lineas (lote_id, compania_id, numero_linea, cuenta_id, tercero_id, centro_costo_id, comprobante, documento, fecha, debito, credito, concepto, origen) VALUES
+    (v_lote, v_empresa, 7, c250505, t_garcia, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 0, 4500000, 'Obligación nómina feb ADM', 'Nómina'),
+    (v_lote, v_empresa, 8, c250505, t_lopez, ce_ven, 'CE', 'NOM-2026-02', '2026-02-28', 0, 3200000, 'Obligación nómina feb VEN', 'Nómina'),
+    (v_lote, v_empresa, 9, c250505, NULL, ce_ope, 'CE', 'NOM-2026-02', '2026-02-28', 0, 2300000, 'Obligación nómina feb OPE', 'Nómina'),
+    (v_lote, v_empresa, 10, c250505, t_garcia, ce_adm, 'CE', 'NOM-2026-02', '2026-02-28', 0, 800000, 'Prestaciones por pagar feb', 'Nómina'),
+    (v_lote, v_empresa, 11, c250505, t_martinez, ce_ope, 'CE', 'NOM-2026-02', '2026-02-28', 0, 600000, 'Prestaciones por pagar feb', 'Nómina'),
+    (v_lote, v_empresa, 12, c236540, t_dian, NULL, 'CE', 'NOM-2026-02', '2026-02-28', 0, 1200000, 'Retención nómina febrero', 'Nómina');
 
   UPDATE lote_lineas SET base = 12600000 WHERE lote_id = v_lote AND numero_linea = 12;
   UPDATE lote_lineas SET clase = 'Retencion' WHERE lote_id = v_lote AND numero_linea = 12;
+  -- B03: concepto de retención explícito por renglón (R04 = Salarios)
+  UPDATE lote_lineas SET concepto_retencion_id = (SELECT id FROM conceptos_retencion WHERE compania_id = v_empresa AND codigo = 'R04')
+  WHERE lote_id = v_lote AND numero_linea = 12;
 
   -- Generar validaciones (debe dejar 2 errores: línea 3 centro y línea 9 tercero)
   PERFORM validar_lote(v_lote);

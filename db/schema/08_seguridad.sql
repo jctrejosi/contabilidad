@@ -57,7 +57,7 @@ CREATE TABLE auditoria (
   id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   compania_id bigint REFERENCES companias (id),
   anio        integer,
-  usuario_id  integer NOT NULL,
+  usuario_id  bigint REFERENCES usuarios (id),
   rol_id      bigint REFERENCES roles (id),
   accion      text NOT NULL,                                 -- 'Aprobación de lote'
   modulo      text NOT NULL,                                 -- 'Lotes'
@@ -89,6 +89,24 @@ CREATE TABLE integraciones (
   version               integer NOT NULL DEFAULT 0,
   CONSTRAINT integraciones_uk UNIQUE (compania_id, modulo)
 );
+
+-- -------------------------------------------------------------------
+-- Asignación de usuarios a compañías (B14: acceso por empresa).
+-- -------------------------------------------------------------------
+CREATE TABLE usuario_companias (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  usuario_id  bigint NOT NULL REFERENCES usuarios (id) ON DELETE CASCADE,
+  compania_id bigint NOT NULL REFERENCES companias (id) ON DELETE CASCADE,
+  CONSTRAINT usuario_companias_uk UNIQUE (usuario_id, compania_id)
+);
+
+-- B14: actores de lotes/documentos referencian usuarios reales
+-- (las tablas se crean en 04_movimientos, antes que usuarios; por eso
+-- la FK se agrega aquí, una vez existe usuarios).
+ALTER TABLE lotes
+  ADD CONSTRAINT lotes_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuarios (id);
+ALTER TABLE documentos
+  ADD CONSTRAINT documentos_usuario_fk FOREIGN KEY (usuario_id) REFERENCES usuarios (id);
 
 CREATE TRIGGER trg_usuarios_auditoria BEFORE UPDATE ON usuarios
   FOR EACH ROW EXECUTE FUNCTION auditoria_antes_update();

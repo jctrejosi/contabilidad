@@ -35,7 +35,8 @@ CREATE TABLE cuentas (
   actualizado_en  timestamptz,
   actualizado_por integer,
   version         integer NOT NULL DEFAULT 0,
-  CONSTRAINT cuentas_codigo_uk UNIQUE (compania_id, codigo)
+  CONSTRAINT cuentas_codigo_uk UNIQUE (compania_id, codigo),
+  CONSTRAINT cuentas_compania_id_uk UNIQUE (compania_id, id) -- soporta FK compuestas (B05)
 );
 
 -- -------------------------------------------------------------------
@@ -55,6 +56,8 @@ CREATE TABLE terceros (
   telefono        text,
   ciudad          text,
   nit_relacionado text,
+  correo          text,                                    -- FADCLI: correo electrónico
+  codigo_legado   text,                                    -- identidad original (RECNO/clave legada)
   estado          text NOT NULL DEFAULT 'Activo'
                     CHECK (estado IN ('Activo', 'Bloqueado')),
   motivo_bloqueo  text,
@@ -71,7 +74,8 @@ CREATE TABLE terceros (
   actualizado_en  timestamptz,
   actualizado_por integer,
   version         integer NOT NULL DEFAULT 0,
-  CONSTRAINT terceros_nit_uk UNIQUE (compania_id, nit)
+  CONSTRAINT terceros_nit_uk UNIQUE (compania_id, nit),
+  CONSTRAINT terceros_compania_id_uk UNIQUE (compania_id, id)
 );
 
 CREATE TABLE tercero_etiquetas (
@@ -97,7 +101,8 @@ CREATE TABLE centros_costos (
   actualizado_en  timestamptz,
   actualizado_por integer,
   version         integer NOT NULL DEFAULT 0,
-  CONSTRAINT centros_costos_codigo_uk UNIQUE (compania_id, codigo)
+  CONSTRAINT centros_costos_codigo_uk UNIQUE (compania_id, codigo),
+  CONSTRAINT centros_costos_compania_id_uk UNIQUE (compania_id, id)
 );
 
 -- -------------------------------------------------------------------
@@ -115,7 +120,8 @@ CREATE TABLE comprobantes (
   actualizado_en  timestamptz,
   actualizado_por integer,
   version         integer NOT NULL DEFAULT 0,
-  CONSTRAINT comprobantes_codigo_uk UNIQUE (compania_id, codigo)
+  CONSTRAINT comprobantes_codigo_uk UNIQUE (compania_id, codigo),
+  CONSTRAINT comprobantes_compania_id_uk UNIQUE (compania_id, id)
 );
 
 CREATE TABLE consecutivos_comprobantes (
@@ -127,7 +133,7 @@ CREATE TABLE consecutivos_comprobantes (
   consecutivo_fin   bigint,
   version           integer NOT NULL DEFAULT 0,
   CONSTRAINT consecutivos_uk UNIQUE (compania_id, anio, comprobante_id)
-);
+) WITH (fillfactor = 70); -- fila muy caliente: se actualiza en cada contabilización
 
 -- -------------------------------------------------------------------
 -- Tipos de documento y numeración.
@@ -148,7 +154,8 @@ CREATE TABLE tipos_documento (
   actualizado_en      timestamptz,
   actualizado_por     integer,
   version             integer NOT NULL DEFAULT 0,
-  CONSTRAINT tipos_documento_codigo_uk UNIQUE (compania_id, codigo)
+  CONSTRAINT tipos_documento_codigo_uk UNIQUE (compania_id, codigo),
+  CONSTRAINT tipos_documento_compania_id_uk UNIQUE (compania_id, id)
 );
 
 -- -------------------------------------------------------------------
@@ -168,7 +175,8 @@ CREATE TABLE conceptos_retencion (
   actualizado_en timestamptz,
   actualizado_por integer,
   version      integer NOT NULL DEFAULT 0,
-  CONSTRAINT conceptos_retencion_codigo_uk UNIQUE (compania_id, codigo)
+  CONSTRAINT conceptos_retencion_codigo_uk UNIQUE (compania_id, codigo),
+  CONSTRAINT conceptos_retencion_compania_id_uk UNIQUE (compania_id, id)
 );
 
 CREATE TABLE tarifas_iva (
@@ -184,7 +192,8 @@ CREATE TABLE tarifas_iva (
   actualizado_en timestamptz,
   actualizado_por integer,
   version      integer NOT NULL DEFAULT 0,
-  CONSTRAINT tarifas_iva_codigo_uk UNIQUE (compania_id, codigo)
+  CONSTRAINT tarifas_iva_codigo_uk UNIQUE (compania_id, codigo),
+  CONSTRAINT tarifas_iva_compania_id_uk UNIQUE (compania_id, id)
 );
 
 -- -------------------------------------------------------------------
@@ -207,30 +216,31 @@ CREATE TABLE renglones_renta (
 );
 
 -- -------------------------------------------------------------------
--- Plantillas contables (asientos predefinidos).
+-- Plantillas contables. B09 corregido: el legado PLANTICO/GRABAPLA
+-- guarda PAREJAS de cuentas (NOM/DEB/CRE), no importes fijos.
 -- -------------------------------------------------------------------
 CREATE TABLE plantillas_contables (
-  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  compania_id  bigint NOT NULL REFERENCES companias (id),
-  codigo       text NOT NULL,
-  nombre       text NOT NULL,
-  eliminado_en timestamptz,
-  creado_en    timestamptz,
-  creado_por   integer,
-  actualizado_en timestamptz,
-  actualizado_por integer,
-  version      integer NOT NULL DEFAULT 0,
+  id                bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  compania_id       bigint NOT NULL REFERENCES companias (id),
+  codigo            text NOT NULL,
+  nombre            text NOT NULL,
+  tipo_documento_id bigint REFERENCES tipos_documento (id),
+  eliminado_en      timestamptz,
+  creado_en         timestamptz,
+  creado_por        integer,
+  actualizado_en    timestamptz,
+  actualizado_por   integer,
+  version           integer NOT NULL DEFAULT 0,
   CONSTRAINT plantillas_codigo_uk UNIQUE (compania_id, codigo)
 );
 
 CREATE TABLE plantilla_lineas (
-  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  plantilla_id bigint NOT NULL REFERENCES plantillas_contables (id) ON DELETE CASCADE,
-  orden       integer NOT NULL DEFAULT 0,
-  cuenta_id   bigint REFERENCES cuentas (id),
-  debito      dinero NOT NULL DEFAULT 0,
-  credito     dinero NOT NULL DEFAULT 0,
-  concepto    text
+  id               bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  plantilla_id     bigint NOT NULL REFERENCES plantillas_contables (id) ON DELETE CASCADE,
+  orden            integer NOT NULL DEFAULT 0,
+  cuenta_debito_id bigint REFERENCES cuentas (id),          -- DEB en VISDOCUM (cuenta)
+  cuenta_credito_id bigint REFERENCES cuentas (id),         -- CRE en VISDOCUM (cuenta)
+  concepto         text
 );
 
 -- -------------------------------------------------------------------
