@@ -1,0 +1,270 @@
+/* ============================================================
+   CONTABDSI · Design tokens
+   Azul petróleo + superficies claras, densidad compacta/cómoda
+   ============================================================ */
+
+:root {
+  /* Color — brand (azul petróleo) */
+  --petrol-900: #06313c;
+  --petrol-800: #08404e;
+  --petrol-700: #0a4d5e;
+  --petrol-600: #0c5c70;
+  --petrol-500: #147086;
+  --petrol-400: #3c8ba0;
+  --petrol-300: #7cb4c4;
+  --petrol-200: #b4d5de;
+  --petrol-100: #dcecf0;
+  --petrol-50: #f0f7f9;
+
+  /* Color — neutros */
+  --gray-900: #16202a;
+  --gray-800: #1c2733;
+  --gray-700: #33414e;
+  --gray-600: #4c5a67;
+  --gray-500: #67788a;
+  --gray-400: #8a97a5;
+  --gray-300: #b7c1ca;
+  --gray-200: #d8e0e7;
+  --gray-150: #e4eaf0;
+  --gray-100: #eef2f5;
+  --gray-50: #f6f8fa;
+  --white: #ffffff;
+
+  /* Color — semánticos */
+  --success-700: #125c34;
+  --success-600: #1e7a46;
+  --success-100: #ddf1e4;
+  --success-50: #effaf3;
+  --danger-700: #9f1d14;
+  --danger-600: #b3261e;
+  --danger-100: #f7dcd9;
+  --danger-50: #fdf1f0;
+  --warning-700: #7d4c06;
+  --warning-600: #a05e03;
+  --warning-100: #fdecd1;
+  --warning-50: #fff7ea;
+  --info-700: #13458f;
+  --info-600: #175cd3;
+  --info-100: #d9e6fa;
+  --info-50: #eff5fd;
+
+  /* Semantic aliases */
+  --bg-app: var(--gray-50);
+  --bg-surface: var(--white);
+  --bg-raised: var(--white);
+  --bg-muted: var(--gray-100);
+  --bg-sidebar: var(--petrol-900);
+  --bg-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --bg-header: var(--white);
+
+  --text-primary: var(--gray-800);
+  --text-secondary: var(--gray-600);
+  --text-muted: var(--gray-500);
+  --text-invert: #f2f6f8;
+  --text-sidebar-muted: #9db8c2;
+
+  --border: var(--gray-200);
+  --border-strong: var(--gray-300);
+  --border-focus: var(--petrol-500);
+
+  --accent: var(--petrol-600);
+  --accent-hover: var(--petrol-700);
+  --accent-soft: var(--petrol-50);
+  --accent-text: var(--petrol-700);
+
+  --success: var(--success-600);
+  --danger: var(--danger-600);
+  --warning: var(--warning-600);
+  --info: var(--info-600);
+
+  /* Tipografía */
+  --font-ui: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue',
+    Roboto, Arial, sans-serif;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 15px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 22px;
+  --line-height: 1.45;
+
+  /* Espaciado / densidad */
+  --density: compact;
+  --cell-px: 8px;
+  --cell-py: 5px;
+  --control-h: 30px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(16, 32, 45, 0.08);
+  --shadow-md: 0 4px 12px rgba(16, 32, 45, 0.12);
+  --shadow-lg: 0 12px 32px rgba(16, 32, 45, 0.22);
+  --shadow-focus: 0 0 0 3px rgba(12, 92, 112, 0.22);
+
+  /* Layout */
+  --sidebar-w: 248px;
+  --sidebar-w-collapsed: 60px;
+  --header-h: 52px;
+
+  /* Scrollbar */
+  --scrollbar-thumb: var(--gray-300);
+}
+
+[data-density='comfortable'] {
+  --cell-px: 12px;
+  --cell-py: 9px;
+  --control-h: 34px;
+}
+
+/* ===== Base ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height);
+  color: var(--text-primary);
+  background: var(--bg-app);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 650;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+code,
+kbd {
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, 'Roboto Mono', monospace;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg-muted);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.num,
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.money {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.neg {
+  color: var(--danger);
+}
+.pos {
+  color: var(--success-700);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Utilidades */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+}
+.row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+.gap-4 { gap: 4px; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.spacer { flex: 1 1 auto; }
+
+.muted { color: var(--text-muted); }
+.small { font-size: var(--font-size-sm); }
+.xs { font-size: var(--font-size-xs); }
+.bold { font-weight: 650; }
+.right { text-align: right; }
+.center { text-align: center; }
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Accesibilidad — focus ring para controles */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}

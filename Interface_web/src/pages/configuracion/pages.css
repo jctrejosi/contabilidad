@@ -1,0 +1,250 @@
+/* ============================================================
+   CONTABDSI · Estilos propios de Configuración / Administración
+   Se importa desde PlanCuentas.tsx (mismo bundle del área).
+   ============================================================ */
+
+/* --- Árbol de maestros (plan de cuentas, centros) --- */
+.cfg-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  padding: 6px;
+  min-height: 340px;
+  max-height: 560px;
+}
+.cfg-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  min-width: 0;
+}
+.cfg-tree-row:hover { background: var(--gray-100); }
+.cfg-tree-row.sel { background: var(--accent-soft); border-color: var(--petrol-200); }
+.cfg-tree-code {
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  color: var(--accent-text);
+  flex: none;
+}
+.cfg-tree-name {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cfg-tree-lvl {
+  font-size: 10px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 3px;
+  flex: none;
+}
+
+/* --- Detalle de maestro --- */
+.master-detail { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.det-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 10px 16px; }
+.det-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.det-item .det-label {
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  font-weight: 650;
+}
+.det-item .det-value { font-size: var(--font-size-sm); font-weight: 600; }
+
+/* --- Saldo inicial y meses --- */
+.meses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.mes-item { display: flex; flex-direction: column; gap: 3px; }
+.mes-item .mes-label { font-size: var(--font-size-xs); color: var(--text-muted); font-weight: 600; }
+
+/* --- Lista de impacto (plan de cuentas) --- */
+.impact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px dashed var(--warning-600);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--warning-50);
+}
+.impact-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--font-size-sm);
+}
+
+/* --- Chips de etiquetas (terceros) --- */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--petrol-100);
+  color: var(--petrol-700);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+/* --- Matriz de permisos (usuarios) --- */
+.perm-matrix { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.perm-table { border-collapse: collapse; width: 100%; font-size: var(--font-size-sm); }
+.perm-table th, .perm-table td { border: 1px solid var(--border); padding: 5px 10px; text-align: center; white-space: nowrap; }
+.perm-table th {
+  background: var(--gray-50);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  position: sticky;
+  top: 0;
+}
+.perm-table td:first-child, .perm-table th:first-child { text-align: left; font-weight: 600; }
+.perm-table .perm-label { font-weight: 600; color: var(--text-secondary); }
+
+/* --- Tablero de integraciones --- */
+.integ-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.integ-card-body { display: flex; flex-direction: column; gap: 10px; }
+.integ-meta { display: flex; flex-direction: column; gap: 3px; font-size: var(--font-size-sm); }
+.integ-meta-row { display: flex; justify-content: space-between; gap: 10px; }
+
+/* --- Formatos documentales --- */
+.fmt-layout { display: grid; grid-template-columns: 240px 1fr 260px; gap: 14px; align-items: start; }
+@media (max-width: 1150px) { .fmt-layout { grid-template-columns: 1fr; } }
+.fmt-list { display: flex; flex-direction: column; gap: 4px; }
+.fmt-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--bg-surface);
+  font-size: var(--font-size-sm);
+}
+.fmt-list-item.sel { border-color: var(--accent); background: var(--accent-soft); }
+.fmt-canvas-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--gray-50);
+  padding: 10px;
+}
+.fmt-canvas {
+  position: relative;
+  width: 100%;
+  height: 540px;
+  background: #fff;
+  border: 1px dashed var(--gray-400);
+  overflow: hidden;
+  border-radius: 4px;
+}
+.fmt-elem { position: absolute; cursor: move; user-select: none; }
+.fmt-elem.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fmt-leyenda { font-size: var(--font-size-sm); color: var(--text-primary); }
+.fmt-img-ph {
+  background: repeating-linear-gradient(45deg, var(--gray-100), var(--gray-100) 8px, var(--gray-50) 8px, var(--gray-50) 16px);
+  border: 1px dashed var(--gray-400);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+.fmt-figura { border: 1.5px solid var(--petrol-500); }
+.fmt-campo {
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: var(--font-size-sm);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border: 1px dashed var(--petrol-300);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.fmt-palette { display: flex; flex-wrap: wrap; gap: 6px; }
+.fmt-props { display: flex; flex-direction: column; gap: 10px; }
+.fmt-preview-paper {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-height: 380px;
+  padding: 18px;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+}
+.fmt-preview-paper .fmt-elem { cursor: default; }
+
+/* --- Especiales --- */
+.fn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 12px; }
+.fn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.fn-card h4 { margin: 0; font-size: var(--font-size-md); display: flex; align-items: center; gap: 8px; }
+.fn-card p { margin: 0; color: var(--text-secondary); font-size: var(--font-size-sm); }
+
+/* --- Banner de mantenimiento --- */
+.maint-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--warning-100);
+  border: 1px solid var(--warning-600);
+  color: var(--warning-700);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+/* --- Notas / avisos --- */
+.note-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  background: var(--warning-50);
+  border: 1px solid var(--warning-600);
+  color: var(--warning-700);
+}
+
+/* --- Bloques colapsables (integración) --- */
+.collapse-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 8px 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+/* --- Tarjetas de simulación --- */
+.sim-table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
+.sim-table th, .sim-table td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; }
+.sim-table th { background: var(--gray-50); color: var(--text-muted); font-size: var(--font-size-xs); text-transform: uppercase; }
+.sim-table .money, .sim-table td.money { text-align: right; }

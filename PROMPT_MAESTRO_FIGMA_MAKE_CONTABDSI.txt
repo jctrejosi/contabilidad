@@ -1,0 +1,195 @@
+Diseña y genera un prototipo web interactivo, de alta fidelidad y navegable, para una aplicación de contabilidad general empresarial llamada **CONTABDSI**. Debe conservar toda la funcionalidad del sistema legado VISION/FORTUNER, pero reorganizarla según el flujo moderno del contador. No copies la apariencia de Windows/FiveWin ni uses una estética anticuada. El producto debe sentirse profesional, denso, confiable y preparado para operación contable diaria.
+
+Si este proyecto ya contiene un rediseño o hay pantallas/componentes de Figma adjuntos, extiéndelos: conserva marca, tokens, componentes, navegación aprobada y datos existentes. No reemplaces el proyecto completo. Usa la propuesta visual siguiente sólo para completar lo que aún no esté definido. Antes de cada iteración, identifica qué pantallas ya existen, qué requisitos faltan y cuáles vas a agregar.
+
+### Propósito
+
+La aplicación recibe hechos económicos por captura directa, lotes o importaciones; valida y contabiliza comprobantes; mantiene saldos por cuenta, tercero y centro de costo; permite trazabilidad documental; genera libros, estados financieros, impuestos y medios magnéticos; y ejecuta auditorías, reprocesos, cierres y consolidaciones.
+
+El flujo principal es:
+
+**Configurar → Capturar/importar → Validar → Aprobar → Contabilizar → Consultar → Conciliar → Informar → Impuestos/medios → Cerrar/consolidar.**
+
+### Tecnología del prototipo
+
+Genera una aplicación React + TypeScript con componentes reutilizables, datos mock en español y navegación completa. No conectes un backend real. Aísla los datos simulados en una capa de servicios. Simula validaciones, carga de archivos, trabajos en segundo plano, cambio de estados y confirmaciones. No ejecutes acciones destructivas reales. Organiza los componentes de forma modular.
+
+La aprobación, reversión trazable, roles y simulación son requisitos propuestos del rediseño, no afirmaciones de que ya existan en el legado. Usa reglas tributarias configurables, sin inventar tarifas/topes legales. Para reglas no definidas muestra “Pendiente de validación funcional”. Diseña estados de conflicto de edición, bloqueo por otro usuario, doble envío prevenido, reintento seguro y error de transacción. La interfaz debe estar preparada para un backend con importes decimales, claves por compañía/año, permisos de servidor, control de versión, idempotencia y contabilización atómica; el prototipo sólo simula estos contratos.
+
+### Diseño visual
+
+Usa un shell desktop-first: sidebar plegable, header fijo y área central amplia. En el header deben permanecer visibles compañía, NIT, año, período, estado Abierto/Cerrado, búsqueda global, notificaciones y usuario. Usa fondo gris muy claro, tarjetas blancas, navegación azul petróleo, verde para cuadratura/éxito, rojo para errores y diferencias, ámbar para advertencias. Tipografía clara con números tabulares. Valores monetarios en COP alineados a la derecha. Densidad compacta con opción cómoda. Cumple WCAG 2.2 AA y navegación por teclado.
+
+Optimiza para 1440 y 1920 px; permite consulta/aprobación en tablet. En móvil muestra tablero, consultas y aprobaciones, pero no fuerces la captura contable compleja.
+
+### Roles
+
+Implementa estados de interfaz para Administrador, Contador principal, Auxiliar contable, Auditor, Analista tributario y Consulta gerencial. Oculta o deshabilita acciones por permiso. Toda acción sensible debe mostrar y registrar usuario, fecha/hora, compañía, año, parámetros, impacto, resultado y motivo.
+
+### Navegación
+
+Crea estas áreas:
+
+- Inicio.
+- Movimientos: Captura directa, Lotes, Anulación, Importaciones, Integración de nómina y Reembolsos.
+- Consultas: Documentos, Movimiento mensual, Saldos anuales, Anual por cuenta, Anual por tercero, Anual por centro, Saldos cuenta/centro, Documento específico y Comparativos.
+- Informes: Documentos, Libros, Estados y balances, Terceros, Centros, Flujo de caja, NIC/NIIF y Generador personalizado.
+- Impuestos: Retenciones, IVA y Medios magnéticos.
+- Reprocesos y auditoría.
+- Cierres.
+- Consolidación.
+- Configuración: Parámetros, Plan de cuentas, Terceros, Comprobantes, Centros, Renglones de renta, Tipos de documento, Retenciones, IVA, Plantillas, Compañías, Formatos documentales, Especiales y Reclasificaciones.
+- Administración: Usuarios/permisos, Bitácora, Integraciones y Reorganización de datos.
+- Presupuesto futuro, oculto bajo feature flag.
+
+### Componentes comunes
+
+Crea CompanyPeriodSwitcher, AccountingDataGrid, AccountingEntryGrid, DebitCreditSummary, AccountPicker, ThirdPartyPicker, CostCenterPicker, VoucherPicker, DocumentTypePicker, TaxRatePicker, StatusBadge, ValidationCenter, ProcessWizard, DangerConfirmation, AuditTimeline, ReportParameters, ReportPreview, ExportMenu, SavedView y estados Empty/Error/NoPermission/Loading/Success.
+
+Las tablas deben soportar encabezado fijo, filtros, orden, búsqueda, agrupación, columnas configurables, selección múltiple, totales, exportación y navegación por teclado. Las acciones estándar son Crear, Editar, Eliminar, Buscar, Importar, Exportar, Imprimir, Guardar, Cancelar y Ver detalle.
+
+### Inicio
+
+Diseña un tablero con compañía y período, estado del mes, débitos, créditos, diferencia, documentos, lotes por estado, alertas contables y tareas pendientes. Agrega accesos funcionales a lote, captura directa, anulación, plan de cuentas, impresión y auditoría. Muestra banner si el período está cerrado o existe un proceso masivo bloqueando la compañía.
+
+### Plan de cuentas
+
+Diseña árbol jerárquico y tabla con niveles 1, 2, 4, 6, 9 y 12. Incluye código, NIT, nombre, afectable, controla tercero, ajuste, centro de costo, IVA/retención/otro, movimiento, distribución de costos, porcentaje y cuenta base. Panel de saldo inicial y enero-diciembre, con acceso a 13-18. Acciones: crear, modificar, buscar, imprimir/exportar y eliminar. Impide eliminar cuentas con hijos, saldo inicial o movimiento. Filtros: base, todas, retenciones, IVA y afectables. Muestra impacto antes de cambiar controles de una cuenta con movimiento.
+
+### Terceros
+
+Diseña tabla con zona, NIT, dígito, tipo documental, nombre, dirección, teléfono, ciudad, NIT relacionado, estado/motivo de bloqueo, fecha de creación, saldo, cupo, sexo, nacimiento y estado web. Acciones: crear, modificar, eliminar, buscar, bloquear, desbloquear, importar, cupos y exportar XLSX. Informes: general, cumpleaños, profesiones y etiquetas. Incluye bloqueo masivo por mora/saldo.
+
+Incluye un asistente seguro de reasignación de NIT: NIT actual, NIT nuevo, compañías y módulos afectados, simulación de registros, duplicados, respaldo, confirmación, progreso, resultado y auditoría. Explica que afecta también facturación, cartera, inventario y cuentas por pagar.
+
+### Otros maestros
+
+Diseña CRUD y filtros para parámetros de operación; tipos y consecutivos de comprobante; centros de costo; renglones de renta; tipos y numeración de documento; conceptos/tarifas/cuentas de retención; tarifas/cuentas de IVA; plantillas contables; creación/traslado/limpieza de compañías. Diseña un editor visual de formatos documentales con crear, modificar, eliminar, configurar, leyendas, imágenes, figuras, vista previa, guardar y cancelar. Diseña generador de informes por renglones, cuentas/rangos, signos, totales y orden.
+
+### Captura directa
+
+Diseña encabezado con período, fecha, comprobante, tipo/número de documento, tercero, documento afectado y concepto. Debajo usa una grilla editable con cuenta, nombre, NIT, tercero, centro, comprobante, documento, fecha, débito, crédito, base, clase IVA/retención/otro, documento afectado y concepto.
+
+Permite agregar, editar, duplicar, eliminar, reordenar, pegar desde Excel, aplicar plantilla, cargar documento existente y guardar borrador. Soporta Enter editar, F2 validar/grabar, F3 eliminar, F4 cargar movimiento, F5 plantilla y F6 importar Excel. Valida la línea según las marcas de la cuenta. Fija abajo totales débito/crédito/diferencia y estado Cuadrado/Descuadrado. Impide contabilizar con diferencia o errores. Antes de contabilizar muestra resumen y después un recibo con comprobante, documento, líneas y enlace al detalle.
+
+### Lotes
+
+Diseña lista con código, nombre, período, usuario, origen, fecha, líneas, débito, crédito, diferencia, errores y estado. Acciones: crear, modificar, eliminar borrador, reorganizar, imprimir, verificar, aprobar, actualizar/contabilizar, depurar y reasignar.
+
+Estados: Borrador, Con errores, Verificado, Pendiente aprobación, Aprobado, Contabilizando, Contabilizado, Fallido y Anulado. Diseña editor con edición débito/crédito, eliminar, comparar, imprimir, buscar e importar. El centro de validación debe agrupar errores globales, por documento y comprobante; validar cuenta, NIT, centro, período, duplicados, documento ya contabilizado, base e impuesto; permitir ir a la celda y exportar XLSX.
+
+Haz obligatorio que toda importación masiva termine primero en lote. La importación desde Captura directa sólo debe llenar el borrador del comprobante activo y pasar por sus validaciones antes de contabilizar. Simula contabilización atómica y diagnóstico si falla.
+
+### Importaciones, nómina y reembolsos
+
+Diseña un asistente común para XLS/XLSX, ADT, XLS por meses, TXT y CSV: seleccionar archivo, elegir hoja/formato, mapear columnas, previsualizar, validar, elegir lote, importar y revisar resultado. Campos: cuenta, NIT, centro, comprobante, documento, tipo, fecha, débito, crédito, base, impuesto y concepto. Permite guardar plantillas de mapeo y muestra filas aceptadas, advertidas, rechazadas y duplicadas.
+
+Incluye parámetros y flujos separados para Nómina, Aportes y Provisiones. Incluye Reembolsos con encabezado/detalle y botones Guardar, Crear lote/Contabilizar y Cancelar.
+
+### Anulación
+
+Diseña búsqueda por período, tipo/número, comprobante, NIT o valor; muestra original y documentos afectados. Solicita fecha/período de reversión, comprobante, motivo y soporte; previsualiza el asiento inverso; valida período/permiso y enlaza original con reversión. No borres el movimiento original.
+
+### Consultas
+
+Diseña:
+
+- General por documentos con filtros y detalle.
+- Movimiento mensual con cuenta, NIT, comprobante, documento, centro, fecha, débito, crédito, base, clase fiscal, documento afectado, concepto y origen.
+- Saldos/comportamiento anual con saldo inicial y enero-diciembre.
+- Movimiento anual por cuenta, tercero y centro con drill-down mensual.
+- Saldos cuenta/centro en dos paneles relacionados.
+- Documento específico por documento propio o afectado.
+- Comparativo de un mes entre dos contabilidades con saldo/movimiento y diferencia.
+- Comparativo de centros entre dos contabilidades.
+- Comparativo de dos meses de una contabilidad.
+
+Usa siempre Ver detalle, Buscar/Filtrar, Imprimir, Exportar y Volver. Desde cualquier saldo permite llegar al documento y a la línea origen.
+
+### Informes
+
+Crea un centro de informes con favoritos, recientes, búsqueda, categorías, parámetros, vista previa paginada y exportación PDF/XLSX/CSV/impresión. Incluye todos estos informes:
+
+Documento por formato; documento por planilla; listado de cuentas; balance de comprobación acumulado; balance mensual; acumulado corriente/no corriente; libro auxiliar general; auxiliar por documento afectado; balance general y estado de resultados; movimiento por comprobante; inventario y balance; mayor y balance; diario por cuenta; caja diario por comprobante; caja diario por cuenta; saldos por cuenta; balance comparativo mensual; análisis anual acumulado; análisis anual mensual; balance de prueba anual; movimiento por tipo de documento; movimiento por cuenta; comparativo cuenta-tercero; resumen por tipo de contribuyente; diario por centro con rangos continuos; diario por centro con rangos fijos; balance de centro acumulado; balance de centro mensual; clasificación por centros; clasificación centro-tercero; centros discriminados por mes; definición de cuentas de flujo de caja; flujo de caja comparativo anual; estado de situación financiera de apertura/convergencia NIC; información NIC de saldos y movimientos.
+
+### Retenciones, IVA, terceros y centros
+
+Diseña espacios de Retenciones e IVA con: acumulación general, análisis y certificados, relación de acumulados, totales por cuenta, soportes/anexos y limpiar acumulados. Retenciones agrega plano anual y carga manual de certificados al portal.
+
+Agrega informes por terceros: acumulación, consulta, cuenta-tercero, tercero específico y limpiar. Agrega centros: acumulación, consulta, cuenta por centro, centro por cuenta, tercero por centro, detallado, variante columnas 51-52, limpiar y consulta por nivel.
+
+Muestra fecha de la última acumulación y alerta si quedó desactualizada. “Limpiar” debe explicar que elimina derivados, no el libro, y permitir regenerar.
+
+### Medios magnéticos
+
+Diseña un asistente anual: Formatos → Conceptos → Asignación de cuentas → Generación → Revisión → Topes/cruces → Exportación. Incluye mantenimiento de formatos/conceptos, asignación manual por árbol, copiar definiciones de otra compañía, generar medios, conservar versión/parámetros, revisión editable, crear/modificar/eliminar fila manual, generar salidas, detalle, segunda variante e identificación. Incluye detalle por tercero, totales por tercero, formato por tercero, movimiento por documento, depuración por topes y cruces de terceros entre formatos. Muestra conciliación entre total contable, exclusiones, topes, ajustes y total reportado.
+
+### Reprocesos y auditoría
+
+Separa tarjetas “Auditar” de “Corregir/Recalcular”. Incluye ejecución de reproceso mensual, revalorización de cuentas/centros, documentos vs movimiento, auditoría de revalorización, movimiento vs cuentas válidas, creación asistida de cuentas faltantes y revalorización mensual optimizada. Cada proceso usa alcance, simulación, reporte de diferencias, respaldo, aprobación, progreso, resultado y exportación. Bloquea concurrencia sobre la misma compañía/año.
+
+### Especiales y reclasificaciones
+
+Incluye con permisos elevados: paginación; depuración de terceros; extraer comprobante; extraer documento; extraer movimiento completo; traslado de saldos entre cuentas generando lote; lote de saldos iniciales; reasignar cuentas; reasignar centros; revisar bases IVA/retención; convertir lote; reconstruir documentos; reasignar mes; actualizar estructuras de lotes; distribuir por terceros; detectar/depurar duplicados; extraer por documento + centro; extraer mes incorrecto; extraer por lote + usuario; generar por tipo documental; actualizar nombres de terceros; exportar mes completo; reclasificar cuenta-documento a centro; reclasificar comprobante-documento-tercero; reclasificar centro por cuenta; analizar plan por nivel; y analizar movimiento de cuentas por mes.
+
+Separa “Analizar plan” de “Eliminar cuentas en cero”. Marca “Fusión de movimientos” como deshabilitada y En desarrollo. Diseña reorganización de índices/compactación como modo mantenimiento con respaldo y exclusividad.
+
+### Cierres
+
+Diseña checklist previo de conciliaciones, lotes, descuadres, impuestos, respaldo y usuarios. Marca “Cierre anual automático” como En desarrollo/no disponible. Diseña “Generar comprobante de cierre” con clases 4-9 por defecto, cuenta de resultado, comprobante, documento, fecha, período y lote; previsualiza y genera lote sin contabilizar; enlázalo a verificar/aprobar/contabilizar y compara balance antes/después.
+
+Diseña “Traslado 13-18 a 01-06” como proceso de máximo riesgo con matriz origen/destino, simulación, respaldo, exclusividad, confirmación escrita y paso obligatorio de revalorizar desde 00.
+
+### Consolidación
+
+Diseña definición de compañías origen y un asistente de consolidación. Exige que el destino esté marcado Sólo consolidación. Muestra que reemplazará cuentas, centros, comprobantes y movimientos. Pasos: orígenes, compatibilidad, simulación, respaldo, confirmación de vaciado, ejecución, revalorizar desde 00 y comparar totales. Advierte que no incluye eliminación intercompañía ni conversión de moneda. Reserva una sección futura para esos ajustes.
+
+### Presupuesto futuro
+
+Incluye sólo bajo feature flag un diseño para presupuesto jerárquico departamento → grupo → sección → código, centro de costo y valores mensuales, con Grabar/Cancelar y futura comparación presupuesto vs real. No lo habilites en el menú principal.
+
+Conserva como referencia técnica oculta las funciones compartidas de vehículos, zonas, eventos y ciudades que no están enlazadas al menú contable. No inventes flujos de ventas/inventario para ellas. Diseña estado de integración con módulos externos y mensajes de indisponibilidad/bloqueo del almacenamiento legado. Los datos de ciudad y zona sí forman parte del tercero.
+
+### Reglas contables
+
+- Mostrar débito y crédito en columnas separadas; no pedir crédito negativo.
+- Sólo contabilizar cuando débito = crédito.
+- Período cerrado es sólo lectura.
+- Cuenta no afectable no acepta movimiento.
+- Tercero/centro/base son obligatorios según la cuenta.
+- Fecha y documento deben concordar con el período.
+- Detectar duplicados antes de contabilizar.
+- Importación masiva pasa por lote; importación directa llena un borrador y exige validación antes de contabilizar.
+- Anulación crea reversión trazable.
+- Todo cambio de maestro/proceso masivo queda auditado.
+- Acciones destructivas requieren permiso, respaldo y confirmación.
+- Trabajos largos muestran progreso persistente y notificación.
+- Acumulados desactualizados deben indicarse.
+
+### Seguridad para acciones peligrosas
+
+Usa un modal reforzado con: compañía, NIT, año, período, tablas/registros afectados, usuarios conectados, estado del respaldo, simulación descargable, motivo obligatorio y texto exacto para confirmar. Aplícalo a limpieza de compañía, reasignaciones, eliminación masiva, reconstrucción, reindexación/compactación, traslado 13-18, cierre y consolidación.
+
+### Datos mock
+
+Usa `001 — Compañía Demo S.A.S.`, NIT `900.123.456-7`, año 2026, febrero Abierto y usuario `Laura Gómez — Contador principal`. Crea lote `NOM2 — Nómina febrero`, 12 líneas y 2 errores corregibles. Usa comprobante `CE-000245` y documento `NOM-2026-02`. Cuentas: 110505 Caja, 111005 Bancos, 130505 Clientes con tercero, 236540 Retención, 240805 IVA, 510506 Sueldos con centro y 250505 Salarios por pagar con tercero. Centros ADM, VEN y OPE. Usa terceros ficticios y valores COP cuadrables.
+
+### Flujo interactivo obligatorio
+
+Permite: abrir tablero → lote NOM2 → ver dos errores → ir a la celda → corregir tercero y centro → quedar cuadrado → verificar → enviar a aprobación → aprobar → contabilizar → ver recibo → abrir documento oficial → ir a consulta mensual → abrir balance de comprobación → exportar PDF/XLSX.
+
+Incluye también rutas navegables, aunque sean con datos mock, para todas las funciones enumeradas. Para pantallas extensas reutiliza patrones y componentes, pero no omitas opciones.
+
+### Entregables visuales
+
+Genera:
+
+1. Sistema de diseño con tokens y componentes.
+2. Shell y navegación completa.
+3. P0 de alta fidelidad: tablero, captura directa, lista/editor de lotes, validaciones, aprobación/contabilización, documento oficial, consulta mensual, plan de cuentas, terceros y balance de comprobación.
+4. P1/P2 con patrones consistentes: importaciones, nómina, reembolsos, anulación, consultas anuales/comparativos, todos los informes, impuestos/medios, reprocesos, cierres, consolidación, maestros restantes, formatos, especiales, permisos y presupuesto futuro.
+5. Flujos de captura, lote, consulta, informe, medios, cierre y consolidación.
+6. Estados normal, vacío, cargando, error, sin permiso, período cerrado y proceso en curso.
+7. Prototipo navegable con el flujo obligatorio.
+
+No reduzcas el producto a un dashboard. Es una herramienta transaccional contable completa; las tablas, validaciones, trazabilidad, permisos y confirmaciones son parte esencial del diseño.

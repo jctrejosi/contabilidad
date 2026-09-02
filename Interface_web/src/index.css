@@ -1,0 +1,116 @@
+/* CONTABDSI · Punto de entrada de estilos */
+
+@import './design/tokens.css';
+@import './components/ui/ui.css';
+@import './components/accounting/accounting.css';
+@import './shell/shell.css';
+
+/* Estilos de páginas compartidos */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(12, 1fr);
+}
+.col-3 { grid-column: span 3; }
+.col-4 { grid-column: span 4; }
+.col-6 { grid-column: span 6; }
+.col-8 { grid-column: span 8; }
+.col-9 { grid-column: span 9; }
+.col-12 { grid-column: span 12; }
+
+@media (max-width: 1200px) {
+  .col-3, .col-4 { grid-column: span 6; }
+  .col-6, .col-8, .col-9 { grid-column: span 12; }
+}
+
+/* Panel de filtros de consultas */
+.querybar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Secciones de maestro: dos paneles */
+.master-split {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .master-split { grid-template-columns: 1fr; }
+}
+
+/* Pasos numerados */
+.flow-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+.flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-weight: 600;
+}
+.flow-step-current {
+  background: var(--accent-soft);
+  border-color: var(--petrol-300);
+  color: var(--accent-text);
+}
+.flow-step-done { color: var(--success-700); border-color: var(--success-100); background: var(--success-50); }
+.flow-arrow { color: var(--gray-400); }
+
+/* Dato destacado (dashboard) */
+.stat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.stat-label {
+  font-size: var(--font-size-xs);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stat-value { font-size: var(--font-size-xl); font-weight: 700; letter-spacing: -0.01em; }
+.stat-sub { font-size: var(--font-size-xs); color: var(--text-secondary); }
+
+/* Print: solo la hoja del reporte */
+@media print {
+  body * { visibility: hidden; }
+  .preview-sheet, .preview-sheet * { visibility: visible; }
+  .preview-sheet { position: absolute; left: 0; top: 0; width: 100%; border: none; box-shadow: none; }
+}
