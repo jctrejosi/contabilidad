@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" width="220" height="48" role="img" aria-label="DSI S.A.">
+  <defs>
+    <linearGradient id="dsi-brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#008ED8"/>
+      <stop offset="1" stop-color="#001F4C"/>
+    </linearGradient>
+  </defs>
+  <!-- Marca -->
+  <rect x="0" y="0" width="48" height="48" rx="10" fill="url(#dsi-brand)"/>
+  <!-- Líneas de libro contable -->
+  <rect x="12" y="13" width="24" height="4" rx="2" fill="#ffffff" opacity="0.95"/>
+  <rect x="12" y="21" width="19" height="4" rx="2" fill="#ffffff" opacity="0.72"/>
+  <rect x="12" y="29" width="13" height="4" rx="2" fill="#7BDCFB" opacity="0.9"/>
+  <path d="M22 37.5c2.8-1.6 5.2-1.6 8 0l-8-0.4v0.4z" fill="#ffffff" opacity="0.55"/>
+  <!-- Wordmark -->
+  <text x="62" y="27" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="23" font-weight="800" letter-spacing="1" fill="#001F4C">DSI</text>
+  <text x="62" y="40" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10.5" font-weight="700" letter-spacing="2.2" fill="#0073C0">S.A. · SOFTWARE</text>
+</svg>
