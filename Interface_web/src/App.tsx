@@ -143,7 +143,7 @@ export default function App() {
         return <ConsultaDocumentos onOpenDocumento={openDocumento} />;
 
       case 'consultas/mensual':
-        return <MovimientoMensual onOpenDocumento={openDocumento} />;
+        return <MovimientoMensual cia={companiaActiva.codigo} onOpenDocumento={openDocumento} />;
 
       case 'consultas/saldos-anuales':
         return <SaldosAnuales />;
@@ -206,7 +206,7 @@ export default function App() {
         return <TercerosPage />;
 
       case 'config/comprobantes':
-        return <Comprobantes />;
+        return <Comprobantes cia={companiaActiva.codigo} />;
 
       case 'config/centros':
         return <Centros cia={companiaActiva.codigo} />;

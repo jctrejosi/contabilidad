@@ -31,6 +31,8 @@ Rutas disponibles:
 - `GET /api/terceros`: pagina y busca el maestro global `FADCLI`.
 - `GET /api/centros?cia=027`: consulta `CONCECOS` aislado por compañía.
 - `GET /api/tipos-documento`: consulta el maestro global `VISDOCUM` sin CIA.
+- `GET /api/comprobantes?cia=027`: consulta `CONTICOM` aislado por compañía.
+- `GET /api/movimiento-mensual?cia=027&anio=2025&mes=1`: consulta paginada de `MOV01`; admite filtros de cuenta, tercero, comprobante, centro y documento.
 - `GET /api/cuentas?cia=027`: consulta las cuentas maestras de esa compañía.
 - `POST /api/cuentas?cia=027`: crea una cuenta dentro de esa compañía.
 - `PUT /api/cuentas/{codigo}?cia=027`: modifica una cuenta existente dentro de esa compañía sin cambiar su código.

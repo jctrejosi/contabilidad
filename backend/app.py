@@ -27,6 +27,8 @@ from .ads_repository import (
 from .terceros_repository import list_third_parties
 from .centros_repository import list_cost_centers
 from .tipos_documento_repository import list_document_types
+from .comprobantes_repository import list_vouchers
+from .movimiento_mensual_repository import list_monthly_movements
 
 
 logger = logging.getLogger("contabdsi.backend")
@@ -145,6 +147,57 @@ def document_types() -> dict[str, object]:
         "source": "VISDOCUM",
         "sharedAcrossCompanies": True,
     }
+
+
+@app.get("/api/comprobantes", summary="Consultar comprobantes por compañía")
+def vouchers(
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lee CONTICOM usando siempre la compañía activa como parte de la clave."""
+    try:
+        items = list_vouchers(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "items": items,
+        "count": len(items),
+        "source": "CONTICOM",
+        "sharedAcrossCompanies": False,
+    }
+
+
+@app.get("/api/movimiento-mensual", summary="Consultar movimientos contables de un mes")
+def monthly_movements(
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=12),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    tercero: str = Query("", max_length=15),
+    comprobante: str = Query("", max_length=6),
+    centro: str = Query("", max_length=7),
+    documento: str = Query("", max_length=12),
+) -> dict[str, object]:
+    """Lee MOV01 solamente después de recibir compañía, período y filtros."""
+    try:
+        result = list_monthly_movements(
+            cia,
+            anio,
+            mes,
+            page=page,
+            page_size=page_size,
+            account_from=cuenta_desde,
+            account_to=cuenta_hasta,
+            third_party=tercero,
+            voucher=comprobante,
+            cost_center=centro,
+            document=documento,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {**result, "source": "MOV01", "sharedAcrossCompanies": False}
 
 
 @app.get("/api/cuentas", summary="Listar cuentas maestras")

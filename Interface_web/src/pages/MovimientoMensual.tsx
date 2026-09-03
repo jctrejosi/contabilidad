@@ -1,236 +1,177 @@
-import { useState } from 'react';
-import { MOVIMIENTOS_FEB, CUENTAS, TERCEROS, fmtCOP } from '../data/mock';
-import type { MovimientoLinea } from '../types';
+import { useEffect, useState } from 'react';
+import {
+  consultarMovimientoMensual,
+  type MovimientoMensualReal,
+  type MovimientoMensualResponse,
+} from '../api/movimientoMensual';
 
 interface Props {
+  /** Código de la compañía seleccionada al ingresar a la aplicación. */
+  cia: string;
   onOpenDocumento?: () => void;
 }
 
-export default function MovimientoMensual({ onOpenDocumento }: Props) {
-  const [periodo, setPeriodo] = useState('2026-02');
+const fmtCOP = (value: number) => new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  maximumFractionDigits: 2,
+}).format(value);
+const INPUT_CLASS = 'w-full rounded border border-gray-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1';
+
+export default function MovimientoMensual({ cia, onOpenDocumento }: Props) {
+  // El período inicia vacío a propósito: abrir la opción no debe consultar MOV01.
+  const [periodo, setPeriodo] = useState('');
   const [cuentaDesde, setCuentaDesde] = useState('');
   const [cuentaHasta, setCuentaHasta] = useState('');
-  const [filterTercero, setFilterTercero] = useState('');
-  const [filterComprobante, setFilterComprobante] = useState('');
-  const [selected, setSelected] = useState<MovimientoLinea | null>(null);
-  const [showExport, setShowExport] = useState(false);
+  const [tercero, setTercero] = useState('');
+  const [comprobante, setComprobante] = useState('');
+  const [centro, setCentro] = useState('');
+  const [documento, setDocumento] = useState('');
+  const [resultado, setResultado] = useState<MovimientoMensualResponse | null>(null);
+  const [selected, setSelected] = useState<MovimientoMensualReal | null>(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
 
-  const cuentasAfectables = CUENTAS.filter(c => c.afectable);
+  // Cambiar de compañía borra los resultados anteriores, pero no consulta ADS.
+  useEffect(() => {
+    setPeriodo('');
+    setResultado(null);
+    setSelected(null);
+    setError('');
+  }, [cia]);
 
-  const filtered = MOVIMIENTOS_FEB.filter(m => {
-    if (cuentaDesde && m.cuenta < cuentaDesde) return false;
-    if (cuentaHasta && m.cuenta > cuentaHasta) return false;
-    if (filterTercero && !m.tercero.toLowerCase().includes(filterTercero.toLowerCase())) return false;
-    if (filterComprobante && !m.comprobante.toLowerCase().includes(filterComprobante.toLowerCase())) return false;
-    return true;
-  });
+  async function consultar(page = 1) {
+    if (!periodo) {
+      setError('Seleccione el período que desea consultar.');
+      return;
+    }
+    const [anio, mes] = periodo.split('-').map(Number);
+    setCargando(true);
+    setError('');
+    setSelected(null);
+    try {
+      const response = await consultarMovimientoMensual({
+        cia, anio, mes, page, pageSize: 100,
+        cuentaDesde, cuentaHasta, tercero, comprobante, centro, documento,
+      });
+      setResultado(response);
+    } catch (cause: unknown) {
+      setResultado(null);
+      setError(cause instanceof Error ? cause.message : 'No fue posible consultar MOV01.');
+    } finally {
+      setCargando(false);
+    }
+  }
 
-  const totalDeb = filtered.reduce((s, m) => s + m.debito, 0);
-  const totalCred = filtered.reduce((s, m) => s + m.credito, 0);
+  function exportarPaginaCSV() {
+    if (!resultado?.items.length) return;
+    const filas = [
+      ['Fecha', 'Comprobante', 'Tipo documento', 'Documento', 'Cuenta', 'NIT', 'Centro', 'Débito', 'Crédito', 'Base', 'Concepto'],
+      ...resultado.items.map(item => [item.fecha, item.comprobante, item.tipoDoc, item.documento, item.cuenta, item.nit, item.centro, String(item.debito), String(item.credito), String(item.base), item.concepto]),
+    ];
+    const csv = filas.map(fila => fila.map(value => `"${value.replace(/"/g, '""')}"`).join(';')).join('\n');
+    const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' }));
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = `movimiento-${cia}-${periodo}-pagina-${resultado.page}.csv`;
+    enlace.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const items = resultado?.items ?? [];
 
   return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
-      <div className="flex items-center justify-between">
+    <div className="max-w-screen-2xl space-y-4 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-base font-semibold text-gray-800">Movimiento mensual</h1>
-          <p className="text-xs text-gray-500">Consulta de movimiento contable por período, cuenta, tercero y comprobante</p>
+          <p className="text-xs text-gray-500">Consulta bajo demanda de MOV01 para la compañía {cia}</p>
         </div>
         <div className="flex items-center gap-2">
-          <button className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">⎙ Imprimir</button>
-          <div className="relative">
-            <button
-              onClick={() => setShowExport(v => !v)}
-              className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50"
-            >
-              ↓ Exportar ▾
-            </button>
-            {showExport && (
-              <div className="absolute right-0 top-8 bg-white rounded border border-gray-200 shadow-lg z-20 py-1 w-36">
-                {['PDF', 'XLSX', 'CSV'].map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setShowExport(false)}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                  >
-                    {f}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Advantage · MOV01 · CIA {cia}</span>
+          <button type="button" disabled={!items.length} onClick={exportarPaginaCSV} className="rounded border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar página CSV</button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded border border-gray-200 p-3">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Período</label>
-            <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Cuenta desde</label>
-            <input value={cuentaDesde} onChange={e => setCuentaDesde(e.target.value)} placeholder="100000"
-              className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Cuenta hasta</label>
-            <input value={cuentaHasta} onChange={e => setCuentaHasta(e.target.value)} placeholder="999999"
-              className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Tercero</label>
-            <select value={filterTercero} onChange={e => setFilterTercero(e.target.value)}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1">
-              <option value="">Todos</option>
-              {TERCEROS.map(t => <option key={t.nit} value={t.nombre}>{t.nombre}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Comprobante</label>
-            <input value={filterComprobante} onChange={e => setFilterComprobante(e.target.value)} placeholder="CE, CI, NOM..."
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
-          </div>
-          <div className="flex items-end">
-            <button className="w-full text-xs py-1.5 rounded font-medium text-white" style={{ backgroundColor: '#0073C0' }}>
-              Consultar
-            </button>
-          </div>
+      <div className="rounded border border-gray-200 bg-white p-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+          <Filter label="Período *"><input type="month" value={periodo} onChange={event => setPeriodo(event.target.value)} className={INPUT_CLASS} /></Filter>
+          <Filter label="Cuenta desde"><input inputMode="numeric" value={cuentaDesde} onChange={event => setCuentaDesde(event.target.value)} placeholder="100000" className={`${INPUT_CLASS} font-mono`} /></Filter>
+          <Filter label="Cuenta hasta"><input inputMode="numeric" value={cuentaHasta} onChange={event => setCuentaHasta(event.target.value)} placeholder="999999999999" className={`${INPUT_CLASS} font-mono`} /></Filter>
+          <Filter label="NIT tercero"><input value={tercero} onChange={event => setTercero(event.target.value)} placeholder="NITN" className={`${INPUT_CLASS} font-mono`} /></Filter>
+          <Filter label="Comprobante"><input value={comprobante} onChange={event => setComprobante(event.target.value)} placeholder="06" className={`${INPUT_CLASS} font-mono`} /></Filter>
+          <Filter label="Centro"><input value={centro} onChange={event => setCentro(event.target.value)} placeholder="TFASE" className={`${INPUT_CLASS} font-mono`} /></Filter>
+          <Filter label="Documento"><input value={documento} onChange={event => setDocumento(event.target.value)} placeholder="TDOCUM" className={`${INPUT_CLASS} font-mono`} /></Filter>
+          <div className="flex items-end"><button type="button" disabled={cargando} onClick={() => consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-wait disabled:opacity-60">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
         </div>
+        <p className="mt-2 text-xs text-gray-400">La base de datos solo se consulta cuando pulsa Consultar. El período y la compañía son filtros obligatorios.</p>
       </div>
+
+      {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="flex gap-4">
-        {/* Results table */}
-        <div className="flex-1 min-w-0">
-          <div className="bg-white rounded border border-gray-200 overflow-hidden">
-            <div className="table-fixed-header overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Fecha</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Comprobante</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Tipo Doc</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Documento</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Cuenta</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Nombre cuenta</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Tercero</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Centro</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Débito</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Crédito</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Concepto</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {filtered.map(m => (
-                    <tr
-                      key={m.id}
-                      className={`hoverable cursor-pointer ${selected?.id === m.id ? 'bg-blue-50' : ''}`}
-                      onClick={() => setSelected(m)}
-                    >
-                      <td className="px-3 py-2 font-mono text-gray-600">{m.fecha}</td>
-                      <td className="px-3 py-2 font-mono text-gray-700 font-medium">{m.comprobante}</td>
-                      <td className="px-3 py-2 text-gray-600">{m.tipoDoc}</td>
-                      <td className="px-3 py-2 font-mono text-gray-600">{m.documento}</td>
-                      <td className="px-3 py-2 font-mono text-gray-700">{m.cuenta}</td>
-                      <td className="px-3 py-2 text-gray-600 max-w-40 truncate">{m.nombreCuenta}</td>
-                      <td className="px-3 py-2 text-gray-600 max-w-44 truncate">{m.tercero || <span className="text-gray-300">—</span>}</td>
-                      <td className="px-3 py-2">
-                        {m.centro ? (
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${
-                            m.centro === 'ADM' ? 'bg-blue-50 text-blue-700' :
-                            m.centro === 'VEN' ? 'bg-green-50 text-green-700' :
-                            'bg-amber-50 text-amber-700'
-                          }`}>{m.centro}</span>
-                        ) : <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-gray-800">
-                        {m.debito > 0 ? fmtCOP(m.debito) : <span className="text-gray-200">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono text-gray-500">
-                        {m.credito > 0 ? fmtCOP(m.credito) : <span className="text-gray-200">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-gray-500 max-w-48 truncate">{m.concepto}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {/* Totals */}
-            <div className="flex items-center gap-6 px-4 py-2.5 bg-gray-50 border-t border-gray-200">
-              <span className="text-xs text-gray-500">{filtered.length} registro{filtered.length !== 1 ? 's' : ''}</span>
-              <span className="text-xs text-gray-500">Total débitos: <span className="font-mono font-semibold text-gray-800">{fmtCOP(totalDeb)}</span></span>
-              <span className="text-xs text-gray-500">Total créditos: <span className="font-mono font-semibold text-gray-800">{fmtCOP(totalCred)}</span></span>
-              <span className={`text-xs font-mono font-semibold ${totalDeb === totalCred ? 'text-green-600' : 'text-red-600'}`}>
-                Diferencia: {fmtCOP(Math.abs(totalDeb - totalCred))}
-              </span>
-            </div>
+        <div className="min-w-0 flex-1 overflow-hidden rounded border border-gray-200 bg-white">
+          <div className="table-fixed-header overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="border-b border-gray-200 bg-gray-50"><tr>
+                {['Fecha', 'Comprobante', 'Tipo Doc', 'Documento', 'Cuenta', 'NIT', 'Centro', 'Débito', 'Crédito', 'Base', 'Concepto'].map((column, index) => <th key={column} className={`px-3 py-2.5 font-semibold text-gray-600 ${index >= 7 && index <= 9 ? 'text-right' : 'text-left'}`}>{column}</th>)}
+              </tr></thead>
+              <tbody className="divide-y divide-gray-50">
+                {!resultado && !cargando && <tr><td colSpan={11} className="px-4 py-12 text-center text-gray-500"><div className="font-medium text-gray-600">Aún no se ha consultado MOV01</div><div className="mt-1">Seleccione un período, aplique los filtros necesarios y pulse Consultar.</div></td></tr>}
+                {cargando && <tr><td colSpan={11} className="px-4 py-12 text-center text-gray-500">Consultando MOV01 para la compañía {cia}…</td></tr>}
+                {resultado && !cargando && items.length === 0 && <tr><td colSpan={11} className="px-4 py-12 text-center text-gray-500">No hay movimientos que coincidan con los filtros aplicados.</td></tr>}
+                {!cargando && items.map((item, index) => {
+                  const rowKey = `${resultado?.page}-${item.fecha}-${item.comprobante}-${item.documento}-${item.cuenta}-${item.secuencia}-${index}`;
+                  return <tr key={rowKey} onClick={() => setSelected(item)} className={`hoverable cursor-pointer ${selected === item ? 'bg-blue-50' : ''}`}>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-600">{item.fecha || '—'}</td>
+                    <td className="px-3 py-2 font-mono font-medium text-gray-700">{item.comprobante || '—'}</td>
+                    <td className="px-3 py-2 text-gray-600">{item.tipoDoc || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-gray-600">{item.documento || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-gray-700">{item.cuenta}</td>
+                    <td className="px-3 py-2 font-mono text-gray-600">{item.nit || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-gray-600">{item.centro || '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-gray-800">{item.debito ? fmtCOP(item.debito) : '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-gray-600">{item.credito ? fmtCOP(item.credito) : '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-gray-600">{item.base ? fmtCOP(item.base) : '—'}</td>
+                    <td title={item.concepto} className="max-w-56 truncate px-3 py-2 text-gray-500">{item.concepto || '—'}</td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex flex-wrap items-center gap-5 border-t border-gray-200 bg-gray-50 px-4 py-2.5">
+            <span className="text-xs text-gray-500">{resultado ? `${items.length} registros · página ${resultado.page}` : 'Sin consulta'}</span>
+            {resultado && <>
+              <span className="text-xs text-gray-500">Débitos de la página: <span className="font-mono font-semibold text-gray-800">{fmtCOP(resultado.pageDebit)}</span></span>
+              <span className="text-xs text-gray-500">Créditos de la página: <span className="font-mono font-semibold text-gray-800">{fmtCOP(resultado.pageCredit)}</span></span>
+              <div className="ml-auto flex gap-2">
+                <button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => consultar(resultado.page - 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button>
+                <button type="button" disabled={!resultado.hasMore || cargando} onClick={() => consultar(resultado.page + 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button>
+              </div>
+            </>}
           </div>
         </div>
 
-        {/* Detail panel */}
-        {selected && (
-          <div className="w-72 shrink-0">
-            <div className="bg-white rounded border border-gray-200 p-4 space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-mono font-bold text-gray-800">{selected.comprobante}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{selected.documento}</div>
-                </div>
-                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
-              </div>
-
-              <div className="space-y-2 text-xs">
-                {[
-                  ['Período', selected.periodo],
-                  ['Fecha', selected.fecha],
-                  ['Cuenta', `${selected.cuenta} — ${selected.nombreCuenta}`],
-                  ['NIT', selected.nit || '—'],
-                  ['Tercero', selected.tercero || '—'],
-                  ['Centro', selected.centro || '—'],
-                  ['Tipo Doc', selected.tipoDoc],
-                  ['Doc. afectado', selected.docAfectado || '—'],
-                  ['Origen', selected.origen],
-                  ['Lote', selected.lote],
-                ].map(([label, val]) => (
-                  <div key={String(label)} className="flex justify-between gap-3">
-                    <span className="text-gray-400 shrink-0">{label}</span>
-                    <span className="text-gray-700 text-right text-xs font-mono truncate max-w-36">{val}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                <div>
-                  <div className="text-xs text-gray-400 mb-0.5">Débito</div>
-                  <div className="font-mono font-bold text-gray-800">{selected.debito > 0 ? fmtCOP(selected.debito) : '—'}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-400 mb-0.5">Crédito</div>
-                  <div className="font-mono font-bold text-gray-500">{selected.credito > 0 ? fmtCOP(selected.credito) : '—'}</div>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <div className="text-xs text-gray-400 mb-1">Concepto</div>
-                <div className="text-xs text-gray-700">{selected.concepto}</div>
-              </div>
-
-              <button
-                onClick={onOpenDocumento}
-                className="w-full text-xs py-2 border rounded font-medium text-white transition-colors mt-2"
-                style={{ backgroundColor: '#0073C0' }}
-              >
-                Ver documento oficial →
-              </button>
-            </div>
+        {selected && <aside className="w-72 shrink-0 space-y-3 rounded border border-gray-200 bg-white p-4">
+          <div className="flex items-start justify-between"><div><div className="font-mono font-bold text-gray-800">{selected.comprobante || 'Sin comprobante'}</div><div className="mt-0.5 text-xs text-gray-500">{selected.documento || 'Sin documento'}</div></div><button type="button" onClick={() => setSelected(null)} className="text-lg leading-none text-gray-400 hover:text-gray-600">×</button></div>
+          <div className="space-y-2 text-xs">
+            {[
+              ['Período', selected.periodo], ['Fecha', selected.fecha || '—'], ['Cuenta', selected.cuenta],
+              ['NIT tercero', selected.nitTercero || '—'], ['NIT movimiento', selected.nitMovimiento || '—'],
+              ['Centro', selected.centro || '—'], ['Tipo documento', selected.tipoDoc || '—'],
+              ['Doc. afectado', selected.docAfectado || '—'], ['Clasificación fiscal', selected.claseFiscal || '—'],
+              ['Secuencia', String(selected.secuencia)], ['Usuario', selected.usuario || '—'],
+            ].map(([label, value]) => <div key={label} className="flex justify-between gap-3"><span className="shrink-0 text-gray-400">{label}</span><span className="max-w-36 truncate text-right font-mono text-gray-700">{value}</span></div>)}
           </div>
-        )}
+          <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2"><div><div className="text-xs text-gray-400">Débito</div><div className="font-mono font-bold text-gray-800">{selected.debito ? fmtCOP(selected.debito) : '—'}</div></div><div><div className="text-xs text-gray-400">Crédito</div><div className="font-mono font-bold text-gray-600">{selected.credito ? fmtCOP(selected.credito) : '—'}</div></div></div>
+          <div><div className="mb-1 text-xs text-gray-400">Concepto</div><div className="text-xs text-gray-700">{selected.concepto || '—'}</div></div>
+          {onOpenDocumento && <button type="button" onClick={onOpenDocumento} className="w-full rounded bg-petroleum-500 py-2 text-xs font-medium text-white">Ver documento oficial →</button>}
+        </aside>}
       </div>
-
-      {showExport && (
-        <div className="fixed inset-0 z-10" onClick={() => setShowExport(false)} />
-      )}
     </div>
   );
+}
+
+function Filter({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>{children}</div>;
 }
