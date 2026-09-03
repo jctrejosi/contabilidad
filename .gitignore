@@ -1,1 +1,4 @@
 /ADD_CONTAB
+backend/.env
+backend/__pycache__/
+backend/.pytest_cache/

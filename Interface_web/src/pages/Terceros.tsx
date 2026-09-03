@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { TERCEROS, fmtCOP } from '../data/mock';
+import { useEffect, useState } from 'react';
+import { fmtCOP } from '../data/mock';
+import { listarTerceros } from '../api/terceros';
 import type { Tercero } from '../types';
 
 const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100 aria-[invalid=true]:border-red-400';
@@ -56,10 +57,16 @@ const ETIQUETAS_MOCK = [['Cliente frecuente', 'VIP'], ['Proveedor clave'], ['Cr�
 const CUMPLE_MOCK = ['1985-03-08', '1990-11-21', '1988-07-04', '2005-01-17', '2015-09-30', '1978-12-12'];
 
 export default function TercerosPage() {
-  const [terceros, setTerceros] = useState<Tercero[]>(TERCEROS);
+  const [terceros, setTerceros] = useState<Tercero[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [errorConexion, setErrorConexion] = useState<string | null>(null);
+  const [pagina, setPagina] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
   const [tab, setTab] = useState<'directorio' | 'informes'>('directorio');
   const [informe, setInforme] = useState<'general' | 'cumpleanos' | 'profesiones' | 'etiquetas'>('general');
   const [search, setSearch] = useState('');
+  const [searchAplicado, setSearchAplicado] = useState('');
   const [filterEstado, setFilterEstado] = useState<'todos' | 'Activo' | 'Bloqueado'>('todos');
   const [selectedNit, setSelectedNit] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
@@ -86,16 +93,45 @@ export default function TercerosPage() {
   const [nitActual, setNitActual] = useState('860.050.010');
   const [nitNuevo, setNitNuevo] = useState('');
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPagina(1);
+      setSearchAplicado(search.trim());
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    let vigente = true;
+    setCargando(true);
+    setErrorConexion(null);
+    void listarTerceros({
+      page: pagina,
+      search: searchAplicado,
+      estado: filterEstado === 'Activo' ? 'activo' : filterEstado === 'Bloqueado' ? 'bloqueado' : 'todos',
+    })
+      .then(result => {
+        if (!vigente) return;
+        setTerceros(result.items);
+        setTotal(result.total);
+        setTotalPaginas(result.pages);
+        setSelectedNit(actual => actual && result.items.some(item => item.nit === actual) ? actual : null);
+      })
+      .catch(error => {
+        if (!vigente) return;
+        setTerceros([]);
+        setErrorConexion(error instanceof Error ? error.message : 'No fue posible consultar FADCLI.');
+      })
+      .finally(() => {
+        if (vigente) setCargando(false);
+      });
+    return () => { vigente = false; };
+  }, [filterEstado, pagina, searchAplicado]);
+
   const selected = terceros.find(t => t.nit === selectedNit) || null;
 
-  const filtered = terceros.filter(t => {
-    if (filterEstado !== 'todos' && t.estado !== filterEstado) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return t.nit.includes(q) || t.nombre.toLowerCase().includes(q) || t.ciudad.toLowerCase().includes(q);
-    }
-    return true;
-  });
+  // El backend ya entrega únicamente la página que coincide con los filtros.
+  const filtered = terceros;
 
   function toggleBloqueo(nit: string) {
     setTerceros(prev => prev.map(t => {
@@ -254,17 +290,20 @@ export default function TercerosPage() {
           <p className="mt-1 text-xs text-gray-500">Directorio de personas naturales y jurídicas vinculadas a la contabilidad</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
-          <button onClick={() => setShowImport(true)} className={BUTTON_SECONDARY}>↑ Importar</button>
-          <button onClick={exportarCSV} className={BUTTON_SECONDARY}>↓ Exportar XLSX</button>
-          <button onClick={abrirCupos} className={BUTTON_SECONDARY}>Cupos</button>
+          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${errorConexion ? 'border-red-200 bg-red-50 text-red-700' : cargando ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
+            {errorConexion ? 'Sin conexión a Advantage' : cargando ? 'Consultando FADCLI…' : `FADCLI global · ${total.toLocaleString('es-CO')} terceros`}
+          </span>
+          <button disabled title="Se habilitará al implementar la importación real" className={`${BUTTON_SECONDARY} cursor-not-allowed opacity-50`}>↑ Importar</button>
+          <button onClick={exportarCSV} disabled={cargando || !!errorConexion} className={`${BUTTON_SECONDARY} disabled:cursor-not-allowed disabled:opacity-50`}>↓ Exportar página</button>
+          <button disabled title="Se habilitará con las reglas de cupo de cartera" className={`${BUTTON_SECONDARY} cursor-not-allowed opacity-50`}>Cupos</button>
           <button
-            onClick={() => setShowReasign(true)}
-            className="rounded border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
+            disabled
+            title="Requiere actualizar todas las referencias contables del tercero"
+            className="cursor-not-allowed rounded border border-amber-200 bg-white px-4 py-2 text-sm font-medium text-amber-400 opacity-60"
           >
             ⚠ Reasignar NIT
           </button>
-          <button onClick={abrirNuevo} className={BUTTON_PRIMARY}>+ Nuevo tercero</button>
+          <button disabled title="La creación real se implementará en la siguiente fase" className={`${BUTTON_PRIMARY} cursor-not-allowed opacity-50`}>+ Nuevo tercero</button>
         </div>
       </div>
 
@@ -275,13 +314,21 @@ export default function TercerosPage() {
         </div>
       )}
 
+      {errorConexion && (
+        <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errorConexion} Verifique que el servicio Python esté iniciado.
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-gray-200">
         {([['directorio', 'Directorio'], ['informes', 'Informes']] as const).map(([k, label]) => (
           <button
             key={k}
+            disabled={k === 'informes'}
+            title={k === 'informes' ? 'Los informes se conectarán después del directorio real' : undefined}
             onClick={() => setTab(k)}
-            className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px ${tab === k ? 'border-petroleum-500 text-petroleum-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px ${tab === k ? 'border-petroleum-500 text-petroleum-700' : k === 'informes' ? 'cursor-not-allowed border-transparent text-gray-300' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
             {label}
           </button>
@@ -302,7 +349,7 @@ export default function TercerosPage() {
             {(['todos', 'Activo', 'Bloqueado'] as const).map(e => (
               <button
                 key={e}
-                onClick={() => setFilterEstado(e)}
+                onClick={() => { setPagina(1); setFilterEstado(e); }}
                 className={`text-xs px-2.5 py-1 rounded transition-colors font-medium ${filterEstado === e ? 'bg-petroleum-500 text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               >
                 {e === 'todos' ? 'Todos' : e}
@@ -335,6 +382,12 @@ export default function TercerosPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
+                      {cargando && (
+                        <tr><td colSpan={13} className="px-4 py-12 text-center text-sm text-gray-500">Consultando terceros en FADCLI…</td></tr>
+                      )}
+                      {!cargando && !errorConexion && filtered.length === 0 && (
+                        <tr><td colSpan={13} className="px-4 py-12 text-center text-sm text-gray-500">No se encontraron terceros con estos criterios.</td></tr>
+                      )}
                       {filtered.map(t => (
                         <tr
                           key={t.nit}
@@ -367,16 +420,7 @@ export default function TercerosPage() {
                           <td className="px-3 py-2.5 font-mono text-gray-500">{t.fechaCreacion}</td>
                           <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
-                              <button className="text-xs text-blue-600 hover:underline" onClick={() => abrirEditar(t)}>Modificar</button>
-                              <span className="text-gray-200">|</span>
-                              <button className="text-xs text-red-500 hover:underline" onClick={() => pedirEliminar(t)}>Eliminar</button>
-                              <span className="text-gray-200">|</span>
-                              <button
-                                onClick={() => toggleBloqueo(t.nit)}
-                                className={`text-xs hover:underline ${t.estado === 'Activo' ? 'text-amber-600' : 'text-green-600'}`}
-                              >
-                                {t.estado === 'Activo' ? 'Bloquear' : 'Desbloquear'}
-                              </button>
+                              <span className="text-xs text-gray-400">Solo consulta</span>
                             </div>
                           </td>
                         </tr>
@@ -384,8 +428,12 @@ export default function TercerosPage() {
                     </tbody>
                   </table>
                 </div>
-                <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-500">
-                  {filtered.length} tercero{filtered.length !== 1 ? 's' : ''}
+                <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2 text-xs text-gray-500">
+                  <span>Página {pagina} de {totalPaginas} · {filtered.length} de {total.toLocaleString('es-CO')} terceros</span>
+                  <div className="flex gap-1">
+                    <button type="button" disabled={cargando || pagina <= 1} onClick={() => setPagina(value => Math.max(1, value - 1))} className="rounded border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
+                    <button type="button" disabled={cargando || pagina >= totalPaginas} onClick={() => setPagina(value => Math.min(totalPaginas, value + 1))} className="rounded border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Siguiente</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -424,16 +472,9 @@ export default function TercerosPage() {
                     ))}
                   </div>
 
-                  <div className="flex gap-2 pt-2">
-                    <button onClick={() => abrirEditar(selected)} className="flex-1 text-xs py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Modificar</button>
-                    <button onClick={() => pedirEliminar(selected)} className="flex-1 text-xs py-1.5 border border-red-200 rounded text-red-500 hover:bg-red-50">Eliminar</button>
+                  <div className="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700">
+                    Consulta real de FADCLI. La modificación, eliminación y bloqueo se habilitarán con sus validaciones contables y auditoría.
                   </div>
-                  <button
-                    onClick={() => toggleBloqueo(selected.nit)}
-                    className={`w-full text-xs py-1.5 border rounded font-medium ${selected.estado === 'Activo' ? 'border-amber-200 text-amber-700 hover:bg-amber-50' : 'border-green-200 text-green-700 hover:bg-green-50'}`}
-                  >
-                    {selected.estado === 'Activo' ? 'Bloquear' : 'Desbloquear'}
-                  </button>
                 </div>
               </div>
             )}

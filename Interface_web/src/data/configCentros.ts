@@ -2,8 +2,18 @@
 export interface CentroJerarquico {
   codigo: string;
   nombre: string;
-  nivel: 1 | 2 | 3;
+  nivel: 1 | 2;
   padre: string; // Código del centro padre; '' cuando es de nivel 1.
+  carpeta?: string;
+  tipo?: number;
+  habilita?: boolean | null;
+  hist?: string;
+  valor?: number;
+  porcentaje?: number;
+  valorPorcentaje?: number;
+  codigoItem?: string;
+  cuenta?: string;
+  concepto?: string;
 }
 
 export type ErroresCentro = Partial<Record<'codigo' | 'nombre' | 'nivel' | 'padre', string>>;
@@ -12,13 +22,11 @@ export const CENTROS_JERARQUICOS_INICIALES: CentroJerarquico[] = [
   { codigo: 'ADM', nombre: 'Administración', nivel: 1, padre: '' },
   { codigo: 'ADM-GER', nombre: 'Gerencia general', nivel: 2, padre: 'ADM' },
   { codigo: 'ADM-CON', nombre: 'Contabilidad', nivel: 2, padre: 'ADM' },
-  { codigo: 'ADM-CON-TES', nombre: 'Tesorería', nivel: 3, padre: 'ADM-CON' },
   { codigo: 'VEN', nombre: 'Ventas', nivel: 1, padre: '' },
   { codigo: 'VEN-NAC', nombre: 'Ventas nacionales', nivel: 2, padre: 'VEN' },
   { codigo: 'VEN-INT', nombre: 'Ventas internacionales', nivel: 2, padre: 'VEN' },
   { codigo: 'OPE', nombre: 'Operaciones', nivel: 1, padre: '' },
   { codigo: 'OPE-PLA', nombre: 'Planta de producción', nivel: 2, padre: 'OPE' },
-  { codigo: 'OPE-PLA-A', nombre: 'Planta línea A', nivel: 3, padre: 'OPE-PLA' },
 ];
 
 export function validarCentro(form: CentroJerarquico, existentes: CentroJerarquico[], codigoOriginal?: string): ErroresCentro {
@@ -32,7 +40,7 @@ export function validarCentro(form: CentroJerarquico, existentes: CentroJerarqui
   }
   if (!form.nombre.trim()) errores.nombre = 'Ingrese el nombre del centro de costo.';
   const nivel = Number(form.nivel);
-  if (nivel < 1 || nivel > 3) errores.nivel = 'El nivel debe estar entre 1 y 3.';
+  if (nivel < 1 || nivel > 2) errores.nivel = 'El nivel debe estar entre 1 y 2.';
   if (nivel > 1) {
     if (!form.padre) {
       errores.padre = 'Seleccione el centro padre.';
@@ -54,7 +62,7 @@ export function esCentrosGuardados(valor: unknown): valor is CentroJerarquico[] 
     const centro = c as Record<string, unknown>;
     return typeof centro.codigo === 'string'
       && typeof centro.nombre === 'string'
-      && (centro.nivel === 1 || centro.nivel === 2 || centro.nivel === 3)
+      && (centro.nivel === 1 || centro.nivel === 2)
       && typeof centro.padre === 'string';
   });
 }

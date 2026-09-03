@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { EMPRESA, PERIODO, USUARIO } from '../data/mock';
+import { PERIODO, USUARIO } from '../data/mock';
+import type { CompaniaSesion } from '../types';
 
 export type NavPage =
   | 'dashboard'
@@ -156,11 +157,13 @@ const NAV_GROUPS: NavGroup[] = [
 interface ShellProps {
   currentPage: NavPage;
   onNavigate: (page: NavPage) => void;
+  compania: CompaniaSesion;
+  onChangeCompany: () => void;
   children: ReactNode;
   badgeAlerts?: number;
 }
 
-export default function Shell({ currentPage, onNavigate, children, badgeAlerts = 0 }: ShellProps) {
+export default function Shell({ currentPage, onNavigate, compania, onChangeCompany, children, badgeAlerts = 0 }: ShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set(['movimientos', 'consultas'])
@@ -218,8 +221,8 @@ export default function Shell({ currentPage, onNavigate, children, badgeAlerts =
         {/* Company info (collapsed: just icon) */}
         {!collapsed && (
           <div className="px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)', backgroundColor: 'rgba(0,0,0,0.15)' }}>
-            <div className="text-xs font-medium text-white truncate">{EMPRESA.nombre}</div>
-            <div className="text-xs mt-0.5 truncate" style={{ color: '#7BDCFB' }}>NIT {EMPRESA.nit}-{EMPRESA.digito}</div>
+            <div className="text-xs font-medium text-white truncate">{compania.nombre}</div>
+            <div className="text-xs mt-0.5 truncate" style={{ color: '#7BDCFB' }}>NIT {compania.nit || 'No registrado'}</div>
           </div>
         )}
 
@@ -322,11 +325,18 @@ export default function Shell({ currentPage, onNavigate, children, badgeAlerts =
         {/* Header */}
         <header className="shrink-0 bg-white border-b border-gray-200 flex items-center gap-3 px-4 h-14 z-20">
           {/* Company pill */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium" style={{ backgroundColor: '#EFFAFF', color: '#001F4C' }}>
-            <span className="font-semibold">{EMPRESA.codigo}</span>
+          <button
+            type="button"
+            onClick={onChangeCompany}
+            title="Cambiar compañía"
+            className="group flex items-center gap-2 rounded px-3 py-1.5 text-xs font-medium transition hover:ring-1 hover:ring-[#0073C0]"
+            style={{ backgroundColor: '#EFFAFF', color: '#001F4C' }}
+          >
+            <span className="font-semibold">{compania.codigo}</span>
             <span className="text-gray-400">|</span>
-            <span className="truncate max-w-40">{EMPRESA.nombre}</span>
-          </div>
+            <span className="truncate max-w-40">{compania.nombre}</span>
+            <span className="hidden text-[10px] text-[#0073C0] group-hover:inline">Cambiar</span>
+          </button>
 
           <div className="text-gray-300 text-xs">|</div>
 

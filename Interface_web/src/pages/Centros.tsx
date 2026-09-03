@@ -1,284 +1,159 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { EMPRESA } from '../data/mock';
-import { CENTROS_JERARQUICOS_INICIALES, centrosHijos, esCentrosGuardados, validarCentro, type CentroJerarquico, type ErroresCentro } from '../data/configCentros';
+import { useEffect, useMemo, useState } from 'react';
+import { listarCentros } from '../api/centros';
+import { centrosHijos, type CentroJerarquico } from '../data/configCentros';
 
-const STORAGE_KEY = `contabdsi:centros:v1:${EMPRESA.codigo}`;
-const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100 aria-[invalid=true]:border-red-400';
-const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
-const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
-
-function cargar(): CentroJerarquico[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const value: unknown = JSON.parse(raw);
-      if (esCentrosGuardados(value)) return value;
-    }
-  } catch {
-    // Almacenamiento deshabilitado o datos dañados: se usan los datos de demostración.
-  }
-  return structuredClone(CENTROS_JERARQUICOS_INICIALES);
-}
-
-function guardar(centros: CentroJerarquico[]): boolean {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(centros));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    dialog?.showModal();
-    dialog?.querySelector<HTMLElement>('[data-initial-focus]')?.focus();
-    return () => dialog?.close();
-  }, []);
-  return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
-      <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-        <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
-        <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
-      </div>
-      {children}
-    </dialog>
-  );
-}
-
-function exportarCSV(centros: CentroJerarquico[]) {
-  const filas = [['Código', 'Nombre', 'Nivel', 'Padre'], ...centros.map(c => [c.codigo, c.nombre, String(c.nivel), c.padre || '—'])];
-  const csv = filas.map(f => f.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\n');
-  const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `centros-${EMPRESA.codigo}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-const FORM_VACIO: CentroJerarquico = { codigo: '', nombre: '', nivel: 1, padre: '' };
-
-// Ordena los centros para mostrarlos como árbol: cada padre antes que sus hijos.
+/** Ordena una lista jerárquica fija: cada padre aparece antes de sus hijos. */
 function ordenarJerarquico(centros: CentroJerarquico[]): CentroJerarquico[] {
+  const porPadre = new Map<string, CentroJerarquico[]>();
+  for (const centro of centros) {
+    const grupo = porPadre.get(centro.padre) ?? [];
+    grupo.push(centro);
+    porPadre.set(centro.padre, grupo);
+  }
+  for (const grupo of porPadre.values()) grupo.sort((a, b) => a.codigo.localeCompare(b.codigo));
+
   const resultado: CentroJerarquico[] = [];
-  const visitar = (nivel: number, padre: string) => {
-    for (const c of centros.filter(x => x.nivel === nivel && x.padre === padre)) {
-      resultado.push(c);
-      visitar((nivel + 1) as 1 | 2 | 3, c.codigo);
-    }
+  const vistos = new Set<string>();
+  const visitar = (centro: CentroJerarquico) => {
+    if (vistos.has(centro.codigo)) return;
+    vistos.add(centro.codigo);
+    resultado.push(centro);
+    for (const hijo of porPadre.get(centro.codigo) ?? []) visitar(hijo);
   };
-  visitar(1, '');
-  for (const c of centros) if (!resultado.includes(c)) resultado.push(c);
+  for (const raiz of porPadre.get('') ?? []) visitar(raiz);
+  // Conserva incluso filas heredadas anómalas para que ninguna se oculte.
+  for (const centro of centros) visitar(centro);
   return resultado;
 }
 
-export default function Centros() {
-  const [centros, setCentros] = useState<CentroJerarquico[]>(cargar);
+function exportarCSV(centros: CentroJerarquico[], cia: string) {
+  const filas = [
+    ['Compañía', 'Código', 'Nombre', 'Nivel', 'Padre', 'Carpeta', 'Tipo', 'Habilita'],
+    ...centros.map(c => [
+      cia, c.codigo, c.nombre, String(c.nivel), c.padre || '', c.carpeta || '',
+      String(c.tipo ?? ''),
+      c.habilita === null || c.habilita === undefined ? '' : c.habilita ? 'Sí' : 'No',
+    ]),
+  ];
+  const csv = filas.map(fila => fila.map(valor => `"${valor.replace(/"/g, '""')}"`).join(';')).join('\n');
+  const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' }));
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = `centros-costo-cia-${cia}.csv`;
+  enlace.click();
+  URL.revokeObjectURL(url);
+}
+
+function estadoCentro(habilita: boolean | null | undefined) {
+  if (habilita === true) return { texto: 'Habilitado', clase: 'bg-green-50 text-green-700' };
+  if (habilita === false) return { texto: 'No habilitado', clase: 'bg-gray-100 text-gray-600' };
+  return { texto: 'Sin definir', clase: 'bg-amber-50 text-amber-700' };
+}
+
+interface CentrosProps {
+  /** Código de la compañía seleccionada al ingresar a la aplicación. */
+  cia: string;
+}
+
+export default function Centros({ cia }: CentrosProps) {
+  const [centros, setCentros] = useState<CentroJerarquico[]>([]);
   const [busqueda, setBusqueda] = useState('');
-  const [modal, setModal] = useState<{ modo: 'crear' | 'editar'; original?: string } | null>(null);
-  const [form, setForm] = useState<CentroJerarquico>(FORM_VACIO);
-  const [errores, setErrores] = useState<ErroresCentro>({});
-  const [eliminar, setEliminar] = useState<CentroJerarquico | null>(null);
-  const [mensaje, setMensaje] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState('');
 
-  const filtrados = ordenarJerarquico(centros).filter(c => {
-    if (!busqueda) return true;
-    const q = busqueda.toLowerCase();
-    return c.codigo.toLowerCase().includes(q) || c.nombre.toLowerCase().includes(q);
-  });
+  useEffect(() => {
+    let vigente = true;
+    setCargando(true);
+    setError('');
+    setCentros([]);
+    listarCentros(cia)
+      .then(respuesta => { if (vigente) setCentros(respuesta.items); })
+      .catch((cause: unknown) => {
+        if (vigente) setError(cause instanceof Error ? cause.message : 'No fue posible consultar CONCECOS.');
+      })
+      .finally(() => { if (vigente) setCargando(false); });
+    return () => { vigente = false; };
+  }, [cia]);
 
-  function abrirCrear() {
-    setForm(structuredClone(FORM_VACIO));
-    setErrores({});
-    setModal({ modo: 'crear' });
-  }
-
-  function abrirEditar(item: CentroJerarquico) {
-    setForm(structuredClone(item));
-    setErrores({});
-    setModal({ modo: 'editar', original: item.codigo });
-  }
-
-  function update(field: keyof CentroJerarquico, value: string | number) {
-    setForm(prev => ({ ...prev, [field]: value }));
-    setErrores(prev => ({ ...prev, [field]: undefined }));
-  }
-
-  function grabar(event: FormEvent) {
-    event.preventDefault();
-    const nuevosErrores = validarCentro(form, centros, modal?.original);
-    setErrores(nuevosErrores);
-    if (Object.keys(nuevosErrores).length) {
-      setMensaje({ tipo: 'error', texto: 'Revise los campos señalados antes de guardar.' });
-      return;
+  const ordenados = useMemo(() => ordenarJerarquico(centros), [centros]);
+  const filtrados = useMemo(() => {
+    const termino = busqueda.trim().toLocaleLowerCase('es');
+    if (!termino) return ordenados;
+    const visibles = new Set<string>();
+    for (const centro of centros) {
+      const coincide = centro.codigo.toLocaleLowerCase('es').includes(termino)
+        || centro.nombre.toLocaleLowerCase('es').includes(termino)
+        || (centro.carpeta ?? '').toLocaleLowerCase('es').includes(termino);
+      if (coincide) {
+        visibles.add(centro.codigo);
+        if (centro.padre) visibles.add(centro.padre);
+      }
     }
-    const limpio: CentroJerarquico = {
-      ...form,
-      codigo: form.codigo.trim(),
-      nombre: form.nombre.trim(),
-      nivel: Number(form.nivel) as 1 | 2 | 3,
-      padre: Number(form.nivel) > 1 ? form.padre : '',
-    };
-    const siguientes = modal?.modo === 'editar'
-      ? centros.map(c => c.codigo === modal.original ? limpio : c)
-      : [...centros, limpio];
-    if (!guardar(siguientes)) {
-      setMensaje({ tipo: 'error', texto: 'El navegador no permitió guardar. El cambio no quedó almacenado.' });
-      return;
-    }
-    setCentros(siguientes);
-    setMensaje({ tipo: 'success', texto: modal?.modo === 'editar' ? `Centro ${limpio.codigo} actualizado.` : `Centro ${limpio.codigo} creado.` });
-    setModal(null);
-  }
+    return ordenados.filter(centro => visibles.has(centro.codigo));
+  }, [busqueda, centros, ordenados]);
 
-  function confirmarEliminar() {
-    if (!eliminar) return;
-    const siguientes = centros.filter(c => c.codigo !== eliminar.codigo);
-    if (!guardar(siguientes)) {
-      setMensaje({ tipo: 'error', texto: 'El navegador no permitió guardar. No se eliminó el centro.' });
-      setEliminar(null);
-      return;
-    }
-    setCentros(siguientes);
-    setMensaje({ tipo: 'success', texto: `Centro ${eliminar.codigo} eliminado.` });
-    setEliminar(null);
-  }
-
-  const hijosDeEliminar = eliminar ? centrosHijos(eliminar.codigo, centros) : [];
-  const candidatosPadre = centros.filter(c => c.nivel === Number(form.nivel) - 1 && c.codigo !== form.codigo);
+  const raices = centros.filter(centro => centro.nivel === 1).length;
 
   return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
+    <div className="max-w-screen-2xl space-y-4 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Centros de costo</div>
           <h1 className="text-lg font-semibold text-gray-800">Centros de costo</h1>
-          <p className="mt-1 text-xs text-gray-500">Estructura jerárquica de centros de costo en tres niveles, con código de padre para cada nivel.</p>
+          <p className="mt-1 text-xs text-gray-500">Catálogo CONCECOS de la compañía {cia}. La jerarquía se muestra completa y no se puede contraer.</p>
         </div>
-        <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
+        <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">
+          Advantage · CIA {cia} · {centros.length} centros
+        </span>
       </div>
 
-      {mensaje && <div role={mensaje.tipo === 'error' ? 'alert' : 'status'} className={`rounded border px-4 py-3 text-sm ${mensaje.tipo === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-800'}`}>{mensaje.texto}</div>}
+      {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="bg-white rounded border border-gray-200 p-3 flex items-center gap-3 flex-wrap">
-        <input type="text" placeholder="Buscar por código o nombre..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 w-64" />
-        <span className="text-xs text-gray-500">{centros.length} centros · {centros.filter(c => c.nivel === 1).length} de nivel 1</span>
-        <button onClick={() => exportarCSV(ordenarJerarquico(centros))} className="ml-auto text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">↓ Exportar CSV</button>
-        <button onClick={abrirCrear} className={BUTTON_PRIMARY}>+ Crear centro</button>
+      <div className="flex flex-wrap items-center gap-3 rounded border border-gray-200 bg-white p-3">
+        <input type="search" aria-label="Buscar centros de costo" placeholder="Buscar por código, nombre o carpeta..." value={busqueda} onChange={event => setBusqueda(event.target.value)} className="w-72 rounded border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1" />
+        <span className="text-xs text-gray-500">{centros.length} centros · {raices} raíces</span>
+        <button type="button" disabled={!centros.length} onClick={() => exportarCSV(ordenados, cia)} className="ml-auto rounded border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar CSV</button>
+        <button type="button" disabled title="Se habilitará después de validar las reglas de escritura en Advantage." className="cursor-not-allowed rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white opacity-50">+ Crear centro</button>
       </div>
 
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
+      <div className="overflow-hidden rounded border border-gray-200 bg-white">
         <div className="table-fixed-header overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Código</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Nombre</th>
-                <th className="px-3 py-2.5 text-center font-semibold text-gray-600">Nivel</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Padre</th>
-                <th className="px-3 py-2.5 text-center font-semibold text-gray-600">Dependientes</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Acciones</th>
-              </tr>
-            </thead>
+            <thead className="border-b border-gray-200 bg-gray-50"><tr>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Código</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Nombre</th>
+              <th className="px-3 py-2.5 text-center font-semibold text-gray-600">Nivel</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Padre</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Carpeta</th>
+              <th className="px-3 py-2.5 text-center font-semibold text-gray-600">Tipo</th>
+              <th className="px-3 py-2.5 text-center font-semibold text-gray-600">Estado</th>
+              <th className="px-3 py-2.5 text-center font-semibold text-gray-600">Hijos</th>
+              <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Acciones</th>
+            </tr></thead>
             <tbody className="divide-y divide-gray-50">
-              {filtrados.map(c => {
-                const indent = (c.nivel - 1) * 20;
-                const dependientes = centrosHijos(c.codigo, centros).length;
-                return (
-                  <tr key={c.codigo} className="hoverable">
-                    <td className="px-3 py-2.5" style={{ paddingLeft: `${12 + indent}px` }}>
-                      <span className={`font-mono ${c.nivel === 1 ? 'font-bold text-gray-800' : 'text-gray-600'}`}>{c.codigo}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-700" style={{ paddingLeft: `${12 + indent}px` }}>{c.nombre}</td>
-                    <td className="px-3 py-2.5 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.nivel === 1 ? 'bg-blue-100 text-blue-700' : c.nivel === 2 ? 'bg-gray-100 text-gray-600' : 'bg-amber-100 text-amber-700'}`}>
-                        {c.nivel}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-gray-500">{c.padre || '—'}</td>
-                    <td className="px-3 py-2.5 text-center font-mono text-gray-600">{dependientes || '—'}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => abrirEditar(c)} className="text-xs text-blue-600 hover:underline">Editar</button>
-                        <span className="text-gray-200">|</span>
-                        <button onClick={() => setEliminar(c)} className="text-xs text-red-500 hover:underline">Eliminar</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
+              {cargando && <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-500">Consultando CONCECOS para la compañía {cia}…</td></tr>}
+              {!cargando && !error && filtrados.length === 0 && <tr><td colSpan={9} className="px-4 py-10 text-center text-gray-500">{centros.length ? 'No hay centros que coincidan con la búsqueda.' : `La compañía ${cia} no tiene centros de costo registrados.`}</td></tr>}
+              {!cargando && filtrados.map(centro => {
+                const estado = estadoCentro(centro.habilita);
+                const hijos = centrosHijos(centro.codigo, centros).length;
+                const sangria = centro.nivel === 2 ? 20 : 0;
+                return <tr key={`${cia}-${centro.codigo}`} className="hoverable">
+                  <td className="px-3 py-2.5" style={{ paddingLeft: `${12 + sangria}px` }}><span className={`font-mono ${centro.nivel === 1 ? 'font-bold text-gray-800' : 'text-gray-600'}`}>{centro.nivel === 2 && <span aria-hidden="true" className="mr-2 text-gray-300">└</span>}{centro.codigo}</span></td>
+                  <td className="px-3 py-2.5 text-gray-700">{centro.nombre || '—'}</td>
+                  <td className="px-3 py-2.5 text-center"><span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-600">{centro.nivel}</span></td>
+                  <td className="px-3 py-2.5 font-mono text-gray-500">{centro.padre || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{centro.carpeta || '—'}</td>
+                  <td className="px-3 py-2.5 text-center font-mono text-gray-600">{centro.tipo ?? '—'}</td>
+                  <td className="px-3 py-2.5 text-center"><span className={`rounded-full px-2 py-0.5 ${estado.clase}`}>{estado.texto}</span></td>
+                  <td className="px-3 py-2.5 text-center font-mono text-gray-600">{hijos || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-400" title="Alta, edición y eliminación pendientes de validación de integridad.">Solo consulta</td>
+                </tr>;
               })}
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-500">
-          {filtrados.length} centro{filtrados.length !== 1 ? 's' : ''} mostrados en orden jerárquico
-        </div>
+        <div className="border-t border-gray-100 px-4 py-2 text-xs text-gray-500">{filtrados.length} centro{filtrados.length !== 1 ? 's' : ''} mostrado{filtrados.length !== 1 ? 's' : ''} en orden jerárquico</div>
       </div>
-
-      {modal && <Modal title={modal.modo === 'crear' ? 'Nuevo centro de costo' : `Editar centro ${modal.original}`} onClose={() => setModal(null)}>
-        <form noValidate onSubmit={grabar}>
-          <div className="space-y-3 p-5">
-            <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-              <legend className="px-2 text-xs font-semibold text-petroleum-800">Datos del centro</legend>
-              <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="grid items-center gap-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-x-3">
-                  <label htmlFor="cen-codigo" className="text-xs font-medium text-gray-600">Código:</label>
-                  <input id="cen-codigo" data-initial-focus className={`${INPUT} font-mono`} value={form.codigo} maxLength={12} onChange={e => update('codigo', e.target.value.toUpperCase())} aria-invalid={!!errores.codigo} aria-describedby={errores.codigo ? 'cen-codigo-error' : undefined} />
-                  {errores.codigo && <p id="cen-codigo-error" className="text-xs text-red-600 sm:col-start-2">{errores.codigo}</p>}
-                </div>
-                <div className="grid items-center gap-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-x-3">
-                  <label htmlFor="cen-nivel" className="text-xs font-medium text-gray-600">Nivel:</label>
-                  <select id="cen-nivel" className={INPUT} value={String(form.nivel)} onChange={e => { update('nivel', Number(e.target.value)); update('padre', ''); }} aria-invalid={!!errores.nivel}>
-                    <option value={1}>1 — Dirección</option>
-                    <option value={2}>2 — Subcentro</option>
-                    <option value={3}>3 — Detalle</option>
-                  </select>
-                  {errores.nivel && <p className="text-xs text-red-600 sm:col-start-2">{errores.nivel}</p>}
-                </div>
-                <div className="grid items-center gap-1 sm:col-span-2 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-x-3">
-                  <label htmlFor="cen-nombre" className="text-xs font-medium text-gray-600">Nombre:</label>
-                  <input id="cen-nombre" className={INPUT} value={form.nombre} onChange={e => update('nombre', e.target.value)} aria-invalid={!!errores.nombre} aria-describedby={errores.nombre ? 'cen-nombre-error' : undefined} />
-                  {errores.nombre && <p id="cen-nombre-error" className="text-xs text-red-600 sm:col-start-2">{errores.nombre}</p>}
-                </div>
-                {Number(form.nivel) > 1 && (
-                  <div className="grid items-center gap-1 sm:col-span-2 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-x-3">
-                    <label htmlFor="cen-padre" className="text-xs font-medium text-gray-600">Centro padre:</label>
-                    <select id="cen-padre" className={INPUT} value={form.padre} onChange={e => update('padre', e.target.value)} aria-invalid={!!errores.padre} aria-describedby={errores.padre ? 'cen-padre-error' : undefined}>
-                      <option value="">— Seleccione el centro padre —</option>
-                      {candidatosPadre.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nombre}</option>)}
-                    </select>
-                    {errores.padre && <p id="cen-padre-error" className="text-xs text-red-600 sm:col-start-2">{errores.padre}</p>}
-                  </div>
-                )}
-              </div>
-            </fieldset>
-          </div>
-          <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
-            <button type="button" onClick={() => setModal(null)} className={BUTTON_SECONDARY}>Cancelar</button>
-            <button type="submit" className={BUTTON_PRIMARY}>Guardar</button>
-          </div>
-        </form>
-      </Modal>}
-
-      {eliminar && <Modal title="Eliminar centro de costo" onClose={() => setEliminar(null)}>
-        <div className="space-y-3 p-5">
-          {hijosDeEliminar.length > 0 ? (
-            <div role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              No puede eliminar <span className="font-mono font-semibold">{eliminar.codigo}</span> porque tiene {hijosDeEliminar.length} centro{hijosDeEliminar.length !== 1 ? 's' : ''} dependiente{hijosDeEliminar.length !== 1 ? 's' : ''}: {hijosDeEliminar.map(h => h.codigo).join(', ')}. Reasigne o elimine primero los dependientes.
-            </div>
-          ) : (
-            <p className="text-sm text-gray-600">¿Está seguro de eliminar el centro <span className="font-mono font-semibold text-gray-800">{eliminar.codigo}</span> — {eliminar.nombre}? Los movimientos que lo referencien quedarán sin centro de costo.</p>
-          )}
-        </div>
-        <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
-          <button type="button" data-initial-focus onClick={() => setEliminar(null)} className={BUTTON_SECONDARY}>Cancelar</button>
-          {hijosDeEliminar.length === 0 && <button type="button" onClick={confirmarEliminar} className="rounded bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">Eliminar</button>}
-        </div>
-      </Modal>}
     </div>
   );
 }

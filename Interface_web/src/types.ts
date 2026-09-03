@@ -24,6 +24,14 @@ export interface Empresa {
   digito: string;
 }
 
+/** Compañía contable seleccionable desde la tabla real CONEMP. */
+export interface CompaniaSesion {
+  codigo: string;
+  nombre: string;
+  nit: string;
+  habilitada: boolean;
+}
+
 export interface Periodo {
   anio: number;
   mes: number;

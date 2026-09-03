@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Shell, { type NavPage } from './components/Shell';
 import { LOTES_INICIALES, ALERTAS } from './data/mock';
-import type { Lote } from './types';
+import type { CompaniaSesion, Lote } from './types';
 
 import Dashboard from './pages/Dashboard';
 import LotesPage from './pages/Lotes';
@@ -44,14 +44,32 @@ import UsuariosPermisos from './pages/UsuariosPermisos';
 import Bitacora from './pages/Bitacora';
 import Integraciones from './pages/Integraciones';
 import Reorganizacion from './pages/Reorganizacion';
+import SeleccionCompania from './pages/SeleccionCompania';
 
 const URGENTE_ALERTS = ALERTAS.filter(a => a.tipo === 'error').length;
 
 export default function App() {
+  const [compania, setCompania] = useState<CompaniaSesion | null>(null);
   const [page, setPage] = useState<NavPage>('dashboard');
   const [lotes, setLotes] = useState<Lote[]>(LOTES_INICIALES);
   const [selectedLoteId, setSelectedLoteId] = useState<string | null>(null);
   const [showDocumentPage, setShowDocumentPage] = useState(false);
+
+  if (!compania) {
+    return (
+      <SeleccionCompania
+        onSelect={seleccion => {
+          setCompania(seleccion);
+          setPage('dashboard');
+          setSelectedLoteId(null);
+          setShowDocumentPage(false);
+        }}
+      />
+    );
+  }
+
+  // Alias no anulable para las funciones de navegación definidas debajo.
+  const companiaActiva = compania;
 
   function navigate(p: NavPage) {
     setPage(p);
@@ -182,7 +200,7 @@ export default function App() {
         return <ParametrosOperacion onExit={() => navigate('dashboard')} />;
 
       case 'config/plan-cuentas':
-        return <PlanCuentas />;
+        return <PlanCuentas cia={companiaActiva.codigo} />;
 
       case 'config/terceros':
         return <TercerosPage />;
@@ -191,7 +209,7 @@ export default function App() {
         return <Comprobantes />;
 
       case 'config/centros':
-        return <Centros />;
+        return <Centros cia={companiaActiva.codigo} />;
 
       case 'config/renglones':
         return <RenglonesRenta />;
@@ -238,7 +256,18 @@ export default function App() {
   }
 
   return (
-    <Shell currentPage={page} onNavigate={navigate} badgeAlerts={URGENTE_ALERTS}>
+    <Shell
+      currentPage={page}
+      onNavigate={navigate}
+      badgeAlerts={URGENTE_ALERTS}
+      compania={companiaActiva}
+      onChangeCompany={() => {
+        setPage('dashboard');
+        setSelectedLoteId(null);
+        setShowDocumentPage(false);
+        setCompania(null);
+      }}
+    >
       {renderPage()}
     </Shell>
   );
