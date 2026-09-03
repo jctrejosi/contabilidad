@@ -19,16 +19,16 @@ Veredicto por hallazgo (B01–B15) contra el esquema actual de `contabilidad/db`
 | B07 | Idempotencia y pruebas insuficientes | **CONFIRMADO — CORREGIDO** | Nueva `lotes.origen_referencia` con UNIQUE parcial (reimportar el mismo origen no duplica); prueba de idempotencia reescrita para verificar por **efecto** (conteo de documentos), sin falso positivo; conciliación libro vs saldos por cuenta. |
 | B08 | Error estructural en auditoría de generaciones fiscales | **CONFIRMADO — CORREGIDO** | `generaciones_medios` ahora declara `actualizado_en` (el trigger era inválido) y separa `numero_generacion` (identidad por compañía/año) de `version` (control optimista). |
 | B09 | Parámetros, nómina y plantillas incompletos | **CONFIRMADO — CORREGIDO (parcial)** | `parametros_operacion` ampliado (fecha_operativa/CTFCHOY, observacion/CTTOBS, documento/CTDOCUM, leyenda2/CTLEY2); nueva `parametros_nomina` (CTCOMNOM1..3, CTDOCNOM1..3); `plantilla_lineas` reestructurada a **parejas de cuentas** (cuenta_debito/cuenta_credito) como el legado. Pendiente: decidir regla de `modo_retencion` (MCR no se persiste en el legado). |
-| B10 | Faltan activos, amortizaciones, bancos y reembolsos | **CONFIRMADO — CORREGIDO (estructura)** | Nuevas tablas: `tercero_cuentas_bancarias`, `reembolsos`+`reembolso_lineas`, `activos`+`activo_cuotas`+`activo_distribuciones` (schema/11). Pendiente: verificar estructura física de CONREMAE/CONREITE antes de fijar tipos. |
+| B10 | Faltan activos, amortizaciones, bancos y reembolsos | **CONFIRMADO — CORREGIDO (estructura)** | Nuevas tablas: `tercero_cuentas_bancarias`, `reembolsos`+`reembolso_lineas`, `activos`+`activo_cuotas`+`activo_distribuciones` (postgresql/schema/11). Pendiente: verificar estructura física de CONREMAE/CONREITE antes de fijar tipos. |
 | B11 | Terceros y catálogos perderían información | **CONFIRMADO — CORREGIDO (parcial)** | `terceros` ampliado con `correo` y `codigo_legado`. Pendiente: catálogos CIUDAD/ACTIVIDA/VISTDOC y datos comerciales/fiscales completos (integración o réplica) — fase 2 del plan. |
 | B12 | Exógena e informes no se reducen a una tabla de resultados | **CONFIRMADO — CORREGIDO (parcial)** | `formatos_exogenos` con unicidad `(compania, codigo, vigencia)`. Pendiente: reglas CONMAG3 (rangos/condiciones/fuentes), VALOR1..11 de CONMAGDT, CONMAGIT por documento y definiciones CONINF1 del generador. |
 | B13 | Presupuesto y cierres necesitan más que cabeceras | **CONFIRMADO — CORREGIDO (parcial)** | `presupuesto_rubros` con `nombre`/`concepto` y UNIQUE `(presupuesto, codigo, centro)`; `presupuesto_valores` con períodos 00–13 y tipo Presupuesto/Ejecucion. Pendiente: algoritmos de cierre/consolidación/reprocesos (tablas existen, funciones no). |
 | B14 | Seguridad y auditoría no equivalen a guardar un usuario | **CONFIRMADO — CORREGIDO (parcial)** | `auditoria.usuario_id`, `lotes.usuario_id`, `documentos.usuario_id` ahora `bigint` con FK a `usuarios`; nueva `usuario_companias`. Pendiente: autenticación/RLS real, inmutabilidad de bitácora y pruebas de aislamiento (fase de servicios). |
-| B15 | El instalador de demostración no es un migrador | **CONFIRMADO — ASUMIDO COMO CORRECTO** | `scripts/up.sh` es un bootstrap de demostración con `dropdb`; está documentado que NUNCA debe apuntar a producción. El migrador real (fases 5-9 del plan) es una unidad de trabajo separada. |
+| B15 | El instalador de demostración no es un migrador | **CONFIRMADO — ASUMIDO COMO CORRECTO** | `postgresql/scripts/up.sh` es un bootstrap de demostración con `dropdb`; está documentado que NUNCA debe apuntar a producción. El migrador real (fases 5-9 del plan) es una unidad de trabajo separada. |
 
 ## Resultado de la re-validación ejecutada
 
-`scripts/up.sh` carga el esquema (12 archivos) y ejecuta **11 pruebas** que pasan:
+`postgresql/scripts/up.sh` carga el esquema (12 archivos) y ejecuta **11 pruebas** que pasan:
 
 1. NOM2 cuadrado con 2 errores iniciales.
 2. Corrección → Verificado.
