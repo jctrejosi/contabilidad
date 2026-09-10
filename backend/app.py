@@ -8,9 +8,11 @@ SQL ni se conocen credenciales.
 from __future__ import annotations
 
 import logging
+from datetime import date
+from decimal import Decimal
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Path, Query, status
+from fastapi import FastAPI, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from .ads_repository import (
@@ -29,6 +31,23 @@ from .centros_repository import list_cost_centers
 from .tipos_documento_repository import list_document_types
 from .comprobantes_repository import list_vouchers
 from .movimiento_mensual_repository import list_monthly_movements
+from .documentos_repository import document_movements, list_documents
+from .lotes_repository import list_lot_lines, list_lots
+from .contabilizacion_repository import (
+    PostingConflict,
+    PostingValidationError,
+    get_accounting_period,
+    post_direct_movement,
+)
+from .balance_comprobacion_repository import (
+    build_trial_balance,
+    export_trial_balance_pdf,
+    export_trial_balance_xlsx,
+)
+from .reproceso_mensual_repository import (
+    execute_monthly_reprocess,
+    simulate_monthly_reprocess,
+)
 
 
 logger = logging.getLogger("contabdsi.backend")
@@ -64,13 +83,57 @@ class AccountCreate(AccountWrite):
     )
 
 
+class DirectMovementLine(BaseModel):
+    """Partida recibida desde Captura directa antes de escribir MOV01."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cuenta: str = Field(pattern=r"^[0-9]{1,12}$")
+    nit: str = Field("", max_length=15)
+    centro: str = Field("", max_length=7)
+    debito: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    credito: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    base: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    documentoAfectado: str = Field("", max_length=12)
+
+
+class DirectMovementPost(BaseModel):
+    """Cabecera y partidas necesarias para contabilizar directamente en ADS."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cia: str = Field(pattern=r"^[0-9]{1,3}$")
+    fecha: date
+    comprobante: str = Field(min_length=1, max_length=2)
+    tipoDocumento: str = Field(min_length=1, max_length=2)
+    numeroDocumento: str = Field("", max_length=12)
+    concepto: str = Field(min_length=1, max_length=50)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    lineas: list[DirectMovementLine] = Field(min_length=2, max_length=5000)
+
+
+class MonthlyReprocessRequest(BaseModel):
+    """Rango y trazabilidad del reproceso mensual consolidado."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cia: str = Field(pattern=r"^[0-9]{1,3}$")
+    anio: int = Field(ge=1900, le=2100)
+    mesDesde: int = Field(ge=1, le=12)
+    mesHasta: int = Field(ge=1, le=12)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
 def _service_error(exc: Exception) -> HTTPException:
     """Convierte errores de dominio/ADS en respuestas HTTP estables y seguras."""
     if isinstance(exc, AccountAlreadyExists):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, PostingConflict):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, (AccountNotFound, CompanyNotFound)):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    if isinstance(exc, ValueError):
+    if isinstance(exc, (ValueError, PostingValidationError)):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, AdsConfigurationError):
         logger.error("Configuracion ADS no disponible: %s", exc)
@@ -166,6 +229,18 @@ def vouchers(
     }
 
 
+@app.get("/api/periodo-operacion", summary="Consultar el período contable habilitado")
+def accounting_period(
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lee CONCTR para inicializar fecha y período de Captura directa."""
+    try:
+        item = get_accounting_period(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONCTR"}
+
+
 @app.get("/api/movimiento-mensual", summary="Consultar movimientos contables de un mes")
 def monthly_movements(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
@@ -198,6 +273,193 @@ def monthly_movements(
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "MOV01", "sharedAcrossCompanies": False}
+
+
+@app.get("/api/documentos", summary="Consultar cabeceras de documentos contabilizados")
+def documents(
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, alias="pageSize", ge=1, le=100),
+    periodo: str = Query("", max_length=7),
+    comprobante: str = Query("", max_length=2),
+    tipo_documento: str = Query("", alias="tipoDocumento", max_length=2),
+    nit: str = Query("", max_length=15),
+    fecha_desde: str = Query("", alias="fechaDesde", max_length=10),
+    fecha_hasta: str = Query("", alias="fechaHasta", max_length=10),
+    documento: str = Query("", max_length=12),
+) -> dict[str, object]:
+    """Lee CONDOCUM únicamente al recibir filtros confirmados por el usuario."""
+    try:
+        result = list_documents(
+            cia,
+            page=page,
+            page_size=page_size,
+            period=periodo,
+            voucher=comprobante,
+            document_type=tipo_documento,
+            nit=nit,
+            date_from=fecha_desde,
+            date_to=fecha_hasta,
+            document=documento,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {**result, "source": "CONDOCUM", "sharedAcrossCompanies": False}
+
+
+@app.get("/api/documentos/detalle", summary="Consultar las partidas de un documento")
+def document_detail(
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    documento: str = Query(min_length=1, max_length=12),
+    comprobante: str = Query(min_length=1, max_length=6),
+    tipo_documento: str = Query(alias="tipoDocumento", min_length=1, max_length=2),
+    fecha: str = Query(min_length=10, max_length=10),
+) -> dict[str, object]:
+    """Relaciona la cabecera seleccionada con sus renglones almacenados en MOV01."""
+    try:
+        items = document_movements(
+            cia,
+            document=documento,
+            voucher=comprobante,
+            document_type=tipo_documento,
+            movement_date=fecha,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "items": items,
+        "count": len(items),
+        "source": "MOV01",
+        "sharedAcrossCompanies": False,
+    }
+
+
+@app.get("/api/lotes", summary="Consultar lotes de la compañía activa")
+def lots(
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """Lista CONMOVI usando CIA como condición obligatoria."""
+    try:
+        result = list_lots(cia, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {**result, "source": "CONMOVI", "sharedAcrossCompanies": False}
+
+
+@app.get("/api/lotes/detalle", summary="Consultar las partidas de un lote")
+def lot_detail(
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    lote: str = Query(min_length=1, max_length=10),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(200, alias="pageSize", ge=1, le=500),
+) -> dict[str, object]:
+    """Lee CONLOTES relacionando simultáneamente CIA y LOTE."""
+    try:
+        result = list_lot_lines(cia, lote, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {**result, "source": "CONLOTES", "sharedAcrossCompanies": False}
+
+
+@app.post("/api/movimientos/contabilizar", summary="Contabilizar una captura directa en Advantage")
+def post_movement(
+    movement: DirectMovementPost,
+    dry_run: bool = Query(
+        False,
+        alias="dryRun",
+        description="Ejecuta todas las escrituras y finalmente hace rollback.",
+    ),
+) -> dict[str, object]:
+    """Graba VISDOCUM, MOV01, CONMAE, CONTERCE, COCENTRO y CONDOCUM atómicamente."""
+    try:
+        result = post_direct_movement(movement.model_dump(), dry_run=dry_run)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "source": "Advantage Data Server"}
+
+
+@app.post("/api/reprocesos/mensual/simular", summary="Simular el reproceso mensual")
+def simulate_monthly_reprocess_endpoint(request: MonthlyReprocessRequest) -> dict[str, object]:
+    """Compara MOV01 contra CONMAE/CONTERCE sin efectuar escrituras."""
+    try:
+        result = simulate_monthly_reprocess(
+            request.cia, request.anio, request.mesDesde, request.mesHasta
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "source": "MOV01", "dryRun": True}
+
+
+@app.post("/api/reprocesos/mensual/ejecutar", summary="Ejecutar el reproceso mensual")
+def execute_monthly_reprocess_endpoint(
+    request: MonthlyReprocessRequest,
+    dry_run: bool = Query(False, alias="dryRun"),
+) -> dict[str, object]:
+    """Reemplaza acumulados mensuales en CONMAE y CONTERCE atómicamente."""
+    try:
+        result = execute_monthly_reprocess(
+            request.cia,
+            request.anio,
+            request.mesDesde,
+            request.mesHasta,
+            user=request.usuario,
+            reason=request.motivo,
+            dry_run=dry_run,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "source": "Advantage Data Server", "dryRun": dry_run}
+
+
+@app.get("/api/informes/balance-comprobacion", summary="Generar balance de comprobación acumulado")
+def trial_balance(
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+    nivel: int = Query(6, ge=4, le=12),
+    incluir_ceros: bool = Query(False, alias="incluirCeros"),
+) -> dict[str, object]:
+    """Lee los acumulados de CONMAE aplicando la lógica del informe Harbour."""
+    try:
+        return build_trial_balance(
+            cia, anio, mes_desde, mes_hasta, level=nivel, include_zero=incluir_ceros,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/balance-comprobacion/exportar", summary="Exportar balance acumulado")
+def export_trial_balance(
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+    nivel: int = Query(6, ge=4, le=12),
+    incluir_ceros: bool = Query(False, alias="incluirCeros"),
+    formato: Literal["xlsx", "pdf"] = Query(),
+) -> Response:
+    """Descarga el mismo resultado presentado en pantalla como XLSX o PDF."""
+    try:
+        report = build_trial_balance(
+            cia, anio, mes_desde, mes_hasta, level=nivel, include_zero=incluir_ceros,
+        )
+        if formato == "xlsx":
+            content = export_trial_balance_xlsx(report)
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            content = export_trial_balance_pdf(report)
+            media_type = "application/pdf"
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    filename = f"balance_comprobacion_{int(cia):03d}_{anio}_{mes_desde:02d}_{mes_hasta:02d}.{formato}"
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/api/cuentas", summary="Listar cuentas maestras")

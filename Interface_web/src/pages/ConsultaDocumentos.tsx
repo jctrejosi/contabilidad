@@ -1,250 +1,237 @@
-import { useState } from 'react';
-import { COMPROBANTES, MOVIMIENTOS_FEB, fmtCOP } from '../data/mock';
-import type { MovimientoLinea } from '../types';
+import { useEffect, useState } from 'react';
+import { listarComprobantes, type ComprobanteReal } from '../api/comprobantes';
+import {
+  consultarDetalleDocumento,
+  consultarDocumentos,
+  type DocumentoContable,
+  type DocumentosResponse,
+  type MovimientoDocumento,
+} from '../api/documentos';
+import { listarTiposDocumento, type TipoDocumentoReal } from '../api/tiposDocumento';
 
 const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const SELECT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
+const fmtCOP = (value: number) => new Intl.NumberFormat('es-CO', {
+  style: 'currency', currency: 'COP', maximumFractionDigits: 2,
+}).format(value);
 
 interface Props {
+  cia: string;
   onOpenDocumento?: () => void;
 }
 
-interface GrupoDocumento {
-  fecha: string;
+interface Filtros {
+  periodo: string;
   comprobante: string;
-  tipoDoc: string;
-  documento: string;
+  tipoDocumento: string;
   nit: string;
-  tercero: string;
-  lineas: MovimientoLinea[];
-  totalDebito: number;
-  totalCredito: number;
+  fechaDesde: string;
+  fechaHasta: string;
+  documento: string;
 }
 
-const TIPOS_DOC = Array.from(new Set(MOVIMIENTOS_FEB.map(m => m.tipoDoc)));
+const FILTROS_VACIOS: Filtros = {
+  periodo: '', comprobante: '', tipoDocumento: '', nit: '',
+  fechaDesde: '', fechaHasta: '', documento: '',
+};
 
-function agruparDocumentos(): GrupoDocumento[] {
-  const porDocumento = new Map<string, MovimientoLinea[]>();
-  for (const m of MOVIMIENTOS_FEB) {
-    const existente = porDocumento.get(m.documento) ?? [];
-    existente.push(m);
-    porDocumento.set(m.documento, existente);
-  }
-  return Array.from(porDocumento.entries()).map(([documento, lineas]) => {
-    const principal = lineas.find(l => l.tercero) ?? lineas[0];
-    return {
-      fecha: lineas[0].fecha,
-      comprobante: lineas[0].comprobante,
-      tipoDoc: lineas[0].tipoDoc,
-      documento,
-      nit: principal.nit,
-      tercero: principal.tercero,
-      lineas,
-      totalDebito: lineas.reduce((s, l) => s + l.debito, 0),
-      totalCredito: lineas.reduce((s, l) => s + l.credito, 0),
-    };
-  }).sort((a, b) => a.fecha.localeCompare(b.fecha));
+function claveDocumento(documento: DocumentoContable): string {
+  return `${documento.fecha}|${documento.comprobante}|${documento.tipoDocumento}|${documento.documento}|${documento.id}`;
 }
 
-export default function ConsultaDocumentos({ onOpenDocumento }: Props) {
-  const [periodo, setPeriodo] = useState('2026-02');
-  const [comprobante, setComprobante] = useState('');
-  const [tipoDoc, setTipoDoc] = useState('');
-  const [nit, setNit] = useState('');
-  const [desde, setDesde] = useState('');
-  const [hasta, setHasta] = useState('');
+export default function ConsultaDocumentos({ cia, onOpenDocumento }: Props) {
+  // La pantalla inicia deliberadamente sin documentos. Solo consultar() llama
+  // CONDOCUM, después de que el usuario escriba al menos un filtro.
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [resultado, setResultado] = useState<DocumentosResponse | null>(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
+  const [comprobantes, setComprobantes] = useState<ComprobanteReal[]>([]);
+  const [tiposDocumento, setTiposDocumento] = useState<TipoDocumentoReal[]>([]);
+  const [maestrosError, setMaestrosError] = useState('');
   const [expandido, setExpandido] = useState<string | null>(null);
-  const [showExport, setShowExport] = useState(false);
+  const [detalles, setDetalles] = useState<Record<string, MovimientoDocumento[]>>({});
+  const [detalleCargando, setDetalleCargando] = useState<string | null>(null);
+  const [detalleError, setDetalleError] = useState<Record<string, string>>({});
 
-  const documentos = agruparDocumentos();
-  const filtrados = documentos.filter(d => {
-    if (comprobante && !d.comprobante.startsWith(comprobante)) return false;
-    if (tipoDoc && d.tipoDoc !== tipoDoc) return false;
-    if (nit && !d.nit.includes(nit)) return false;
-    if (desde && d.fecha < desde) return false;
-    if (hasta && d.fecha > hasta) return false;
-    if (periodo && d.fecha.slice(0, 7) !== periodo) return false;
-    return true;
-  });
-  const totalDeb = filtrados.reduce((s, d) => s + d.totalDebito, 0);
-  const totalCred = filtrados.reduce((s, d) => s + d.totalCredito, 0);
+  // CONTICOM y VISDOCUM alimentan únicamente los selectores. Esta carga no
+  // consulta documentos ni movimientos.
+  useEffect(() => {
+    let vigente = true;
+    setFiltros(FILTROS_VACIOS);
+    setResultado(null);
+    setExpandido(null);
+    setDetalles({});
+    setError('');
+    setMaestrosError('');
+    Promise.all([listarComprobantes(cia), listarTiposDocumento()])
+      .then(([comprobantesResponse, tiposResponse]) => {
+        if (!vigente) return;
+        setComprobantes(comprobantesResponse.items);
+        setTiposDocumento(tiposResponse.items);
+      })
+      .catch((cause: unknown) => {
+        if (vigente) setMaestrosError(cause instanceof Error ? cause.message : 'No fue posible cargar los filtros maestros.');
+      });
+    return () => { vigente = false; };
+  }, [cia]);
+
+  function cambiarFiltro(campo: keyof Filtros, valor: string) {
+    setFiltros(actual => ({ ...actual, [campo]: valor }));
+    // Los resultados corresponden a los filtros usados en la última consulta;
+    // al modificarlos se ocultan para no presentar información desactualizada.
+    setResultado(null);
+    setExpandido(null);
+    setError('');
+  }
+
+  const hayFiltro = Object.values(filtros).some(valor => valor.trim());
+
+  async function consultar(page = 1) {
+    if (!hayFiltro) {
+      setError('Aplique al menos un filtro antes de consultar documentos.');
+      return;
+    }
+    setCargando(true);
+    setError('');
+    setExpandido(null);
+    try {
+      const response = await consultarDocumentos({ cia, page, pageSize: 50, ...filtros });
+      setResultado(response);
+    } catch (cause: unknown) {
+      setResultado(null);
+      setError(cause instanceof Error ? cause.message : 'No fue posible consultar CONDOCUM.');
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  async function alternarDetalle(documento: DocumentoContable) {
+    const clave = claveDocumento(documento);
+    if (expandido === clave) {
+      setExpandido(null);
+      return;
+    }
+    setExpandido(clave);
+    if (detalles[clave]) return;
+    setDetalleCargando(clave);
+    setDetalleError(actual => ({ ...actual, [clave]: '' }));
+    try {
+      const lineas = await consultarDetalleDocumento(cia, documento);
+      setDetalles(actual => ({ ...actual, [clave]: lineas }));
+    } catch (cause: unknown) {
+      setDetalleError(actual => ({
+        ...actual,
+        [clave]: cause instanceof Error ? cause.message : 'No fue posible consultar MOV01.',
+      }));
+    } finally {
+      setDetalleCargando(null);
+    }
+  }
+
+  const items = resultado?.items ?? [];
 
   return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
+    <div className="max-w-screen-2xl space-y-4 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Consultas / Documentos</div>
           <h1 className="text-lg font-semibold text-gray-800">Consulta general de documentos</h1>
-          <p className="mt-1 text-xs text-gray-500">Búsqueda de documentos contables por período, comprobante, tipo, NIT y fechas.</p>
+          <p className="mt-1 text-xs text-gray-500">Cabeceras de CONDOCUM y detalle contable de MOV01 · compañía {cia}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
-          <button type="button" onClick={() => window.print()} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">⎙ Imprimir</button>
-          <div className="relative">
-            <button type="button" onClick={() => setShowExport(v => !v)} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">↓ Exportar ▾</button>
-            {showExport && (
-              <div className="absolute right-0 top-8 bg-white rounded border border-gray-200 shadow-lg z-20 py-1 w-36">
-                {['PDF', 'XLSX', 'CSV'].map(f => (
-                  <button key={f} type="button" onClick={() => setShowExport(false)} className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">{f}</button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Advantage · CIA {cia}</span>
       </div>
 
-      <div className="bg-white rounded border border-gray-200 p-3">
+      <div className="rounded border border-gray-200 bg-white p-3">
         <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
           <legend className="px-2 text-xs font-semibold text-petroleum-800">Filtros</legend>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Período</label>
-              <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className={INPUT} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Comprobante</label>
-              <select value={comprobante} onChange={e => setComprobante(e.target.value)} className={SELECT}>
-                <option value="">Todos</option>
-                {COMPROBANTES.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nombre}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Tipo de documento</label>
-              <select value={tipoDoc} onChange={e => setTipoDoc(e.target.value)} className={SELECT}>
-                <option value="">Todos</option>
-                {TIPOS_DOC.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">NIT</label>
-              <input value={nit} onChange={e => setNit(e.target.value)} placeholder="900.123.456" className={`${INPUT} font-mono`} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Fecha desde</label>
-              <input type="date" value={desde} onChange={e => setDesde(e.target.value)} className={`${INPUT} font-mono`} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Fecha hasta</label>
-              <input type="date" value={hasta} onChange={e => setHasta(e.target.value)} className={`${INPUT} font-mono`} />
-            </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
+            <Filter label="Período"><input type="month" value={filtros.periodo} onChange={event => cambiarFiltro('periodo', event.target.value)} className={INPUT} /></Filter>
+            <Filter label="Comprobante"><select value={filtros.comprobante} onChange={event => cambiarFiltro('comprobante', event.target.value)} className={INPUT}><option value="">Todos</option>{comprobantes.map(item => <option key={item.codigo} value={item.codigo}>{item.codigo} — {item.nombre}</option>)}</select></Filter>
+            <Filter label="Tipo documento"><select value={filtros.tipoDocumento} onChange={event => cambiarFiltro('tipoDocumento', event.target.value)} className={INPUT}><option value="">Todos</option>{tiposDocumento.map(item => <option key={item.codigo} value={item.codigo}>{item.codigo} — {item.nombre}</option>)}</select></Filter>
+            <Filter label="NIT"><input value={filtros.nit} onChange={event => cambiarFiltro('nit', event.target.value)} placeholder="CCODIGO" className={`${INPUT} font-mono`} /></Filter>
+            <Filter label="Documento"><input value={filtros.documento} onChange={event => cambiarFiltro('documento', event.target.value)} placeholder="DDOCUM" className={`${INPUT} font-mono`} /></Filter>
+            <Filter label="Fecha desde"><input type="date" value={filtros.fechaDesde} onChange={event => cambiarFiltro('fechaDesde', event.target.value)} className={INPUT} /></Filter>
+            <Filter label="Fecha hasta"><input type="date" value={filtros.fechaHasta} onChange={event => cambiarFiltro('fechaHasta', event.target.value)} className={INPUT} /></Filter>
+            <div className="flex items-end"><button type="button" disabled={cargando || !hayFiltro} onClick={() => consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
           </div>
+          <p className="mt-2 text-xs text-gray-400">No se consulta CONDOCUM al entrar. Seleccione al menos un criterio y pulse Consultar.</p>
         </fieldset>
       </div>
 
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
+      {maestrosError && <div role="alert" className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{maestrosError}</div>}
+      {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      <div className="overflow-hidden rounded border border-gray-200 bg-white">
         <div className="table-fixed-header overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Fecha</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Comprobante</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Tipo</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Documento</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">NIT</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Tercero</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Débito</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Crédito</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Estado</th>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Acciones</th>
-              </tr>
-            </thead>
+            <thead className="border-b border-gray-200 bg-gray-50"><tr>
+              {['Fecha', 'Comprobante', 'Tipo', 'Documento', 'NIT', 'Tercero / detalle', 'Valor', 'Acción'].map((titulo, index) => <th key={titulo} className={`px-3 py-2.5 font-semibold text-gray-600 ${index === 6 ? 'text-right' : 'text-left'}`}>{titulo}</th>)}
+            </tr></thead>
             <tbody className="divide-y divide-gray-50">
-              {filtrados.map(d => (
-                <DocumentoFila
-                  key={d.documento}
-                  grupo={d}
-                  expandido={expandido === d.documento}
-                  onToggle={() => setExpandido(expandido === d.documento ? null : d.documento)}
+              {!resultado && !cargando && <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-500"><div className="font-medium text-gray-600">Aún no se ha consultado CONDOCUM</div><div className="mt-1">Aplique un filtro y pulse Consultar para mostrar documentos.</div></td></tr>}
+              {cargando && <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-500">Consultando CONDOCUM para la compañía {cia}…</td></tr>}
+              {resultado && !cargando && !items.length && <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-500">No existen documentos que coincidan con los filtros aplicados.</td></tr>}
+              {!cargando && items.map(documento => {
+                const clave = claveDocumento(documento);
+                return <DocumentoConDetalle
+                  key={clave}
+                  documento={documento}
+                  abierto={expandido === clave}
+                  cargando={detalleCargando === clave}
+                  lineas={detalles[clave]}
+                  error={detalleError[clave]}
+                  onToggle={() => { void alternarDetalle(documento); }}
                   onOpenDocumento={onOpenDocumento}
-                />
-              ))}
+                />;
+              })}
             </tbody>
           </table>
         </div>
-        {filtrados.length === 0 ? (
-          <div className="px-4 py-10 text-center">
-            <div className="text-2xl mb-2 text-gray-300">⊟</div>
-            <div className="text-xs text-gray-500">Sin resultados — ajuste los filtros o el período para encontrar documentos.</div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-6 px-4 py-2.5 bg-gray-50 border-t border-gray-200">
-            <span className="text-xs text-gray-500">{filtrados.length} documento{filtrados.length !== 1 ? 's' : ''}</span>
-            <span className="text-xs text-gray-500">Total débitos: <span className="font-mono font-semibold text-gray-800">{fmtCOP(totalDeb)}</span></span>
-            <span className="text-xs text-gray-500">Total créditos: <span className="font-mono font-semibold text-gray-800">{fmtCOP(totalCred)}</span></span>
-            <span className={`text-xs font-mono font-semibold ${totalDeb === totalCred ? 'text-green-600' : 'text-red-600'}`}>
-              Diferencia: {fmtCOP(Math.abs(totalDeb - totalCred))}
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-3 border-t border-gray-200 bg-gray-50 px-4 py-2.5">
+          <span className="text-xs text-gray-500">{resultado ? `${items.length} documentos · página ${resultado.page}` : 'Sin consulta'}</span>
+          {resultado && <div className="ml-auto flex gap-2"><button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => consultar(resultado.page - 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button><button type="button" disabled={!resultado.hasMore || cargando} onClick={() => consultar(resultado.page + 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button></div>}
+        </div>
       </div>
-
-      {showExport && <div className="fixed inset-0 z-10" onClick={() => setShowExport(false)} />}
     </div>
   );
 }
 
-function DocumentoFila({ grupo, expandido, onToggle, onOpenDocumento }: {
-  grupo: GrupoDocumento;
-  expandido: boolean;
+function DocumentoConDetalle({ documento, abierto, cargando, lineas, error, onToggle, onOpenDocumento }: {
+  documento: DocumentoContable;
+  abierto: boolean;
+  cargando: boolean;
+  lineas?: MovimientoDocumento[];
+  error?: string;
   onToggle: () => void;
   onOpenDocumento?: () => void;
 }) {
-  const cuadrado = grupo.totalDebito === grupo.totalCredito;
-  return (
-    <>
-      <tr className="hoverable">
-        <td className="px-3 py-2 font-mono text-gray-600">{grupo.fecha}</td>
-        <td className="px-3 py-2 font-mono text-gray-700 font-medium">{grupo.comprobante}</td>
-        <td className="px-3 py-2 text-gray-600">{grupo.tipoDoc}</td>
-        <td className="px-3 py-2 font-mono text-gray-600">{grupo.documento}</td>
-        <td className="px-3 py-2 font-mono text-gray-600">{grupo.nit || <span className="text-gray-300">—</span>}</td>
-        <td className="px-3 py-2 text-gray-600 max-w-44 truncate">{grupo.tercero || <span className="text-gray-300">—</span>}</td>
-        <td className="px-3 py-2 text-right font-mono text-gray-800">{grupo.totalDebito > 0 ? fmtCOP(grupo.totalDebito) : <span className="text-gray-200">—</span>}</td>
-        <td className="px-3 py-2 text-right font-mono text-gray-500">{grupo.totalCredito > 0 ? fmtCOP(grupo.totalCredito) : <span className="text-gray-200">—</span>}</td>
-        <td className="px-3 py-2">
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cuadrado ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-            {cuadrado ? 'Cuadrada' : 'Descuadrada'}
-          </span>
-        </td>
-        <td className="px-3 py-2 whitespace-nowrap">
-          <button type="button" onClick={onToggle} className="text-xs text-petroleum-600 hover:underline mr-3">
-            {expandido ? 'Ocultar detalle' : 'Ver detalle'}
-          </button>
-          <button type="button" onClick={onOpenDocumento} className="text-xs text-petroleum-600 hover:underline">Documento oficial</button>
-        </td>
-      </tr>
-      {expandido && (
-        <tr>
-          <td colSpan={10} className="px-3 py-3 bg-gray-50/60">
-            <div className="rounded border border-gray-200 bg-white overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Cuenta</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Nombre cuenta</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Centro</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Débito</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Crédito</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Concepto</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {grupo.lineas.map(l => (
-                    <tr key={l.id}>
-                      <td className="px-3 py-1.5 font-mono text-gray-700">{l.cuenta}</td>
-                      <td className="px-3 py-1.5 text-gray-600">{l.nombreCuenta}</td>
-                      <td className="px-3 py-1.5 text-gray-600">{l.centro || <span className="text-gray-300">—</span>}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-gray-800">{l.debito > 0 ? fmtCOP(l.debito) : <span className="text-gray-200">—</span>}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-gray-500">{l.credito > 0 ? fmtCOP(l.credito) : <span className="text-gray-200">—</span>}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{l.concepto}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
-  );
+  const totalDebito = lineas?.reduce((total, linea) => total + linea.debito, 0) ?? 0;
+  const totalCredito = lineas?.reduce((total, linea) => total + linea.credito, 0) ?? 0;
+  return <>
+    <tr className="hoverable">
+      <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-600">{documento.fecha || '—'}</td>
+      <td className="px-3 py-2 font-mono font-medium text-gray-700">{documento.comprobante || '—'}</td>
+      <td className="px-3 py-2 text-gray-600">{documento.tipoDocumento || '—'}</td>
+      <td className="px-3 py-2 font-mono text-gray-700">{documento.documento}</td>
+      <td className="px-3 py-2 font-mono text-gray-600">{documento.nit || '—'}</td>
+      <td title={documento.detalle} className="max-w-72 truncate px-3 py-2 text-gray-600">{documento.tercero || documento.detalle || '—'}</td>
+      <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-gray-800">{fmtCOP(documento.valor)}</td>
+      <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={onToggle} className="text-xs text-petroleum-600 hover:underline">{abierto ? 'Ocultar detalle' : 'Ver detalle'}</button>{onOpenDocumento && <button type="button" onClick={onOpenDocumento} className="ml-3 text-xs text-petroleum-600 hover:underline">Documento oficial</button>}</td>
+    </tr>
+    {abierto && <tr><td colSpan={8} className="bg-gray-50/70 px-3 py-3">
+      {cargando && <div className="rounded border border-gray-200 bg-white p-6 text-center text-xs text-gray-500">Consultando las partidas del documento en MOV01…</div>}
+      {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
+      {!cargando && !error && lineas && lineas.length === 0 && <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">La cabecera existe en CONDOCUM, pero no se encontraron partidas relacionadas en MOV01.</div>}
+      {!cargando && !error && lineas && lineas.length > 0 && <div className="overflow-hidden rounded border border-gray-200 bg-white">
+        <table className="w-full text-xs"><thead className="border-b border-gray-200 bg-gray-50"><tr>{['Cuenta', 'Nombre cuenta', 'NIT', 'Centro', 'Documento afectado', 'Débito', 'Crédito', 'Base', 'Concepto'].map((titulo, index) => <th key={titulo} className={`px-3 py-2 font-semibold text-gray-600 ${index >= 5 && index <= 7 ? 'text-right' : 'text-left'}`}>{titulo}</th>)}</tr></thead>
+          <tbody className="divide-y divide-gray-50">{lineas.map((linea, index) => <tr key={`${linea.id}-${index}`}><td className="px-3 py-1.5 font-mono text-gray-700">{linea.cuenta}</td><td className="px-3 py-1.5 text-gray-600">{linea.nombreCuenta || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-600">{linea.nit || '—'}</td><td className="px-3 py-1.5 text-gray-600">{linea.centro || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-600">{linea.documentoAfectado || '—'}</td><td className="px-3 py-1.5 text-right font-mono text-gray-800">{linea.debito ? fmtCOP(linea.debito) : '—'}</td><td className="px-3 py-1.5 text-right font-mono text-gray-600">{linea.credito ? fmtCOP(linea.credito) : '—'}</td><td className="px-3 py-1.5 text-right font-mono text-gray-600">{linea.base ? fmtCOP(linea.base) : '—'}</td><td title={linea.concepto} className="max-w-72 truncate px-3 py-1.5 text-gray-500">{linea.concepto || '—'}</td></tr>)}</tbody>
+          <tfoot className="border-t border-gray-200 bg-gray-50"><tr><td colSpan={5} className="px-3 py-2 text-right font-semibold text-gray-600">Totales</td><td className="px-3 py-2 text-right font-mono font-semibold text-gray-800">{fmtCOP(totalDebito)}</td><td className="px-3 py-2 text-right font-mono font-semibold text-gray-800">{fmtCOP(totalCredito)}</td><td colSpan={2} className={`px-3 py-2 text-xs font-medium ${Math.abs(totalDebito - totalCredito) < 0.01 ? 'text-green-700' : 'text-red-700'}`}>{Math.abs(totalDebito - totalCredito) < 0.01 ? 'Documento cuadrado' : `Diferencia ${fmtCOP(Math.abs(totalDebito - totalCredito))}`}</td></tr></tfoot>
+        </table>
+      </div>}
+    </td></tr>}
+  </>;
+}
+
+function Filter({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>{children}</div>;
 }

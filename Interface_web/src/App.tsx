@@ -20,7 +20,6 @@ import AnualCentro from './pages/AnualCentro';
 import SaldosCuentaCentro from './pages/SaldosCuentaCentro';
 import DocumentoEspecifico from './pages/DocumentoEspecifico';
 import Comparativos from './pages/Comparativos';
-import BalanceComprobacion from './pages/BalanceComprobacion';
 import DocumentoOficial from './pages/DocumentoOficial';
 import Anulacion from './pages/Anulacion';
 import Informes from './pages/Informes';
@@ -114,18 +113,10 @@ export default function App() {
         );
 
       case 'movimientos/lotes':
-        return (
-          <LotesPage
-            lotes={lotes}
-            selectedLoteId={selectedLoteId}
-            onUpdateLotes={setLotes}
-            onNavigateToDoc={openDocumento}
-            onNavigateToMensual={goToMensual}
-          />
-        );
+        return <LotesPage cia={companiaActiva.codigo} />;
 
       case 'movimientos/captura':
-        return <CapturaDirecta onCrearLote={crearLote} />;
+        return <CapturaDirecta cia={companiaActiva.codigo} onCrearLote={crearLote} />;
 
       case 'movimientos/anulacion':
         return <Anulacion />;
@@ -140,7 +131,7 @@ export default function App() {
         return <Reembolsos onNavigate={navigate} onCrearLote={crearLote} />;
 
       case 'consultas/documentos':
-        return <ConsultaDocumentos onOpenDocumento={openDocumento} />;
+        return <ConsultaDocumentos cia={companiaActiva.codigo} onOpenDocumento={openDocumento} />;
 
       case 'consultas/mensual':
         return <MovimientoMensual cia={companiaActiva.codigo} onOpenDocumento={openDocumento} />;
@@ -167,16 +158,21 @@ export default function App() {
         return <Comparativos />;
 
       case 'informes/documentos':
+        return <Informes cia={companiaActiva.codigo} initialCategory="documentos" onNavigate={navigate} />;
       case 'informes/libros':
-      case 'informes/terceros':
-      case 'informes/centros':
-      case 'informes/flujo-caja':
-      case 'informes/nic-niif':
-      case 'informes/generador':
-        return <Informes onNavigate={navigate} />;
-
+        return <Informes cia={companiaActiva.codigo} initialCategory="libros" onNavigate={navigate} />;
       case 'informes/estados':
-        return <BalanceComprobacion />;
+        return <Informes cia={companiaActiva.codigo} initialCategory="estados" onNavigate={navigate} />;
+      case 'informes/terceros':
+        return <Informes cia={companiaActiva.codigo} initialCategory="terceros" onNavigate={navigate} />;
+      case 'informes/centros':
+        return <Informes cia={companiaActiva.codigo} initialCategory="centros" onNavigate={navigate} />;
+      case 'informes/flujo-caja':
+        return <Informes cia={companiaActiva.codigo} initialCategory="flujo" onNavigate={navigate} />;
+      case 'informes/nic-niif':
+        return <Informes cia={companiaActiva.codigo} initialCategory="niif" onNavigate={navigate} />;
+      case 'informes/generador':
+        return <Informes cia={companiaActiva.codigo} initialCategory="generador" onNavigate={navigate} />;
 
       case 'impuestos/retenciones':
         return <ImpuestosPage initialTab="retenciones" />;
@@ -188,7 +184,7 @@ export default function App() {
         return <ImpuestosPage initialTab="medios" />;
 
       case 'reprocesos':
-        return <Reprocesos />;
+        return <Reprocesos compania={companiaActiva} />;
 
       case 'cierres':
         return <Cierres />;

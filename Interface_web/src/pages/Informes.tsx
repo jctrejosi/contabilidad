@@ -1,6 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import type { NavPage } from '../components/Shell';
 import { CUENTAS, TERCEROS, MOVIMIENTOS_FEB, SALDOS_BALANCE, CENTROS, EMPRESA, PERIODO, fmtCOP } from '../data/mock';
+import {
+  consultarBalanceComprobacion,
+  exportarBalanceComprobacion,
+  type BalanceComprobacion,
+  type FiltrosBalanceComprobacion,
+} from '../api/balanceComprobacion';
+import { consultarPeriodoOperacion } from '../api/periodoOperacion';
 
 const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
 const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
@@ -55,7 +62,7 @@ const CATEGORIAS: Categoria[] = [
     nombre: 'Estados y balances',
     icon: '⊟',
     informes: [
-      { id: 'balance-comp', nombre: 'Balance de comprobación acumulado', desc: 'Saldos y movimientos acumulados por cuenta — pantalla de balance existente', page: 'informes/estados' },
+      { id: 'balance-comp', nombre: 'Balance de comprobación acumulado', desc: 'Saldos y movimientos acumulados por cuenta — totales cuadrados' },
       { id: 'bal-gral-resultados', nombre: 'Balance general y estado de resultados', desc: 'Estado de situación financiera y resultados del período' },
       { id: 'bal-comparativo-mensual', nombre: 'Balance comparativo mensual', desc: 'Saldos de dos meses comparados con su variación' },
       { id: 'analisis-anual-acum', nombre: 'Análisis anual acumulado', desc: 'Débitos y créditos acumulados en el año' },
@@ -112,6 +119,14 @@ const CATEGORIAS: Categoria[] = [
       { id: 'nic-saldos', nombre: 'Información NIC de saldos y movimientos', desc: 'Saldos y movimientos presentados bajo NIC' },
     ],
   },
+  {
+    id: 'generador',
+    nombre: 'Generador personalizado',
+    icon: '⚙',
+    informes: [
+      { id: 'generador-personalizado', nombre: 'Informe personalizado', desc: 'Definición flexible de columnas, filtros y orden del informe' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------- datos de vista previa
@@ -128,6 +143,8 @@ interface DatosInforme {
 }
 
 const MESES_ABR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const BALANCE_IDS = new Set(['balance-comp', 'balance-comp-lib']);
 
 // Balance de comprobación cuadrada (débitos = créditos = 85.000.000).
 const BALANCE_COMP = [
@@ -870,10 +887,30 @@ interface PreviewState {
   mesDesde: string;
   mesHasta: string;
   formato: string;
+  balance?: BalanceComprobacion;
+  filtrosBalance?: FiltrosBalanceComprobacion;
 }
 
 function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () => void }) {
-  const datos = useMemo(() => datosDe(preview.inf.id), [preview.inf.id]);
+  const datos = useMemo<DatosInforme>(() => {
+    if (!preview.balance) return datosDe(preview.inf.id);
+    return {
+      columnas: [
+        { label: 'Cuenta' }, { label: 'Nombre' }, { label: 'Saldo anterior', money: true },
+        { label: 'Débitos', money: true }, { label: 'Créditos', money: true }, { label: 'Saldo actual', money: true },
+      ],
+      filas: preview.balance.items.map(item => [
+        item.cuenta, item.nombre, item.saldoAnterior, item.debito, item.credito, item.saldoActual,
+      ]),
+      totales: [
+        '', 'TOTALES DE CONTROL', preview.balance.totales.saldoAnterior,
+        preview.balance.totales.debito, preview.balance.totales.credito, preview.balance.totales.saldoActual,
+      ],
+      nota: preview.balance.totales.diferencia === 0
+        ? `Balance cuadrado. Fuente: ${preview.balance.source}.`
+        : `Diferencia contable: ${fmtMonto(preview.balance.totales.diferencia)}.`,
+    };
+  }, [preview.balance, preview.inf.id]);
   const [pagina, setPagina] = useState(0);
   const [exportando, setExportando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -885,9 +922,20 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
 
-  function exportar(formato: string) {
+  async function exportar(formato: string) {
     setExportando(formato);
     setAviso(null);
+    if (preview.balance && preview.filtrosBalance && (formato === 'PDF' || formato === 'XLSX')) {
+      try {
+        await exportarBalanceComprobacion(preview.filtrosBalance, formato.toLowerCase() as 'pdf' | 'xlsx');
+        setAviso(`Balance exportado en ${formato}.`);
+      } catch (error) {
+        setAviso(error instanceof Error ? error.message : `No fue posible exportar en ${formato}.`);
+      } finally {
+        setExportando(null);
+      }
+      return;
+    }
     timer.current = window.setTimeout(() => {
       setExportando(null);
       setAviso(`Archivo «${preview.inf.nombre}» exportado en ${formato} (simulado).`);
@@ -901,8 +949,12 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
         <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
           <div className="text-center space-y-0.5">
             <div className="text-sm font-bold text-gray-800 uppercase">{preview.inf.nombre}</div>
-            <div className="text-xs text-gray-600">{EMPRESA.nombre} — NIT {EMPRESA.nit}-{EMPRESA.digito}</div>
-            <div className="text-xs text-gray-500">Año {preview.anio} · {preview.mesDesde} a {preview.mesHasta} · Período {PERIODO.nombre}</div>
+            <div className="text-xs text-gray-600">
+              {preview.balance ? preview.balance.compania.nombre : EMPRESA.nombre} — NIT {preview.balance ? preview.balance.compania.nit : `${EMPRESA.nit}-${EMPRESA.digito}`}
+            </div>
+            <div className="text-xs text-gray-500">
+              {preview.balance ? `${preview.balance.periodo} · Nivel ${preview.balance.nombreNivel}` : `Año ${preview.anio} · ${preview.mesDesde} a ${preview.mesHasta} · Período ${PERIODO.nombre}`}
+            </div>
           </div>
         </div>
 
@@ -914,10 +966,12 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
           <button type="button" onClick={() => exportar('XLSX')} disabled={!!exportando} className={BUTTON_SECONDARY}>
             {exportando === 'XLSX' ? '⏳ Generando…' : '📊 XLSX'}
           </button>
-          <button type="button" onClick={() => exportar('CSV')} disabled={!!exportando} className={BUTTON_SECONDARY}>
-            {exportando === 'CSV' ? '⏳ Generando…' : '📝 CSV'}
-          </button>
-          <button type="button" onClick={() => { setAviso('Impresión enviada a la cola de impresión (simulado).'); }} className={BUTTON_SECONDARY}>⎙ Imprimir</button>
+          {!preview.balance && (
+            <button type="button" onClick={() => exportar('CSV')} disabled={!!exportando} className={BUTTON_SECONDARY}>
+              {exportando === 'CSV' ? '⏳ Generando…' : '📝 CSV'}
+            </button>
+          )}
+          {!preview.balance && <button type="button" onClick={() => { setAviso('Impresión enviada a la cola de impresión (simulado).'); }} className={BUTTON_SECONDARY}>⎙ Imprimir</button>}
           <div className="flex-1" />
           {aviso && <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">{aviso}</span>}
         </div>
@@ -974,16 +1028,62 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
 
 interface Props {
   onNavigate: (page: NavPage) => void;
+  /** Categoría elegida en el menú lateral que debe quedar visible. */
+  initialCategory: string;
+  /** Compañía activa que delimita obligatoriamente los datos del informe. */
+  cia: string;
 }
 
-export default function Informes({ onNavigate }: Props) {
+const CATEGORY_PAGE: Record<string, NavPage> = {
+  documentos: 'informes/documentos',
+  libros: 'informes/libros',
+  estados: 'informes/estados',
+  terceros: 'informes/terceros',
+  centros: 'informes/centros',
+  flujo: 'informes/flujo-caja',
+  niif: 'informes/nic-niif',
+  generador: 'informes/generador',
+};
+
+export default function Informes({ onNavigate, initialCategory, cia }: Props) {
   const [searchInforme, setSearchInforme] = useState('');
-  const [selectedCat, setSelectedCat] = useState<string | null>(null);
+  const [selectedCat, setSelectedCat] = useState<string>(initialCategory);
   const [showParams, setShowParams] = useState<Informe | null>(null);
   const [favoritos, setFavoritos] = useState<string[]>(() => leerLista(STORAGE_FAVS));
   const [recientes, setRecientes] = useState<string[]>(() => leerLista(STORAGE_RECIENTES));
   const [preview, setPreview] = useState<PreviewState | null>(null);
-  const [params, setParams] = useState({ anio: '2026', mesDesde: 'Enero', mesHasta: 'Febrero', formato: 'PDF' });
+  const [params, setParams] = useState({ anio: '2026', mesDesde: 'Enero', mesHasta: 'Febrero', formato: 'PDF', nivel: '6', incluirCeros: false });
+  const [generando, setGenerando] = useState(false);
+  const [errorInforme, setErrorInforme] = useState<string | null>(null);
+  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // El mismo centro atiende todas las opciones del menú Informes. Cuando
+  // cambia la opción, desplazamos el contenedor principal a su sección.
+  useEffect(() => {
+    setSelectedCat(initialCategory);
+    setSearchInforme('');
+    window.requestAnimationFrame(() => {
+      categoryRefs.current[initialCategory]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [initialCategory]);
+
+  // El año no se inventa en la interfaz: se toma del ejercicio que CONCTR
+  // tiene asociado a los acumulados actuales de CONMAE.
+  useEffect(() => {
+    let active = true;
+    consultarPeriodoOperacion(cia).then(periodo => {
+      if (!active) return;
+      const hoy = new Date();
+      const mesActual = hoy.getFullYear() === periodo.anio ? hoy.getMonth() + 1 : periodo.mesesHabilitados.at(-1) ?? 1;
+      const mesHasta = periodo.mesesHabilitados.includes(mesActual)
+        ? mesActual
+        : periodo.mesesHabilitados.filter(mes => mes <= mesActual).at(-1) ?? periodo.mesesHabilitados.at(-1) ?? 1;
+      setParams(previous => ({ ...previous, anio: String(periodo.anio), mesDesde: MESES[0], mesHasta: MESES[mesHasta - 1] }));
+    }).catch(() => {
+      // La generación mostrará el error detallado si el usuario abre el informe.
+    });
+    return () => { active = false; };
+  }, [cia]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_FAVS, JSON.stringify(favoritos)); } catch { /* sin almacenamiento */ }
@@ -998,7 +1098,16 @@ export default function Informes({ onNavigate }: Props) {
   const filtered = searchInforme
     ? allInformes.filter(i => i.nombre.toLowerCase().includes(searchInforme.toLowerCase()) || i.desc.toLowerCase().includes(searchInforme.toLowerCase()))
     : [];
-  const displayCategorias = selectedCat ? CATEGORIAS.filter(c => c.id === selectedCat) : CATEGORIAS;
+
+  function irACategoria(categoryId: string) {
+    setSelectedCat(categoryId);
+    setSearchInforme('');
+    window.requestAnimationFrame(() => {
+      categoryRefs.current[categoryId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    const destination = CATEGORY_PAGE[categoryId];
+    if (destination && categoryId !== initialCategory) onNavigate(destination);
+  }
 
   function abrirInforme(inf: Informe) {
     if (inf.page) {
@@ -1008,7 +1117,30 @@ export default function Informes({ onNavigate }: Props) {
     setShowParams(inf);
   }
 
-  function generar(inf: Informe) {
+  async function generar(inf: Informe) {
+    setErrorInforme(null);
+    if (BALANCE_IDS.has(inf.id)) {
+      const filtros: FiltrosBalanceComprobacion = {
+        cia,
+        anio: Number(params.anio),
+        mesDesde: MESES.indexOf(params.mesDesde) + 1,
+        mesHasta: MESES.indexOf(params.mesHasta) + 1,
+        nivel: Number(params.nivel) as 4 | 6 | 9 | 12,
+        incluirCeros: params.incluirCeros,
+      };
+      setGenerando(true);
+      try {
+        const balance = await consultarBalanceComprobacion(filtros);
+        setShowParams(null);
+        setRecientes(prev => [inf.id, ...prev.filter(id => id !== inf.id)].slice(0, 6));
+        setPreview({ inf, ...params, balance, filtrosBalance: filtros });
+      } catch (error) {
+        setErrorInforme(error instanceof Error ? error.message : 'No fue posible generar el balance.');
+      } finally {
+        setGenerando(false);
+      }
+      return;
+    }
     setShowParams(null);
     setRecientes(prev => [inf.id, ...prev.filter(id => id !== inf.id)].slice(0, 6));
     setPreview({ inf, ...params });
@@ -1030,8 +1162,12 @@ export default function Informes({ onNavigate }: Props) {
           <h1 className="text-lg font-semibold text-gray-800">Centro de informes</h1>
           <p className="mt-1 text-xs text-gray-500">Documentos, libros contables, estados financieros, terceros, centros, flujo de caja y NIC/NIIF.</p>
         </div>
-        <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
+        <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Balance conectado a Advantage</span>
       </div>
+
+      {errorInforme && (
+        <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{errorInforme}</div>
+      )}
 
       {/* Buscador + categorías */}
       <div className="bg-white rounded border border-gray-200 p-3 space-y-2.5">
@@ -1048,7 +1184,8 @@ export default function Informes({ onNavigate }: Props) {
           {CATEGORIAS.map(c => (
             <button
               key={c.id}
-              onClick={() => setSelectedCat(selectedCat === c.id ? null : c.id)}
+              onClick={() => irACategoria(c.id)}
+              aria-current={selectedCat === c.id ? 'location' : undefined}
               className={`text-xs px-2.5 py-1 rounded transition-colors font-medium hidden md:block ${
                 selectedCat === c.id ? 'bg-petroleum-500 text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
               }`}
@@ -1118,8 +1255,12 @@ export default function Informes({ onNavigate }: Props) {
       {/* Grilla de categorías */}
       {!searchInforme && (
         <div className="space-y-4">
-          {displayCategorias.map(cat => (
-            <div key={cat.id} className="bg-white rounded border border-gray-200 overflow-hidden">
+          {CATEGORIAS.map(cat => (
+            <div
+              key={cat.id}
+              ref={element => { categoryRefs.current[cat.id] = element; }}
+              className="scroll-mt-4 bg-white rounded border border-gray-200 overflow-hidden"
+            >
               <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 bg-gray-50">
                 <span className="text-sm">{cat.icon}</span>
                 <h2 className="text-xs font-semibold text-gray-700">{cat.nombre}</h2>
@@ -1178,20 +1319,43 @@ export default function Informes({ onNavigate }: Props) {
               <div>
                 <label htmlFor="param-mes-desde" className="block text-xs font-medium text-gray-600 mb-1">Mes desde</label>
                 <select id="param-mes-desde" value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
-                  {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map(m => <option key={m}>{m}</option>)}
+                  {MESES.map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>
               <div>
                 <label htmlFor="param-mes-hasta" className="block text-xs font-medium text-gray-600 mb-1">Mes hasta</label>
                 <select id="param-mes-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
-                  {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map(m => <option key={m}>{m}</option>)}
+                  {MESES.map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>
+              {BALANCE_IDS.has(showParams.id) && (
+                <>
+                  <div>
+                    <label htmlFor="param-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel máximo</label>
+                    <select id="param-nivel" value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                      <option value="4">Cuenta</option>
+                      <option value="6">Subcuenta</option>
+                      <option value="9">Auxiliar 1</option>
+                      <option value="12">Auxiliar 2</option>
+                    </select>
+                  </div>
+                  <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />
+                    Incluir cuentas sin saldo ni movimiento
+                  </label>
+                </>
+              )}
             </div>
-            <p className="px-5 pb-3 text-xs text-gray-400">La vista previa se abre paginada en un modal amplio. Los botones PDF/XLSX/CSV e Imprimir son simulados.</p>
+            <p className="px-5 pb-3 text-xs text-gray-400">
+              {BALANCE_IDS.has(showParams.id)
+                ? 'El informe se calcula con MSALDO y los acumulados mensuales de CONMAE. PDF y XLSX descargan datos reales.'
+                : 'La vista previa se abre paginada en un modal amplio. Las exportaciones de este informe continúan en demostración.'}
+            </p>
             <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
               <button type="button" onClick={() => setShowParams(null)} className={BUTTON_SECONDARY}>Cancelar</button>
-              <button type="submit" className={BUTTON_PRIMARY}>Generar informe</button>
+              <button type="submit" disabled={generando} className={`${BUTTON_PRIMARY} disabled:opacity-60`}>
+                {generando ? 'Consultando Advantage…' : 'Generar informe'}
+              </button>
             </div>
           </form>
         </Modal>

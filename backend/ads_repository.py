@@ -4,10 +4,10 @@ Este módulo concentra la lógica de persistencia de la primera función migrada
 de CONTABDSI. Traduce las filas físicas de ``CONMAE`` al modelo que consume la
 interfaz web y protege las operaciones de alta/modificación con transacciones.
 
-Regla heredada esencial: ``CONMAE`` también contiene auxiliares por tercero.
-Una cuenta del catálogo maestro se identifica por compañía (``CIA``) y por
-``NIT`` con 11 espacios. Por eso todas las consultas y escrituras de este
-módulo incluyen ambos filtros.
+Regla heredada esencial: la instalación actual identifica el auxiliar de
+tercero mediante ``CONMAE.NITN`` (15 caracteres). Las cuentas del catálogo
+maestro pueden guardar este campo como espacios o como ``NULL``; por eso todas
+las consultas y escrituras admiten ambas representaciones.
 """
 
 from __future__ import annotations
@@ -23,9 +23,10 @@ import win32com.client
 
 
 DEFAULT_ENV_FILE = Path(__file__).with_name(".env")
-# Valor exacto usado por CONTABDSI para diferenciar la cuenta maestra de sus
-# posibles auxiliares por tercero dentro de la misma tabla.
-CATALOG_NIT = " " * 11
+# Valor físico de NITN usado por esta versión de CONMAE para una cuenta sin
+# auxiliar. Advantage también devuelve NULL en algunos registros históricos.
+CATALOG_NIT = " " * 15
+CATALOG_ACCOUNT_FILTER = f"(NITN IS NULL OR NITN = '{CATALOG_NIT}')"
 VALID_LEVELS = {1, 2, 4, 6, 9, 12}
 PARENT_LENGTH = {2: 1, 4: 2, 6: 4, 9: 6, 12: 9}
 ACCOUNT_CODE = re.compile(r"^[0-9]{1,12}$")
@@ -134,6 +135,45 @@ def load_connection_string(
     )
 
 
+def load_odbc_connection_string(
+    env_path: Path | None = None,
+    environ: dict[str, str] | None = None,
+) -> str:
+    """Construye ADO sobre el controlador ODBC de Advantage.
+
+    Se usa para operaciones masivas que disparan un defecto conocido de
+    ``adsoledb64.dll`` 11.10.0.24. La aplicación continúa utilizando ADODB;
+    únicamente cambia el proveedor nativo subyacente de OLE DB a MSDASQL/ODBC.
+    """
+    values = _read_env_file(env_path or DEFAULT_ENV_FILE)
+    values.update(dict(os.environ) if environ is None else environ)
+    data_source = values.get("ADS_DATA_SOURCE", "").strip()
+    user_id = values.get("ADS_USER_ID", "").strip()
+    password = values.get("ADS_PASSWORD", "")
+    driver = values.get("ADS_ODBC_DRIVER", "Advantage StreamlineSQL ODBC").strip()
+    configured_type = values.get("ADS_SERVER_TYPE", "ADS_REMOTE_SERVER").strip().upper()
+    server_types = {
+        "ADS_LOCAL_SERVER": "1",
+        "ADS_REMOTE_SERVER": "2",
+        "ADS_INTERNET_SERVER": "4",
+    }.get(configured_type)
+    if not data_source or not user_id or not password:
+        raise AdsConfigurationError(
+            "Falta configurar ADS_DATA_SOURCE, ADS_USER_ID o ADS_PASSWORD para ODBC."
+        )
+    if server_types is None:
+        raise AdsConfigurationError("ADS_SERVER_TYPE no es compatible con Advantage ODBC.")
+    if any(";" in value or "\r" in value or "\n" in value for value in (data_source, user_id, password, driver)):
+        raise AdsConfigurationError("La configuracion ADS ODBC contiene caracteres no permitidos.")
+    return (
+        "Provider=MSDASQL.1;"
+        f"Driver={{{driver}}};"
+        f"DataDirectory={data_source};"
+        f"UID={user_id};PWD={password};"
+        f"ServerTypes={server_types};DefaultType=Advantage;"
+    )
+
+
 @contextmanager
 def ads_connection() -> Iterator[Any]:
     """Abre y cierra una conexión ADODB válida para el hilo actual.
@@ -146,6 +186,25 @@ def ads_connection() -> Iterator[Any]:
     try:
         connection = win32com.client.Dispatch("ADODB.Connection")
         connection.Open(load_connection_string())
+        yield connection
+    finally:
+        if connection is not None:
+            try:
+                if connection.State:
+                    connection.Close()
+            except Exception:
+                pass
+        pythoncom.CoUninitialize()
+
+
+@contextmanager
+def ads_odbc_connection() -> Iterator[Any]:
+    """Abre Advantage mediante ADODB + ODBC para escrituras masivas estables."""
+    pythoncom.CoInitialize()
+    connection = None
+    try:
+        connection = win32com.client.Dispatch("ADODB.Connection")
+        connection.Open(load_odbc_connection_string())
         yield connection
     finally:
         if connection is not None:
@@ -333,7 +392,7 @@ def list_accounts(company_code: str) -> list[dict[str, Any]]:
     sql = (
         "SELECT CODIGO, MNOMBRE, MTC, MCTAPAGOS, MCOSTOS, MAJUSTE, "
         f"MIVA_RET, MSALDO, {monthly_columns} "
-        f"FROM CONMAE WHERE CIA = {company_id} AND NIT = '           ' ORDER BY CODIGO"
+        f"FROM CONMAE WHERE CIA = {company_id} AND {CATALOG_ACCOUNT_FILTER} ORDER BY CODIGO"
     )
     with ads_connection() as connection:
         if not _company_exists(connection, company_id):
@@ -351,7 +410,7 @@ def _catalog_account_exists(connection: Any, company_id: int, code: str) -> bool
     recordset = _open_recordset(
         connection,
         f"SELECT TOP 1 CODIGO FROM CONMAE WHERE CIA = {company_id} "
-        f"AND CODIGO = '{code}' AND NIT = '           '",
+        f"AND CODIGO = '{code}' AND {CATALOG_ACCOUNT_FILTER}",
     )
     try:
         return not recordset.EOF
@@ -377,12 +436,12 @@ def create_account(company_code: str, payload: dict[str, Any]) -> dict[str, Any]
             _execute(
                 connection,
                 "INSERT INTO CONMAE "
-                "(CIA, CODIGO, NIT, MNOMBRE, MTC, MCTAPAGOS, MCOSTOS, MAJUSTE, MIVA_RET, MSALDO) "
+                "(CIA, CODIGO, NITN, MNOMBRE, MTC, MCTAPAGOS, MCOSTOS, MAJUSTE, MIVA_RET, MSALDO) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (ADO_TYPE_INTEGER, 0, company_id),
                     (ADO_TYPE_VARCHAR, 12, code),
-                    (ADO_TYPE_VARCHAR, 11, CATALOG_NIT),
+                    (ADO_TYPE_VARCHAR, 15, CATALOG_NIT),
                     (ADO_TYPE_VARCHAR, 30, data["nombre"]),
                     (ADO_TYPE_BOOLEAN, 0, data["afectable"]),
                     (ADO_TYPE_BOOLEAN, 0, data["requiereTercero"]),
@@ -410,7 +469,7 @@ def get_account(company_code: str, code: str) -> dict[str, Any]:
     sql = (
         "SELECT CODIGO, MNOMBRE, MTC, MCTAPAGOS, MCOSTOS, MAJUSTE, "
         f"MIVA_RET, MSALDO, {monthly_columns} FROM CONMAE "
-        f"WHERE CIA = {company_id} AND CODIGO = '{code}' AND NIT = '           '"
+        f"WHERE CIA = {company_id} AND CODIGO = '{code}' AND {CATALOG_ACCOUNT_FILTER}"
     )
     with ads_connection() as connection:
         recordset = _open_recordset(connection, sql)
@@ -439,7 +498,7 @@ def update_account(company_code: str, code: str, payload: dict[str, Any]) -> dic
                 connection,
                 "UPDATE CONMAE SET MNOMBRE = ?, MTC = ?, MCTAPAGOS = ?, "
                 "MCOSTOS = ?, MAJUSTE = ?, MIVA_RET = ? "
-                f"WHERE CIA = {company_id} AND CODIGO = '{code}' AND NIT = '           '",
+                f"WHERE CIA = {company_id} AND CODIGO = '{code}' AND {CATALOG_ACCOUNT_FILTER}",
                 [
                     (ADO_TYPE_VARCHAR, 30, data["nombre"]),
                     (ADO_TYPE_BOOLEAN, 0, data["afectable"]),
