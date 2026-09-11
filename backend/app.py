@@ -32,7 +32,16 @@ from .tipos_documento_repository import list_document_types
 from .comprobantes_repository import list_vouchers
 from .movimiento_mensual_repository import list_monthly_movements
 from .documentos_repository import document_movements, list_documents
-from .lotes_repository import list_lot_lines, list_lots
+from .lotes_repository import (
+    LotConflict,
+    LotValidationError,
+    create_lot,
+    delete_lot_line,
+    list_lot_lines,
+    list_lots,
+    save_lot_line,
+    update_lot,
+)
 from .contabilizacion_repository import (
     PostingConflict,
     PostingValidationError,
@@ -125,15 +134,45 @@ class MonthlyReprocessRequest(BaseModel):
     motivo: str = Field("", max_length=180)
 
 
+class LotWrite(BaseModel):
+    """Cabecera editable de CONMOVI según CREALOT2/GRABALOT."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lote: str = Field(pattern=r"^[A-Za-z0-9]{4}$")
+    nombre: str = Field(min_length=1, max_length=25)
+    mes: str = Field(pattern=r"^(0[0-9]|1[0-8])$")
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+class LotLineWrite(BaseModel):
+    """Partida editable de CONLOTES según EDITACELDA/GRABAMOV1."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cuenta: str = Field(pattern=r"^[0-9]{1,12}$")
+    nit: str = Field("", max_length=11)
+    centro: str = Field("", max_length=7)
+    comprobante: str = Field(min_length=1, max_length=2)
+    tipoDocumento: str = Field(min_length=1, max_length=2)
+    documento: str = Field(min_length=1, max_length=12)
+    documentoAfectado: str = Field("", max_length=12)
+    fecha: date
+    debito: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    credito: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    base: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    concepto: str = Field(min_length=1, max_length=50)
+
+
 def _service_error(exc: Exception) -> HTTPException:
     """Convierte errores de dominio/ADS en respuestas HTTP estables y seguras."""
     if isinstance(exc, AccountAlreadyExists):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-    if isinstance(exc, PostingConflict):
+    if isinstance(exc, (PostingConflict, LotConflict)):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, (AccountNotFound, CompanyNotFound)):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    if isinstance(exc, (ValueError, PostingValidationError)):
+    if isinstance(exc, (ValueError, PostingValidationError, LotValidationError)):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, AdsConfigurationError):
         logger.error("Configuracion ADS no disponible: %s", exc)
@@ -361,6 +400,76 @@ def lot_detail(
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "CONLOTES", "sharedAcrossCompanies": False}
+
+
+@app.post("/api/lotes", status_code=status.HTTP_201_CREATED, summary="Crear un lote contable")
+def create_lot_endpoint(
+    payload: LotWrite,
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Crea en CONMOVI un lote vacío listo para capturar partidas."""
+    try:
+        item = create_lot(cia, payload.model_dump())
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONMOVI"}
+
+
+@app.put("/api/lotes/{lote}", summary="Modificar la cabecera de un lote")
+def update_lot_endpoint(
+    payload: LotWrite,
+    lote: str = Path(min_length=1, max_length=10),
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    try:
+        item = update_lot(cia, lote, payload.model_dump())
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONMOVI"}
+
+
+@app.post(
+    "/api/lotes/{lote}/detalle",
+    status_code=status.HTTP_201_CREATED,
+    summary="Agregar movimiento a un lote",
+)
+def create_lot_line_endpoint(
+    payload: LotLineWrite,
+    lote: str = Path(min_length=1, max_length=10),
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    try:
+        item = save_lot_line(cia, lote, payload.model_dump())
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONLOTES"}
+
+
+@app.put("/api/lotes/{lote}/detalle/{line_id}", summary="Modificar movimiento del lote")
+def update_lot_line_endpoint(
+    payload: LotLineWrite,
+    lote: str = Path(min_length=1, max_length=10),
+    line_id: int = Path(ge=1),
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    try:
+        item = save_lot_line(cia, lote, payload.model_dump(), line_id=line_id)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONLOTES"}
+
+
+@app.delete("/api/lotes/{lote}/detalle/{line_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_lot_line_endpoint(
+    lote: str = Path(min_length=1, max_length=10),
+    line_id: int = Path(ge=1),
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+) -> Response:
+    try:
+        delete_lot_line(cia, lote, line_id)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post("/api/movimientos/contabilizar", summary="Contabilizar una captura directa en Advantage")

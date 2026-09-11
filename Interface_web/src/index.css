@@ -24,6 +24,21 @@
   --color-petroleum-50: #EFFAFF;
 }
 
+.input-lote {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.75rem;
+  color: #374151;
+  outline: none;
+}
+
+.input-lote:focus {
+  border-color: #0073c0;
+  box-shadow: 0 0 0 2px rgb(0 115 192 / 12%);
+}
+
 html,
 body,
 #root {

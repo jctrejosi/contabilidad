@@ -24,7 +24,12 @@ DEFAULT_AUDIT_DIRECTORY = Path(r"C:\VISADS")
 
 @contextmanager
 def audit_connection() -> Iterator[Any]:
-    """Abre la carpeta de tablas libres que contiene VISAUDI.ADT."""
+    """Abre la carpeta de tablas libres que contiene VISAUDI.ADT.
+
+    Se usa ADO sobre el controlador ODBC de Advantage. El proveedor OLE DB
+    11.10 instalado genera de forma intermitente el callback nativo C0000005
+    al cerrar esta conexión, justo después de terminar un reproceso.
+    """
     directory = Path(os.environ.get("ADS_AUDIT_DATA_SOURCE", str(DEFAULT_AUDIT_DIRECTORY)))
     if not (directory / "VISAUDI.ADT").is_file():
         raise RuntimeError(f"No se encontró VISAUDI.ADT en {directory}.")
@@ -33,10 +38,10 @@ def audit_connection() -> Iterator[Any]:
     try:
         connection = win32com.client.Dispatch("ADODB.Connection")
         connection.Open(
-            "Provider=Advantage.OLEDB.1;"
-            f"Data Source={directory};"
-            "ServerType=ADS_LOCAL_SERVER;"
-            "TableType=ADS_ADT;"
+            "Provider=MSDASQL.1;"
+            "Driver={Advantage StreamlineSQL ODBC};"
+            f"DataDirectory={directory};"
+            "ServerTypes=1;DefaultType=Advantage;"
         )
         yield connection
     finally:

@@ -55,6 +55,15 @@ function formatMoney(value: number): string {
   }).format(value);
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} segundos`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds - minutes * 60;
+  return `${minutes} min ${remaining.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} s`;
+}
+
 /**
  * Integra la revalorización mensual Harbour con el esquema consolidado.
  * La simulación siempre precede a la escritura para que el contador pueda
@@ -274,6 +283,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
                     <div className="text-gray-600">Campos CONMAE diferentes: <strong>{resultado.diferencias.conmae}</strong></div>
                     <div className="text-gray-600">Campos CONTERCE diferentes: <strong>{resultado.diferencias.conterce}</strong></div>
                   </div>
+                  <div className="text-right text-xs font-medium text-gray-600">Tiempo de la operación: <strong>{formatDuration(resultado.duracionSegundos)}</strong></div>
                   {resultado.errores.length > 0 && <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700"><strong>Errores que impiden ejecutar:</strong><ul className="mt-1 list-disc pl-5">{resultado.errores.map(item => <li key={item}>{item}</li>)}</ul></div>}
                   {resultado.advertencias.length > 0 && <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><strong>Advertencias:</strong><ul className="mt-1 list-disc pl-5">{resultado.advertencias.map(item => <li key={item}>{item}</li>)}</ul></div>}
                   {step === "sim" && resultado.puedeEjecutar && <div className="rounded bg-green-50 p-2 text-xs font-medium text-green-700">✓ Simulación terminada. Puede confirmar el reproceso.</div>}
@@ -283,7 +293,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
                       <input id="motivo-reproceso" value={motivo} maxLength={180} onChange={event => setMotivo(event.target.value)} placeholder="Explique por qué se reconstruyen los acumulados…" className="w-full rounded border border-gray-200 px-2.5 py-2 text-xs outline-none focus:border-[#0073C0]" />
                     </div>
                   )}
-                  {step === "done" && <div className="rounded border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-700">✓ Reproceso confirmado. Auditoría: {resultado.auditoria}.</div>}
+                  {step === "done" && <div className="rounded border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-700">✓ Reproceso confirmado. Auditoría: {resultado.auditoria}. Tiempo total: {formatDuration(resultado.duracionSegundos)}.</div>}
                   {resultado.advertenciaAuditoria && <p className="rounded bg-amber-50 p-2 text-xs text-amber-800">{resultado.advertenciaAuditoria}</p>}
                 </div>
               )}

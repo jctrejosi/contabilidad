@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
+from time import perf_counter
 from typing import Any, Iterable
 
 import win32com.client
@@ -45,6 +46,8 @@ from .auditoria_repository import register_monthly_reprocess
 MONEY = Decimal("0.01")
 ACCOUNT_LEVELS = (1, 2, 4, 6, 9, 12)
 CONTERCE_ID_CHUNK = 500
+CONTERCE_UPDATE_CHUNK = 250
+LOOKUP_CHUNK = 500
 
 
 class MonthlyReprocessValidationError(ValueError):
@@ -81,6 +84,7 @@ class ReprocessPlan:
     account_values: dict[tuple[int, str], list[Decimal]]
     third_values: dict[tuple[int, str, str], list[Decimal]]
     third_nonzero_ids: dict[int, list[int]]
+    third_existing_ids: dict[tuple[str, str], int]
     third_names: dict[str, str]
     movement_records: int
     debit: Decimal
@@ -94,6 +98,11 @@ class ReprocessPlan:
 def _money(value: Any) -> Decimal:
     """Convierte valores ADS a centavos y conserva el signo del crédito."""
     return Decimal(str(value or 0)).quantize(MONEY, rounding=ROUND_HALF_UP)
+
+
+def _sql_money_literal(value: Decimal) -> str:
+    """Representa un valor calculado como literal SQL decimal seguro."""
+    return format(value.quantize(MONEY, rounding=ROUND_HALF_UP), "f")
 
 
 def _parameters(command: Any, values: Iterable[tuple[int, int, Any]]) -> None:
@@ -302,6 +311,7 @@ def _load_third_context(
     dict[str, str],
     list[str],
     dict[int, list[int]],
+    dict[tuple[str, str], int],
 ]:
     fields = ", ".join(
         field
@@ -316,52 +326,94 @@ def _load_third_context(
             f"COALESCE(MACMCRE{month:02d}, 0) <> 0",
         )
     )
-    rows = _query_rows(
+    expected_keys = {(account, nit) for _, account, nit in third_values}
+    expected_accounts = sorted({account for account, _ in expected_keys})
+    account_condition = ""
+    if expected_accounts:
+        # Los códigos provienen del maestro, pero aun así se escapan antes de
+        # formar la lista SQL para no depender de que sean solo numéricos.
+        quoted = ",".join(
+            "'" + account.replace("'", "''") + "'" for account in expected_accounts
+        )
+        account_condition = f" OR CODIGO IN ({quoted})"
+    recordset = _open_recordset(
         connection,
         "SELECT ID, CODIGO, NIT, MNOMBRE, " + fields
-        + f" FROM CONTERCE WHERE CIA = ? AND ({nonzero})",
-        [(ADO_TYPE_INTEGER, 0, company)],
+        + f" FROM CONTERCE WHERE CIA = {company} AND (({nonzero}){account_condition})",
     )
+    try:
+        rows = list(_rows(recordset))
+    finally:
+        recordset.Close()
     current: dict[tuple[str, str], dict[int, tuple[Decimal, Decimal]]] = {}
     duplicate_counts: dict[tuple[str, str], int] = {}
+    existing_ids: dict[tuple[str, str], int] = {}
     nonzero_ids: dict[int, list[int]] = {
         month: [] for month in range(month_from, month_to + 1)
     }
     for row in rows:
         key = (_text(row.get("CODIGO")).strip(), _text(row.get("NIT")).strip())
-        if key in current:
+        row_id = int(_number(row.get("ID")))
+        if key in existing_ids and key in expected_keys:
             duplicate_counts[key] = duplicate_counts.get(key, 1) + 1
-        values = current.setdefault(
-            key,
-            {month: (Decimal("0.00"), Decimal("0.00")) for month in range(month_from, month_to + 1)},
-        )
+        if key in expected_keys:
+            existing_ids[key] = min(existing_ids.get(key, row_id), row_id)
+        row_values: dict[int, tuple[Decimal, Decimal]] = {}
         for month in range(month_from, month_to + 1):
-            row_id = int(_number(row.get("ID")))
             row_debit = _money(row.get(f"MACMDEB{month:02d}"))
             row_credit = _money(row.get(f"MACMCRE{month:02d}"))
+            row_values[month] = (row_debit, row_credit)
             if row_debit != 0 or row_credit != 0:
                 nonzero_ids[month].append(row_id)
-            prior = values[month]
-            values[month] = (
-                prior[0] + row_debit,
-                prior[1] + row_credit,
+        if any(debit != 0 or credit != 0 for debit, credit in row_values.values()):
+            values = current.setdefault(
+                key,
+                {month: (Decimal("0.00"), Decimal("0.00")) for month in range(month_from, month_to + 1)},
             )
+            for month, (row_debit, row_credit) in row_values.items():
+                prior = values[month]
+                values[month] = (
+                    prior[0] + row_debit,
+                    prior[1] + row_credit,
+                )
 
     third_names: dict[str, str] = {}
-    for nit in sorted({key[2] for key in third_values}):
-        row = _one(
+    for row in rows:
+        key = (_text(row.get("CODIGO")).strip(), _text(row.get("NIT")).strip())
+        name = _text(row.get("MNOMBRE")).strip()
+        if key in expected_keys and name:
+            third_names.setdefault(key[1], name)
+    missing_nits = {
+        nit for account, nit in expected_keys
+        if (account, nit) not in existing_ids and nit not in third_names
+    }
+    # En una instalación nueva pueden faltar miles de auxiliares en CONTERCE.
+    # Resolverlos uno por uno contra FADCLI reproduce el principal cuello de
+    # botella anterior; se consultan en bloques y cada bloque cruza COM una vez.
+    ordered_missing_nits = sorted(missing_nits)
+    for offset in range(0, len(ordered_missing_nits), LOOKUP_CHUNK):
+        chunk = ordered_missing_nits[offset:offset + LOOKUP_CHUNK]
+        quoted = ",".join("'" + nit.replace("'", "''") + "'" for nit in chunk)
+        recordset = _open_recordset(
             connection,
-            "SELECT TOP 1 CCODIGO, CNOMBRE FROM FADCLI WHERE CCODIGO = ?",
-            [(ADO_TYPE_VARCHAR, 15, nit)],
+            "SELECT CCODIGO, CNOMBRE FROM FADCLI WHERE CCODIGO IN (" + quoted + ")",
         )
-        third_names[nit] = _text(row.get("CNOMBRE")).strip() if row else ""
+        try:
+            for row in _rows(recordset):
+                third_names[_text(row.get("CCODIGO")).strip()] = _text(
+                    row.get("CNOMBRE")
+                ).strip()
+        finally:
+            recordset.Close()
+    for nit in ordered_missing_nits:
+        third_names.setdefault(nit, "")
     warnings: list[str] = []
     if duplicate_counts:
         warnings.append(
             f"CONTERCE tiene {len(duplicate_counts)} claves cuenta–NIT repetidas con saldo; "
             "el reproceso dejará el acumulado en una sola fila y pondrá las demás en cero."
         )
-    return current, third_names, warnings, nonzero_ids
+    return current, third_names, warnings, nonzero_ids, existing_ids
 
 
 def _difference_counts(
@@ -402,7 +454,7 @@ def _build_plan(
     )
     aggregates = _load_aggregates(connection, company, year, month_from, month_to)
     account_values, third_values, warnings, errors = _build_expected_values(accounts, aggregates)
-    current_thirds, third_names, third_warnings, third_nonzero_ids = _load_third_context(
+    current_thirds, third_names, third_warnings, third_nonzero_ids, third_existing_ids = _load_third_context(
         connection, company, month_from, month_to, third_values
     )
     warnings.extend(third_warnings)
@@ -427,6 +479,7 @@ def _build_plan(
         account_values=account_values,
         third_values=third_values,
         third_nonzero_ids=third_nonzero_ids,
+        third_existing_ids=third_existing_ids,
         third_names=third_names,
         movement_records=sum(item.records for item in aggregates),
         debit=sum((item.debit for item in aggregates), Decimal("0.00")),
@@ -438,7 +491,14 @@ def _build_plan(
     )
 
 
-def _result(plan: ReprocessPlan, *, status: str, audit: str = "No aplica", warning: str = "") -> dict[str, Any]:
+def _result(
+    plan: ReprocessPlan,
+    *,
+    status: str,
+    duration_seconds: float,
+    audit: str = "No aplica",
+    warning: str = "",
+) -> dict[str, Any]:
     account_codes = {code for _, code in plan.account_values}
     third_keys = {(code, nit) for _, code, nit in plan.third_values}
     total_differences = plan.differences_conmae + plan.differences_conterce
@@ -464,6 +524,7 @@ def _result(plan: ReprocessPlan, *, status: str, audit: str = "No aplica", warni
         "errores": plan.errors,
         "puedeEjecutar": not plan.errors and total_differences > 0,
         "estado": status,
+        "duracionSegundos": round(duration_seconds, 2),
         "auditoria": audit,
         "advertenciaAuditoria": warning,
         "fuente": "MOV01",
@@ -475,11 +536,16 @@ def simulate_monthly_reprocess(
     company_code: str, year: int, month_from: int, month_to: int,
 ) -> dict[str, Any]:
     """Compara MOV01 con los acumulados actuales sin modificar Advantage."""
+    started_at = perf_counter()
     company = normalize_company_code(company_code)
     _validate_range(year, month_from, month_to)
     with ads_connection() as connection:
         plan = _build_plan(connection, company, int(year), int(month_from), int(month_to))
-    return _result(plan, status="Simulación completada")
+    return _result(
+        plan,
+        status="Simulación completada",
+        duration_seconds=perf_counter() - started_at,
+    )
 
 
 def _replace_balances(connection: Any, plan: ReprocessPlan) -> None:
@@ -519,18 +585,9 @@ def _replace_balances(connection: Any, plan: ReprocessPlan) -> None:
         )
 
     unique_thirds = sorted({(code, nit) for _, code, nit in plan.third_values})
-    third_ids: dict[tuple[str, str], int] = {}
+    third_ids = dict(plan.third_existing_ids)
     for code, nit in unique_thirds:
-        existing = _one(
-            connection,
-            "SELECT TOP 1 ID FROM CONTERCE WHERE CIA = ? AND CODIGO = ? AND NIT = ? ORDER BY ID",
-            [
-                (ADO_TYPE_INTEGER, 0, plan.company),
-                (ADO_TYPE_VARCHAR, 12, code),
-                (ADO_TYPE_VARCHAR, 11, nit),
-            ],
-        )
-        if existing is None:
+        if (code, nit) not in third_ids:
             master = plan.accounts[code]
             _execute(
                 connection,
@@ -552,21 +609,40 @@ def _replace_balances(connection: Any, plan: ReprocessPlan) -> None:
                     (ADO_TYPE_VARCHAR, 11, nit),
                 ],
             )
-        if existing is None:
-            raise RuntimeError(f"No fue posible localizar CONTERCE para {code} / {nit}.")
-        third_ids[(code, nit)] = int(_number(existing.get("ID")))
+            if existing is None:
+                raise RuntimeError(f"No fue posible localizar CONTERCE para {code} / {nit}.")
+            third_ids[(code, nit)] = int(_number(existing.get("ID")))
 
+    # Un UPDATE individual por auxiliar producía cientos de miles de llamadas
+    # ADO y sometía al cliente ACE a una carga que podía terminar en C0000005.
+    # CASE permite enviar 250 auxiliares por sentencia conservando el valor
+    # particular de cada ID. Los valores son Decimal calculados internamente y
+    # los identificadores provienen de CONTERCE, por lo que no se concatena
+    # ninguna entrada libre del usuario.
+    updates_by_month: dict[int, list[tuple[int, Decimal, Decimal]]] = {}
     for (month, code, nit), (debit, credit) in sorted(plan.third_values.items()):
-        _execute(
-            connection,
-            f"UPDATE CONTERCE SET MACMDEB{month:02d} = ?, MACMCRE{month:02d} = ? "
-            "WHERE ID = ?",
-            [
-                (ADO_TYPE_DOUBLE, 0, float(debit)),
-                (ADO_TYPE_DOUBLE, 0, float(credit)),
-                (ADO_TYPE_INTEGER, 0, third_ids[(code, nit)]),
-            ],
+        updates_by_month.setdefault(month, []).append(
+            (third_ids[(code, nit)], debit, credit)
         )
+    for month, updates in updates_by_month.items():
+        debit_field = f"MACMDEB{month:02d}"
+        credit_field = f"MACMCRE{month:02d}"
+        for offset in range(0, len(updates), CONTERCE_UPDATE_CHUNK):
+            chunk = updates[offset:offset + CONTERCE_UPDATE_CHUNK]
+            ids = ",".join(str(row_id) for row_id, _, _ in chunk)
+            debit_cases = " ".join(
+                f"WHEN {row_id} THEN {_sql_money_literal(debit)}"
+                for row_id, debit, _ in chunk
+            )
+            credit_cases = " ".join(
+                f"WHEN {row_id} THEN {_sql_money_literal(credit)}"
+                for row_id, _, credit in chunk
+            )
+            connection.Execute(
+                f"UPDATE CONTERCE SET {debit_field} = CASE ID {debit_cases} "
+                f"ELSE {debit_field} END, {credit_field} = CASE ID {credit_cases} "
+                f"ELSE {credit_field} END WHERE CIA = {plan.company} AND ID IN ({ids})"
+            )
 
 
 def execute_monthly_reprocess(
@@ -580,6 +656,7 @@ def execute_monthly_reprocess(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Reconstruye CONMAE/CONTERCE en una transacción o rollback de prueba."""
+    started_at = perf_counter()
     company = normalize_company_code(company_code)
     _validate_range(year, month_from, month_to)
     normalized_user = str(user).strip().upper()[:4] or "WEB"
@@ -601,7 +678,11 @@ def execute_monthly_reprocess(
                 "No se puede ejecutar: " + " ".join(plan.errors[:5])
             )
         if plan.differences_conmae + plan.differences_conterce == 0:
-            return _result(plan, status="Sin cambios")
+            return _result(
+                plan,
+                status="Sin cambios",
+                duration_seconds=perf_counter() - started_at,
+            )
         connection.BeginTrans()
         try:
             _replace_balances(connection, plan)
@@ -632,6 +713,7 @@ def execute_monthly_reprocess(
     return _result(
         plan,
         status="Validado sin grabar" if dry_run else "Reproceso completado",
+        duration_seconds=perf_counter() - started_at,
         audit=audit_status,
         warning=audit_warning,
     )

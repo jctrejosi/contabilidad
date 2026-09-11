@@ -13,6 +13,7 @@ export interface ResultadoReprocesoMensual {
   errores: string[];
   puedeEjecutar: boolean;
   estado: string;
+  duracionSegundos: number;
   auditoria: string;
   advertenciaAuditoria: string;
   fuente: "MOV01";

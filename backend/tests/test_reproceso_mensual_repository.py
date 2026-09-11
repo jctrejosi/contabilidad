@@ -4,6 +4,7 @@ from backend.reproceso_mensual_repository import (
     AccountMaster,
     MovementAggregate,
     _build_expected_values,
+    _sql_money_literal,
 )
 
 
@@ -51,3 +52,8 @@ def test_blocks_missing_account_and_invalid_required_nit() -> None:
 
     assert any("NIT vacío" in error for error in errors)
     assert any("no existe en CONMAE" in error for error in errors)
+
+
+def test_formats_money_as_safe_ads_decimal_literal() -> None:
+    assert _sql_money_literal(Decimal("1234.5")) == "1234.50"
+    assert _sql_money_literal(Decimal("-0.126")) == "-0.13"
