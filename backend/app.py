@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Path, Query, Response, status
+from fastapi import FastAPI, File, HTTPException, Path, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from .ads_repository import (
@@ -26,22 +26,37 @@ from .ads_repository import (
     list_accounts,
     update_account,
 )
-from .terceros_repository import list_third_parties
+from .terceros_repository import (
+    ThirdPartyAlreadyExists,
+    ThirdPartyValidationError,
+    create_third_party,
+    list_third_parties,
+)
 from .centros_repository import list_cost_centers
 from .tipos_documento_repository import list_document_types
 from .comprobantes_repository import list_vouchers
 from .movimiento_mensual_repository import list_monthly_movements
 from .documentos_repository import document_movements, list_documents
+from .anulacion_repository import (
+    AnnulmentConflict,
+    AnnulmentValidationError,
+    annul_document,
+)
 from .lotes_repository import (
     LotConflict,
     LotValidationError,
     create_lot,
+    delete_lot,
     delete_lot_line,
+    import_lot,
     list_lot_lines,
     list_lots,
+    post_lot,
     save_lot_line,
     update_lot,
+    verify_lot,
 )
+from .importaciones_repository import read_import_file
 from .contabilizacion_repository import (
     PostingConflict,
     PostingValidationError,
@@ -56,6 +71,11 @@ from .balance_comprobacion_repository import (
 from .reproceso_mensual_repository import (
     execute_monthly_reprocess,
     simulate_monthly_reprocess,
+)
+from .parametros_operacion_repository import (
+    OperationParametersValidationError,
+    get_operation_parameters,
+    update_operation_parameters,
 )
 
 
@@ -90,6 +110,29 @@ class AccountCreate(AccountWrite):
         description="Código CONMAE.CODIGO de 1, 2, 4, 6, 9 o 12 dígitos.",
         pattern=r"^[0-9]{1,12}$",
     )
+
+
+class ThirdPartyCreate(BaseModel):
+    """Datos básicos usados por CLIENTES2 para crear un tercero activo."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nit: str = Field(pattern=r"^[0-9]{1,10}$")
+    digito: str = Field("", pattern=r"^[0-9]?$", max_length=1)
+    tipoDocumento: Literal["13", "31"]
+    nombre: str = Field(min_length=1, max_length=60)
+    nombreComercial: str = Field("", max_length=60)
+    primerNombre: str = Field("", max_length=20)
+    segundoNombre: str = Field("", max_length=20)
+    primerApellido: str = Field("", max_length=20)
+    segundoApellido: str = Field("", max_length=20)
+    direccion: str = Field("", max_length=25)
+    codigoCiudad: str = Field("", max_length=5)
+    ciudad: str = Field("", max_length=12)
+    telefono: str = Field("", max_length=15)
+    correo: str = Field("", max_length=60)
+    zona: str = Field("", max_length=2)
+    cupo: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
 
 
 class DirectMovementLine(BaseModel):
@@ -134,6 +177,21 @@ class MonthlyReprocessRequest(BaseModel):
     motivo: str = Field("", max_length=180)
 
 
+class DocumentAnnulmentRequest(BaseModel):
+    """Identidad inmutable y trazabilidad requeridas para retirar un documento."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cia: str = Field(pattern=r"^[0-9]{1,3}$")
+    id: int = Field(ge=1)
+    documento: str = Field(min_length=1, max_length=12)
+    comprobante: str = Field(min_length=1, max_length=6)
+    tipoDocumento: str = Field(min_length=1, max_length=2)
+    fecha: date
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
 class LotWrite(BaseModel):
     """Cabecera editable de CONMOVI según CREALOT2/GRABALOT."""
 
@@ -142,6 +200,14 @@ class LotWrite(BaseModel):
     lote: str = Field(pattern=r"^[A-Za-z0-9]{4}$")
     nombre: str = Field(min_length=1, max_length=25)
     mes: str = Field(pattern=r"^(0[0-9]|1[0-8])$")
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+class LotActionRequest(BaseModel):
+    """Identifica al usuario que confirma una actualización de lote."""
+
+    model_config = ConfigDict(extra="forbid")
+
     usuario: str = Field("WEB", min_length=1, max_length=4)
 
 
@@ -164,15 +230,48 @@ class LotLineWrite(BaseModel):
     concepto: str = Field(min_length=1, max_length=50)
 
 
+class ImportLotRequest(BaseModel):
+    """Cabecera y partidas interpretadas antes de crear el lote de revisión."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lote: str = Field(pattern=r"^[A-Za-z0-9]{4}$")
+    nombre: str = Field(min_length=1, max_length=25)
+    mes: str = Field(pattern=r"^(0[1-9]|1[0-8])$")
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    lineas: list[LotLineWrite] = Field(min_length=2, max_length=5000)
+
+
+class OperationParametersWrite(BaseModel):
+    """Campos editables de CONCTR según PARAMS/DSIGRABA6 del sistema original."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombreEmpresa: str = Field(min_length=1, max_length=40)
+    nit: str = Field(min_length=1, max_length=15)
+    direccion: str = Field("", max_length=30)
+    ciudad: str = Field("", max_length=20)
+    directorioContabilidad: str = Field(min_length=1, max_length=40)
+    anioOperacion: str = Field(pattern=r"^[0-9]{4}$")
+    contabilidadConciliacion: str = Field("", max_length=3)
+    verificaDocumentosLotes: bool
+    tercerosDocumentosPropios: bool
+    controlaUsuarioLotes: bool
+    comentarioCertificado: str = Field("", max_length=120)
+    periodosHabilitados: dict[str, bool]
+
+
 def _service_error(exc: Exception) -> HTTPException:
     """Convierte errores de dominio/ADS en respuestas HTTP estables y seguras."""
     if isinstance(exc, AccountAlreadyExists):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-    if isinstance(exc, (PostingConflict, LotConflict)):
+    if isinstance(exc, ThirdPartyAlreadyExists):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, (PostingConflict, LotConflict, AnnulmentConflict)):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, (AccountNotFound, CompanyNotFound)):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    if isinstance(exc, (ValueError, PostingValidationError, LotValidationError)):
+    if isinstance(exc, (ValueError, PostingValidationError, LotValidationError, OperationParametersValidationError, ThirdPartyValidationError, AnnulmentValidationError)):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, AdsConfigurationError):
         logger.error("Configuracion ADS no disponible: %s", exc)
@@ -217,6 +316,16 @@ def third_parties(
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "FADCLI", "sharedAcrossCompanies": True}
+
+
+@app.post("/api/terceros", status_code=status.HTTP_201_CREATED, summary="Crear tercero")
+def create_third(payload: ThirdPartyCreate) -> dict[str, object]:
+    """Crea un tercero activo para usarlo inmediatamente en movimientos."""
+    try:
+        item = create_third_party(payload.model_dump())
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "FADCLI", "sharedAcrossCompanies": True}
 
 
 @app.get("/api/centros", summary="Consultar centros de costo por compañía")
@@ -275,6 +384,31 @@ def accounting_period(
     """Lee CONCTR para inicializar fecha y período de Captura directa."""
     try:
         item = get_accounting_period(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONCTR"}
+
+
+@app.get("/api/parametros-operacion", summary="Consultar parámetros de operación")
+def operation_parameters(
+    cia: str = Query(description="Compañía activa validada contra CONEMP.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lee el registro real de CONCTR según PARAMS de DSITAB.PRG."""
+    try:
+        item = get_operation_parameters(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONCTR"}
+
+
+@app.put("/api/parametros-operacion", summary="Actualizar parámetros de operación")
+def save_operation_parameters(
+    payload: OperationParametersWrite,
+    cia: str = Query(description="Compañía activa validada contra CONEMP.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Graba en CONCTR los mismos controles persistidos por DSIGRABA6."""
+    try:
+        item = update_operation_parameters(cia, payload.model_dump())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONCTR"}
@@ -373,6 +507,29 @@ def document_detail(
     }
 
 
+@app.post("/api/documentos/anular", summary="Anular un documento contabilizado")
+def annul_document_endpoint(
+    request: DocumentAnnulmentRequest,
+    dry_run: bool = Query(False, alias="dryRun"),
+) -> dict[str, object]:
+    """Retira cabecera y partidas, y reconstruye los acumulados afectados."""
+    try:
+        result = annul_document(
+            request.cia,
+            header_id=request.id,
+            document=request.documento,
+            voucher=request.comprobante,
+            document_type=request.tipoDocumento,
+            movement_date=request.fecha.isoformat(),
+            user=request.usuario,
+            reason=request.motivo,
+            dry_run=dry_run,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "source": "Advantage Data Server", "dryRun": dry_run}
+
+
 @app.get("/api/lotes", summary="Consultar lotes de la compañía activa")
 def lots(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
@@ -385,6 +542,36 @@ def lots(
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "CONMOVI", "sharedAcrossCompanies": False}
+
+
+@app.post("/api/importaciones/leer", summary="Leer un archivo de movimientos")
+async def read_import_endpoint(
+    archivo: UploadFile = File(...),
+    hoja: str = Query("", max_length=100),
+) -> dict[str, object]:
+    """Lee XLSX, CSV o TXT y devuelve datos neutros para mapear en pantalla."""
+    try:
+        content = await archivo.read()
+        item = read_import_file(archivo.filename or "", content, sheet_name=hoja)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    finally:
+        await archivo.close()
+    return {"item": item}
+
+
+@app.post("/api/importaciones/lote", summary="Validar o crear un lote desde una importación")
+def import_lot_endpoint(
+    request: ImportLotRequest,
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    dry_run: bool = Query(False, alias="dryRun"),
+) -> dict[str, object]:
+    """Usa rollback al validar y conserva un Borrador únicamente al confirmar."""
+    try:
+        result = import_lot(cia, request.model_dump(), dry_run=dry_run)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "dryRun": dry_run}
 
 
 @app.get("/api/lotes/detalle", summary="Consultar las partidas de un lote")
@@ -426,6 +613,45 @@ def update_lot_endpoint(
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONMOVI"}
+
+
+@app.delete("/api/lotes/{lote}", summary="Eliminar un lote y sus partidas")
+def delete_lot_endpoint(
+    lote: str = Path(min_length=1, max_length=10),
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    force: bool = Query(False, description="Segunda confirmación para lotes protegidos."),
+) -> dict[str, object]:
+    try:
+        result = delete_lot(cia, lote, force=force)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result}
+
+
+@app.post("/api/lotes/{lote}/verificar", summary="Verificar consistencia de un lote")
+def verify_lot_endpoint(
+    lote: str = Path(min_length=1, max_length=10),
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    try:
+        result = verify_lot(cia, lote)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result}
+
+
+@app.post("/api/lotes/{lote}/actualizar", summary="Contabilizar un lote verificado")
+def post_lot_endpoint(
+    payload: LotActionRequest,
+    lote: str = Path(min_length=1, max_length=10),
+    cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
+    dry_run: bool = Query(False, alias="dryRun"),
+) -> dict[str, object]:
+    try:
+        result = post_lot(cia, lote, user=payload.usuario, dry_run=dry_run)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result}
 
 
 @app.post(

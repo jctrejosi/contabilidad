@@ -1,210 +1,207 @@
-import { useState } from 'react';
-import { MOVIMIENTOS_FEB, fmtCOP } from '../data/mock';
-import type { MovimientoLinea } from '../types';
+import { useEffect, useState } from 'react';
+import { listarComprobantes, type ComprobanteReal } from '../api/comprobantes';
+import {
+  anularDocumento,
+  consultarDetalleDocumento,
+  consultarDocumentos,
+  type DocumentoContable,
+  type DocumentosResponse,
+  type MovimientoDocumento,
+  type ResultadoAnulacion,
+} from '../api/documentos';
+import { listarTiposDocumento, type TipoDocumentoReal } from '../api/tiposDocumento';
 
-export default function Anulacion() {
-  const [busqueda, setBusqueda] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('');
-  const [filtroDoc, setFiltroDoc] = useState('');
-  const [selected, setSelected] = useState<MovimientoLinea | null>(null);
-  const [step, setStep] = useState<'buscar' | 'preview' | 'confirmado'>('buscar');
+const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
+const fmtCOP = (value: number) => new Intl.NumberFormat('es-CO', {
+  style: 'currency', currency: 'COP', maximumFractionDigits: 2,
+}).format(value);
+
+interface Props { cia: string }
+interface Filtros {
+  periodo: string;
+  comprobante: string;
+  tipoDocumento: string;
+  documento: string;
+  nit: string;
+}
+
+const FILTROS_VACIOS: Filtros = {
+  periodo: '', comprobante: '', tipoDocumento: '', documento: '', nit: '',
+};
+
+export default function Anulacion({ cia }: Props) {
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [resultado, setResultado] = useState<DocumentosResponse | null>(null);
+  const [comprobantes, setComprobantes] = useState<ComprobanteReal[]>([]);
+  const [tiposDocumento, setTiposDocumento] = useState<TipoDocumentoReal[]>([]);
+  const [seleccionado, setSeleccionado] = useState<DocumentoContable | null>(null);
+  const [detalle, setDetalle] = useState<MovimientoDocumento[]>([]);
   const [motivo, setMotivo] = useState('');
-  const [periodoRev, setPeriodoRev] = useState('2026-02');
-  const [comprobanteRev, setComprobanteRev] = useState('NO');
+  const [cargando, setCargando] = useState(false);
+  const [detalleCargando, setDetalleCargando] = useState(false);
+  const [anulando, setAnulando] = useState(false);
+  const [error, setError] = useState('');
+  const [mensaje, setMensaje] = useState('');
+  const [confirmar, setConfirmar] = useState(false);
+  const [resumen, setResumen] = useState<ResultadoAnulacion | null>(null);
 
-  const docGroups = MOVIMIENTOS_FEB.reduce((acc, m) => {
-    if (!acc[m.documento]) acc[m.documento] = [];
-    acc[m.documento].push(m);
-    return acc;
-  }, {} as Record<string, MovimientoLinea[]>);
+  useEffect(() => {
+    let vigente = true;
+    setFiltros(FILTROS_VACIOS);
+    setResultado(null);
+    setSeleccionado(null);
+    setDetalle([]);
+    setError('');
+    setMensaje('');
+    Promise.all([listarComprobantes(cia), listarTiposDocumento()])
+      .then(([comprobantesResponse, tiposResponse]) => {
+        if (!vigente) return;
+        setComprobantes(comprobantesResponse.items);
+        setTiposDocumento(tiposResponse.items);
+      })
+      .catch((cause: unknown) => {
+        if (vigente) setError(cause instanceof Error ? cause.message : 'No fue posible cargar los filtros.');
+      });
+    return () => { vigente = false; };
+  }, [cia]);
 
-  const docs = Object.keys(docGroups).filter(d => {
-    if (busqueda && !d.toLowerCase().includes(busqueda.toLowerCase())) return false;
-    if (filtroDoc && !d.toLowerCase().includes(filtroDoc.toLowerCase())) return false;
-    return true;
-  });
+  const hayFiltro = Object.values(filtros).some(value => value.trim());
 
-  function handleAnular() {
-    if (!motivo.trim()) return;
-    setStep('confirmado');
+  function cambiarFiltro(campo: keyof Filtros, valor: string) {
+    setFiltros(actual => ({ ...actual, [campo]: valor }));
+    setResultado(null);
+    setSeleccionado(null);
+    setDetalle([]);
+    setError('');
+    setMensaje('');
   }
 
-  return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-gray-800">Anulación de documentos</h1>
-          <p className="text-xs text-gray-500">Genera un asiento inverso trazable — el movimiento original no se elimina</p>
-        </div>
-      </div>
+  async function consultar(page = 1) {
+    if (!hayFiltro) {
+      setError('Aplique al menos un filtro antes de consultar.');
+      return;
+    }
+    setCargando(true);
+    setError('');
+    setMensaje('');
+    setSeleccionado(null);
+    setDetalle([]);
+    try {
+      setResultado(await consultarDocumentos({ cia, page, pageSize: 50, ...filtros }));
+    } catch (cause: unknown) {
+      setResultado(null);
+      setError(cause instanceof Error ? cause.message : 'No fue posible realizar la consulta.');
+    } finally {
+      setCargando(false);
+    }
+  }
 
-      {step === 'buscar' && (
-        <>
-          {/* Search filters */}
-          <div className="bg-white rounded border border-gray-200 p-4">
-            <h2 className="text-xs font-semibold text-gray-700 mb-3">Buscar documento a anular</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Período</label>
-                <input type="month" defaultValue="2026-02"
-                  className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">N.° documento</label>
-                <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                  placeholder="NOM-2026-02..."
-                  className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Comprobante</label>
-                <input value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
-                  placeholder="CE, CI..."
-                  className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
-              </div>
-              <div className="flex items-end">
-                <button className="w-full text-xs py-1.5 rounded font-medium text-white" style={{ backgroundColor: '#0073C0' }}>
-                  Buscar
-                </button>
-              </div>
-            </div>
-          </div>
+  async function revisar(documento: DocumentoContable) {
+    setSeleccionado(documento);
+    setDetalle([]);
+    setMotivo('');
+    setError('');
+    setMensaje('');
+    setResumen(null);
+    setDetalleCargando(true);
+    try {
+      const lineas = await consultarDetalleDocumento(cia, documento);
+      if (!lineas.length) throw new Error('El documento no contiene partidas que puedan anularse.');
+      setDetalle(lineas);
+    } catch (cause: unknown) {
+      setSeleccionado(null);
+      setError(cause instanceof Error ? cause.message : 'No fue posible revisar el documento.');
+    } finally {
+      setDetalleCargando(false);
+    }
+  }
 
-          {/* Results */}
-          <div className="bg-white rounded border border-gray-200 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50 text-xs font-semibold text-gray-600">
-              Documentos encontrados
-            </div>
-            {docs.map(doc => {
-              const lines = docGroups[doc];
-              const deb = lines.reduce((s, l) => s + l.debito, 0);
-              const cred = lines.reduce((s, l) => s + l.credito, 0);
-              const firstLine = lines[0];
-              return (
-                <div
-                  key={doc}
-                  className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 transition-colors"
-                  onClick={() => { setSelected(firstLine); setStep('preview'); }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-semibold text-gray-800 text-sm">{doc}</span>
-                      <span className="text-xs text-gray-500">·</span>
-                      <span className="text-xs text-gray-500">{firstLine.comprobante}</span>
-                      <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Contabilizado</span>
-                    </div>
-                    <div className="text-xs text-gray-400 mt-0.5">{firstLine.fecha} · {lines.length} líneas</div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="font-mono text-xs text-gray-700 font-semibold">{fmtCOP(deb)}</div>
-                    <div className="text-xs text-gray-400">{firstLine.origen}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
+  async function ejecutarAnulacion() {
+    if (!seleccionado || motivo.trim().length < 5) return;
+    setConfirmar(false);
+    setAnulando(true);
+    setError('');
+    try {
+      const response = await anularDocumento(cia, seleccionado, motivo.trim());
+      setResumen(response);
+      setMensaje(`El documento ${response.documento} fue anulado correctamente.`);
+      setResultado(actual => actual ? {
+        ...actual,
+        items: actual.items.filter(item => item.id !== seleccionado.id),
+      } : null);
+      setSeleccionado(null);
+      setDetalle([]);
+      setMotivo('');
+      if (response.advertencia) setError(response.advertencia);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible completar la anulación.');
+    } finally {
+      setAnulando(false);
+    }
+  }
 
-      {step === 'preview' && selected && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <button onClick={() => setStep('buscar')} className="text-xs text-gray-500 hover:text-gray-700">← Volver</button>
-            <span className="text-gray-300">/</span>
-            <span className="text-xs font-medium text-gray-800">Anular {selected.documento}</span>
-          </div>
+  const items = resultado?.items ?? [];
+  const totalDebito = detalle.reduce((total, line) => total + line.debito, 0);
+  const totalCredito = detalle.reduce((total, line) => total + line.credito, 0);
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Original document */}
-            <div className="bg-white rounded border border-gray-200 p-4">
-              <h3 className="text-xs font-semibold text-gray-700 mb-3">Documento original</h3>
-              <div className="space-y-1 text-xs">
-                {MOVIMIENTOS_FEB.filter(m => m.documento === selected.documento).map((l, i) => (
-                  <div key={l.id} className="flex items-center gap-3 py-1 border-b border-gray-50">
-                    <span className="text-gray-400 w-4">{i + 1}</span>
-                    <span className="font-mono w-16 text-gray-600">{l.cuenta}</span>
-                    <span className="flex-1 text-gray-600 truncate">{l.nombreCuenta}</span>
-                    <span className="font-mono text-gray-800">{l.debito > 0 ? fmtCOP(l.debito) : ''}</span>
-                    <span className="font-mono text-gray-500">{l.credito > 0 ? `(${fmtCOP(l.credito)})` : ''}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Reversal preview */}
-            <div className="bg-white rounded border border-amber-200 p-4" style={{ backgroundColor: '#FFFBEB' }}>
-              <h3 className="text-xs font-semibold text-amber-700 mb-3">Vista previa del asiento inverso</h3>
-              <div className="space-y-1 text-xs">
-                {MOVIMIENTOS_FEB.filter(m => m.documento === selected.documento).map((l, i) => (
-                  <div key={l.id} className="flex items-center gap-3 py-1 border-b border-amber-100">
-                    <span className="text-amber-400 w-4">{i + 1}</span>
-                    <span className="font-mono w-16 text-amber-700">{l.cuenta}</span>
-                    <span className="flex-1 text-amber-700 truncate">{l.nombreCuenta}</span>
-                    <span className="font-mono text-amber-800">{l.credito > 0 ? fmtCOP(l.credito) : ''}</span>
-                    <span className="font-mono text-amber-600">{l.debito > 0 ? `(${fmtCOP(l.debito)})` : ''}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 text-xs text-amber-600 italic">Débitos y créditos invertidos</div>
-            </div>
-          </div>
-
-          {/* Reversal parameters */}
-          <div className="bg-white rounded border border-gray-200 p-4">
-            <h3 className="text-xs font-semibold text-gray-700 mb-3">Parámetros de la reversión</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Período reversión</label>
-                <input type="month" value={periodoRev} onChange={e => setPeriodoRev(e.target.value)}
-                  className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Comprobante</label>
-                <input value={comprobanteRev} onChange={e => setComprobanteRev(e.target.value)}
-                  className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Motivo de anulación <span className="text-red-500">*</span></label>
-                <input
-                  value={motivo}
-                  onChange={e => setMotivo(e.target.value)}
-                  placeholder="Descripción del motivo de la anulación..."
-                  className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button onClick={() => setStep('buscar')} className="text-xs px-4 py-2 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Cancelar</button>
-            <button
-              onClick={handleAnular}
-              disabled={!motivo.trim()}
-              className={`text-xs px-4 py-2 rounded font-medium text-white ${motivo.trim() ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
-              style={{ backgroundColor: '#DC2626' }}
-            >
-              ⊘ Anular documento
-            </button>
-          </div>
-        </div>
-      )}
-
-      {step === 'confirmado' && (
-        <div className="bg-white rounded border border-green-200 p-6 text-center space-y-3">
-          <div className="text-3xl text-green-500">✓</div>
-          <h3 className="text-sm font-semibold text-gray-800">Anulación completada</h3>
-          <p className="text-xs text-gray-500">Se generó el asiento inverso como nota de contabilidad NO-000089 en el período {periodoRev}.</p>
-          <p className="text-xs text-gray-400">El documento original permanece intacto y enlazado a esta reversión.</p>
-          <div className="flex justify-center gap-3 pt-2">
-            <button onClick={() => { setStep('buscar'); setBusqueda(''); setSelected(null); setMotivo(''); }}
-              className="text-xs px-4 py-2 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">
-              Nueva anulación
-            </button>
-            <button className="text-xs px-4 py-2 rounded text-white font-medium" style={{ backgroundColor: '#0073C0' }}>
-              Ver asiento inverso
-            </button>
-          </div>
-        </div>
-      )}
+  return <div className="max-w-screen-2xl space-y-4 p-4">
+    <div>
+      <div className="mb-1 text-xs text-gray-400">Movimientos / Anulación</div>
+      <h1 className="text-lg font-semibold text-gray-800">Anulación de documentos</h1>
+      <p className="mt-1 text-xs text-gray-500">Consulte el documento, revise sus partidas y confirme el retiro del movimiento.</p>
     </div>
-  );
+
+    <div className="rounded border border-gray-200 bg-white p-3">
+      <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
+        <legend className="px-2 text-xs font-semibold text-petroleum-800">Buscar documento</legend>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <Filter label="Período"><input type="month" value={filtros.periodo} onChange={event => cambiarFiltro('periodo', event.target.value)} className={INPUT} /></Filter>
+          <Filter label="Comprobante"><select value={filtros.comprobante} onChange={event => cambiarFiltro('comprobante', event.target.value)} className={INPUT}><option value="">Todos</option>{comprobantes.map(item => <option key={item.codigo} value={item.codigo}>{item.codigo} — {item.nombre}</option>)}</select></Filter>
+          <Filter label="Tipo de documento"><select value={filtros.tipoDocumento} onChange={event => cambiarFiltro('tipoDocumento', event.target.value)} className={INPUT}><option value="">Todos</option>{tiposDocumento.map(item => <option key={item.codigo} value={item.codigo}>{item.codigo} — {item.nombre}</option>)}</select></Filter>
+          <Filter label="N.° documento"><input value={filtros.documento} onChange={event => cambiarFiltro('documento', event.target.value)} className={`${INPUT} font-mono`} /></Filter>
+          <Filter label="Tercero"><input value={filtros.nit} onChange={event => cambiarFiltro('nit', event.target.value)} className={`${INPUT} font-mono`} /></Filter>
+          <div className="flex items-end"><button type="button" disabled={cargando || !hayFiltro} onClick={() => void consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
+        </div>
+      </fieldset>
+    </div>
+
+    {mensaje && <div role="status" className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><div className="font-medium">{mensaje}</div>{resumen && <div className="mt-1 text-xs">{resumen.partidasRetiradas} partidas retiradas · {resumen.cuentasRecalculadas} cuentas y {resumen.tercerosRecalculados} auxiliares de tercero recalculados.</div>}</div>}
+    {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+    <div className="overflow-hidden rounded border border-gray-200 bg-white">
+      <table className="w-full text-xs">
+        <thead className="border-b border-gray-200 bg-gray-50"><tr>{['Fecha', 'Comprobante', 'Tipo', 'Documento', 'Tercero', 'Detalle', 'Valor', 'Acción'].map((title, index) => <th key={title} className={`px-3 py-2.5 font-semibold text-gray-600 ${index === 6 ? 'text-right' : 'text-left'}`}>{title}</th>)}</tr></thead>
+        <tbody className="divide-y divide-gray-50">
+          {!resultado && !cargando && <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-500"><div className="font-medium text-gray-600">Aún no se ha realizado una consulta</div><div className="mt-1">Aplique un filtro y pulse Consultar para mostrar documentos.</div></td></tr>}
+          {cargando && <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-500">Consultando documentos…</td></tr>}
+          {resultado && !cargando && !items.length && <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-500">No se encontraron documentos con los filtros aplicados.</td></tr>}
+          {!cargando && items.map(documento => <tr key={documento.id} className="hoverable">
+            <td className="whitespace-nowrap px-3 py-2 font-mono text-gray-600">{documento.fecha}</td>
+            <td className="px-3 py-2 font-mono text-gray-700">{documento.comprobante}</td>
+            <td className="px-3 py-2 text-gray-600">{documento.tipoDocumento}</td>
+            <td className="px-3 py-2 font-mono font-medium text-gray-800">{documento.documento}</td>
+            <td className="px-3 py-2 font-mono text-gray-600">{documento.nit || '—'}</td>
+            <td title={documento.detalle} className="max-w-72 truncate px-3 py-2 text-gray-600">{documento.tercero || documento.detalle || '—'}</td>
+            <td className="px-3 py-2 text-right font-mono text-gray-800">{fmtCOP(documento.valor)}</td>
+            <td className="px-3 py-2"><button type="button" disabled={detalleCargando} onClick={() => void revisar(documento)} className="whitespace-nowrap text-xs font-medium text-petroleum-600 hover:underline disabled:opacity-50">Revisar anulación</button></td>
+          </tr>)}
+        </tbody>
+      </table>
+      {resultado && <div className="flex items-center gap-3 border-t border-gray-200 bg-gray-50 px-4 py-2.5"><span className="text-xs text-gray-500">{items.length} documentos · página {resultado.page}</span><div className="ml-auto flex gap-2"><button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => void consultar(resultado.page - 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button><button type="button" disabled={!resultado.hasMore || cargando} onClick={() => void consultar(resultado.page + 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button></div></div>}
+    </div>
+
+    {detalleCargando && <div className="rounded border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Cargando partidas del documento…</div>}
+    {seleccionado && !detalleCargando && <div className="space-y-4 rounded border border-amber-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-semibold text-gray-800">Documento {seleccionado.documento}</h2><p className="mt-1 text-xs text-gray-500">Revise cuidadosamente las partidas. La anulación retirará el documento del movimiento contable.</p></div><button type="button" onClick={() => { setSeleccionado(null); setDetalle([]); }} className="text-xs text-gray-500 hover:text-gray-700">Cerrar</button></div>
+      <div className="overflow-x-auto rounded border border-gray-200"><table className="w-full text-xs"><thead className="bg-gray-50"><tr>{['Cuenta', 'Nombre', 'Tercero', 'Centro', 'Concepto', 'Débito', 'Crédito'].map((title, index) => <th key={title} className={`px-3 py-2 font-semibold text-gray-600 ${index >= 5 ? 'text-right' : 'text-left'}`}>{title}</th>)}</tr></thead><tbody className="divide-y divide-gray-50">{detalle.map((line, index) => <tr key={`${line.id}-${index}`}><td className="px-3 py-2 font-mono text-gray-700">{line.cuenta}</td><td className="px-3 py-2 text-gray-600">{line.nombreCuenta}</td><td className="px-3 py-2 font-mono text-gray-600">{line.nit || '—'}</td><td className="px-3 py-2 text-gray-600">{line.centro || '—'}</td><td className="max-w-72 truncate px-3 py-2 text-gray-500">{line.concepto}</td><td className="px-3 py-2 text-right font-mono">{line.debito ? fmtCOP(line.debito) : '—'}</td><td className="px-3 py-2 text-right font-mono">{line.credito ? fmtCOP(line.credito) : '—'}</td></tr>)}</tbody><tfoot className="border-t bg-gray-50"><tr><td colSpan={5} className="px-3 py-2 text-right font-semibold text-gray-600">Totales</td><td className="px-3 py-2 text-right font-mono font-semibold">{fmtCOP(totalDebito)}</td><td className="px-3 py-2 text-right font-mono font-semibold">{fmtCOP(totalCredito)}</td></tr></tfoot></table></div>
+      <div><label className="mb-1 block text-xs font-medium text-gray-700">Motivo de la anulación <span className="text-red-500">*</span></label><textarea value={motivo} maxLength={180} onChange={event => setMotivo(event.target.value)} rows={2} placeholder="Explique por qué se anula el documento" className={INPUT} /><div className="mt-1 text-right text-[11px] text-gray-400">{motivo.length}/180</div></div>
+      <div className="flex justify-end"><button type="button" disabled={anulando || motivo.trim().length < 5 || Math.abs(totalDebito - totalCredito) > 0.01} onClick={() => setConfirmar(true)} className="rounded bg-red-600 px-4 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">Anular documento</button></div>
+    </div>}
+
+    {confirmar && seleccionado && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="confirm-annulment-title"><div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"><h2 id="confirm-annulment-title" className="text-base font-semibold text-gray-900">Confirmar anulación</h2><p className="mt-2 text-sm text-gray-600">Se retirará definitivamente el documento <strong>{seleccionado.documento}</strong> y se recalcularán los saldos afectados. Esta operación no se puede deshacer desde esta pantalla.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setConfirmar(false)} className="rounded border border-gray-300 px-4 py-2 text-xs text-gray-700">Cancelar</button><button type="button" onClick={() => void ejecutarAnulacion()} className="rounded bg-red-600 px-4 py-2 text-xs font-medium text-white">Sí, anular documento</button></div></div></div>}
+  </div>;
+}
+
+function Filter({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>{children}</div>;
 }

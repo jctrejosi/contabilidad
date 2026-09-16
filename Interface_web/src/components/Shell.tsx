@@ -75,7 +75,6 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'movimientos/lotes', label: 'Lotes', icon: '⊞' },
       { id: 'movimientos/anulacion', label: 'Anulación', icon: '⊘' },
       { id: 'movimientos/importaciones', label: 'Importaciones', icon: '↓' },
-      { id: 'movimientos/nomina', label: 'Nómina', icon: '👤' },
       { id: 'movimientos/reembolsos', label: 'Reembolsos', icon: '$' },
     ],
   },
@@ -164,10 +163,10 @@ interface ShellProps {
 }
 
 export default function Shell({ currentPage, onNavigate, compania, onChangeCompany, children, badgeAlerts = 0 }: ShellProps) {
+  // El panel lateral se muestra completo; sus grupos de opciones comienzan
+  // cerrados y el usuario despliega únicamente el que necesita.
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    new Set(['movimientos', 'consultas'])
-  );
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showNotif, setShowNotif] = useState(false);
 
   function toggleGroup(id: string) {

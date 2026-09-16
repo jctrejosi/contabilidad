@@ -1,636 +1,187 @@
-import { useId, useRef, useState, useEffect, type ReactNode } from 'react';
-import { CUENTAS, EMPRESA, LOTES_INICIALES, fmtCOP } from '../data/mock';
-import type { Lote, LoteLinea } from '../types';
+import { useMemo, useState } from 'react';
+import {
+  leerArchivoImportacion,
+  procesarImportacion,
+  type ArchivoImportado,
+  type ImportacionLotePayload,
+  type ResultadoImportacion,
+  type ValorArchivo,
+} from '../api/importaciones';
+import type { LineaLoteWrite } from '../api/lotes';
 import type { NavPage } from '../components/Shell';
+import { normalizarConceptoImportacion, normalizarFechaImportacion } from '../data/importaciones';
 
 const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const SELECT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 disabled:cursor-not-allowed disabled:opacity-50';
-const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 disabled:cursor-not-allowed disabled:opacity-50';
+const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-4 py-2 text-xs font-medium text-white hover:bg-petroleum-600 disabled:cursor-not-allowed disabled:opacity-40';
+const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-4 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40';
+const fmtCOP = (value: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 }).format(value);
+const PASOS = ['Archivo', 'Relacionar columnas', 'Previsualizar y crear lote'];
 
-const PASOS = ['Archivo', 'Hoja y mapeo', 'Previsualizar', 'Validar', 'Importar'];
-const FORMATOS = ['XLS / XLSX', 'ADT', 'XLS por meses', 'TXT', 'CSV'];
-const COLUMNAS_FUENTE = [
-  'A: Fecha', 'B: Cuenta', 'C: Nit', 'D: Centro', 'E: Comprobante', 'F: Documento',
-  'G: Tipo', 'H: Débito', 'I: Crédito', 'J: Base', 'K: Impuesto', 'L: Concepto',
-];
-const CAMPOS: { campo: string; label: string }[] = [
-  { campo: 'cuenta', label: 'Cuenta' },
-  { campo: 'nit', label: 'NIT' },
-  { campo: 'centro', label: 'Centro' },
-  { campo: 'comprobante', label: 'Comprobante' },
-  { campo: 'documento', label: 'Documento' },
-  { campo: 'tipo', label: 'Tipo' },
-  { campo: 'fecha', label: 'Fecha' },
-  { campo: 'debito', label: 'Débito' },
-  { campo: 'credito', label: 'Crédito' },
-  { campo: 'base', label: 'Base' },
-  { campo: 'impuesto', label: 'Impuesto' },
-  { campo: 'concepto', label: 'Concepto' },
-];
-const MAPEO_DEFAULT: Record<string, string> = {
-  cuenta: 'B: Cuenta',
-  nit: 'C: Nit',
-  centro: 'D: Centro',
-  comprobante: 'E: Comprobante',
-  documento: 'F: Documento',
-  tipo: 'G: Tipo',
-  fecha: 'A: Fecha',
-  debito: 'H: Débito',
-  credito: 'I: Crédito',
-  base: 'J: Base',
-  impuesto: 'K: Impuesto',
-  concepto: 'L: Concepto',
-};
+type Campo = keyof LineaLoteWrite;
+interface DefinicionCampo { campo: Campo; label: string; obligatorio: boolean; aliases: string[] }
+interface FilaPreparada { fila: number; linea: LineaLoteWrite; errores: string[] }
 
-type EstadoFila = 'aceptada' | 'advertida' | 'rechazada' | 'duplicada';
-
-interface FilaPreview {
-  fila: number;
-  cuenta: string;
-  nit: string;
-  tercero: string;
-  centro: string;
-  comprobante: string;
-  documento: string;
-  tipoDoc: string;
-  fecha: string;
-  debito: number;
-  credito: number;
-  base: number;
-  clase: string;
-  concepto: string;
-  estado: EstadoFila;
-  motivo: string;
-}
-
-const FILAS_PREVIEW: FilaPreview[] = [
-  { fila: 1, cuenta: '111005', nit: '800.100.200', tercero: 'Empresa ABC Comercial S.A.S.', centro: '', comprobante: 'CE-000246', documento: 'OR-2026-024', tipoDoc: 'OR', fecha: '2026-02-15', debito: 6200000, credito: 0, base: 0, clase: '', concepto: 'Recaudo cartera ABC', estado: 'aceptada', motivo: '' },
-  { fila: 2, cuenta: '130505', nit: '800.100.200', tercero: 'Empresa ABC Comercial S.A.S.', centro: '', comprobante: 'CE-000246', documento: 'OR-2026-024', tipoDoc: 'OR', fecha: '2026-02-15', debito: 0, credito: 6200000, base: 0, clase: '', concepto: 'Recaudo cartera ABC', estado: 'aceptada', motivo: '' },
-  { fila: 3, cuenta: '111005', nit: '900.200.300', tercero: 'Comercial XYZ Distribuciones Ltda.', centro: '', comprobante: 'CE-000246', documento: 'OR-2026-025', tipoDoc: 'OR', fecha: '2026-02-16', debito: 9800000, credito: 0, base: 0, clase: '', concepto: 'Recaudo cartera XYZ', estado: 'aceptada', motivo: '' },
-  { fila: 4, cuenta: '130505', nit: '900.200.300', tercero: 'Comercial XYZ Distribuciones Ltda.', centro: '', comprobante: 'CE-000246', documento: 'OR-2026-025', tipoDoc: 'OR', fecha: '2026-02-16', debito: 0, credito: 9800000, base: 0, clase: '', concepto: 'Recaudo cartera XYZ', estado: 'aceptada', motivo: '' },
-  { fila: 5, cuenta: '111005', nit: '860.050.010', tercero: 'Suministros Técnicos del Norte Ltda.', centro: '', comprobante: 'CE-000247', documento: 'OR-2026-026', tipoDoc: 'OR', fecha: '2026-02-18', debito: 0, credito: 3500000, base: 0, clase: '', concepto: 'Pago proveedor materiales', estado: 'aceptada', motivo: '' },
-  { fila: 6, cuenta: '130505', nit: '860.050.010', tercero: 'Suministros Técnicos del Norte Ltda.', centro: '', comprobante: 'CE-000247', documento: 'OR-2026-026', tipoDoc: 'OR', fecha: '2026-02-18', debito: 3500000, credito: 0, base: 0, clase: '', concepto: 'Pago proveedor materiales', estado: 'aceptada', motivo: '' },
-  { fila: 7, cuenta: '510506', nit: '', tercero: '', centro: '', comprobante: 'NO-000090', documento: 'AJ-2026-004', tipoDoc: 'NO', fecha: '2026-02-20', debito: 450000, credito: 0, base: 0, clase: '', concepto: 'Ajuste nómina sin tercero', estado: 'advertida', motivo: 'La cuenta 510506 requiere tercero (NIT)' },
-  { fila: 8, cuenta: '250505', nit: '12.345.678', tercero: 'García Moreno Juan Pablo', centro: 'ADM', comprobante: 'NO-000090', documento: 'AJ-2026-004', tipoDoc: 'NO', fecha: '2026-02-20', debito: 0, credito: 450000, base: 0, clase: '', concepto: 'Ajuste nómina provisión', estado: 'advertida', motivo: 'Importada con advertencia' },
-  { fila: 9, cuenta: '999999', nit: '', tercero: '', centro: '', comprobante: 'CE-000247', documento: 'OR-2026-027', tipoDoc: 'OR', fecha: '2026-02-19', debito: 1000000, credito: 0, base: 0, clase: '', concepto: 'Cuenta inexistente', estado: 'rechazada', motivo: 'La cuenta 999999 no existe en el plan de cuentas' },
-  { fila: 10, cuenta: '111005', nit: '800.100.200', tercero: 'Empresa ABC Comercial S.A.S.', centro: '', comprobante: 'CE-000246', documento: 'OR-2026-024', tipoDoc: 'OR', fecha: '2026-02-15', debito: 6200000, credito: 0, base: 0, clase: '', concepto: 'Recaudo cartera ABC', estado: 'duplicada', motivo: 'Fila duplicada de la fila 1' },
+const CAMPOS: DefinicionCampo[] = [
+  { campo: 'fecha', label: 'Fecha', obligatorio: true, aliases: ['fecha', 'tfecha'] },
+  { campo: 'cuenta', label: 'Cuenta', obligatorio: true, aliases: ['cuenta', 'codigo', 'codcuenta'] },
+  { campo: 'nit', label: 'Tercero', obligatorio: false, aliases: ['nit', 'tercero', 'ccodigo'] },
+  { campo: 'centro', label: 'Centro de costo', obligatorio: false, aliases: ['centro', 'centrocosto', 'tfase'] },
+  { campo: 'comprobante', label: 'Comprobante', obligatorio: true, aliases: ['comprobante', 'tcompr', 'tipo comprobante'] },
+  { campo: 'tipoDocumento', label: 'Tipo de documento', obligatorio: true, aliases: ['tipodocumento', 'tipo', 'tipodoc'] },
+  { campo: 'documento', label: 'Número de documento', obligatorio: true, aliases: ['documento', 'tdocum', 'numero documento'] },
+  { campo: 'documentoAfectado', label: 'Documento afectado', obligatorio: false, aliases: ['documentoafectado', 'tdocum2', 'doc afectado'] },
+  { campo: 'debito', label: 'Débito', obligatorio: true, aliases: ['debito', 'debe'] },
+  { campo: 'credito', label: 'Crédito', obligatorio: true, aliases: ['credito', 'haber'] },
+  { campo: 'base', label: 'Base', obligatorio: false, aliases: ['base', 'base retencion'] },
+  { campo: 'concepto', label: 'Concepto', obligatorio: true, aliases: ['concepto', 'detalle', 'descripcion'] },
 ];
 
-interface PlantillaMapeo {
-  id: string;
-  nombre: string;
-  mapeo: Record<string, string>;
+function normalizar(texto: string): string {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-interface Props {
-  onNavigate: (p: NavPage) => void;
-  onCrearLote: (l: Lote) => void;
+function sugerirMapeo(columnas: string[]): Record<Campo, string> {
+  return Object.fromEntries(CAMPOS.map(definicion => {
+    const encontrada = columnas.find(columna => definicion.aliases.some(alias => normalizar(columna) === normalizar(alias)));
+    return [definicion.campo, encontrada ?? ''];
+  })) as Record<Campo, string>;
 }
 
-const STORAGE_KEY = `contabdsi:importaciones:mapeos:v1:${EMPRESA.codigo}`;
-
-function esPlantilla(v: unknown): v is PlantillaMapeo {
-  if (typeof v !== 'object' || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return typeof o.id === 'string' && typeof o.nombre === 'string' && typeof o.mapeo === 'object' && o.mapeo !== null;
+function texto(value: ValorArchivo | undefined): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
 }
 
-function cargarPlantillas(): PlantillaMapeo[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const value: unknown = JSON.parse(raw);
-      if (Array.isArray(value)) return value.filter(esPlantilla);
-    }
-  } catch {
-    // Almacenamiento deshabilitado o dato dañado: no bloquear la pantalla.
-  }
-  return [];
+function dinero(value: ValorArchivo | undefined): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  let raw = texto(value).replace(/\s/g, '').replace(/\$/g, '');
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(',');
+  const dot = raw.lastIndexOf('.');
+  if (comma > dot) raw = raw.replace(/\./g, '').replace(',', '.');
+  else if (dot > comma && comma >= 0) raw = raw.replace(/,/g, '');
+  else if (comma >= 0) raw = /^-?\d{1,3}(,\d{3})+$/.test(raw) ? raw.replace(/,/g, '') : raw.replace(',', '.');
+  else if (dot >= 0 && /^-?\d{1,3}(\.\d{3})+$/.test(raw)) raw = raw.replace(/\./g, '');
+  const result = Number(raw);
+  return Number.isFinite(result) ? result : Number.NaN;
 }
 
-function formatearTamano(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    dialog?.showModal();
-    dialog?.querySelector<HTMLElement>('[data-initial-focus]')?.focus();
-    return () => dialog?.close();
-  }, []);
-  return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
-      <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-        <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
-        <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
-      </div>
-      {children}
-    </dialog>
-  );
-}
-
-export default function Importaciones({ onNavigate, onCrearLote }: Props) {
-  const [paso, setPaso] = useState(0);
-  const [archivo, setArchivo] = useState<{ nombre: string; tamanio: string } | null>(null);
-  const [formato, setFormato] = useState('XLS / XLSX');
-  const [hoja, setHoja] = useState('Movimientos');
-  const [mapeo, setMapeo] = useState<Record<string, string>>({ ...MAPEO_DEFAULT });
-  const [plantillas, setPlantillas] = useState<PlantillaMapeo[]>(cargarPlantillas);
-  const [nombrePlantilla, setNombrePlantilla] = useState('');
-  const [loteDestino, setLoteDestino] = useState<'nuevo' | string>('nuevo');
-  const [loteCodigo, setLoteCodigo] = useState('IMP2');
-  const [loteNombre, setLoteNombre] = useState('Importación Excel febrero 2026');
-  const [importando, setImportando] = useState(false);
-  const [progreso, setProgreso] = useState(0);
-  const [loteCreado, setLoteCreado] = useState<Lote | null>(null);
-  const [aviso, setAviso] = useState(false);
-  const avisoRef = useRef<HTMLButtonElement>(null);
-
-  const conteos = {
-    aceptadas: FILAS_PREVIEW.filter(f => f.estado === 'aceptada').length,
-    advertidas: FILAS_PREVIEW.filter(f => f.estado === 'advertida').length,
-    rechazadas: FILAS_PREVIEW.filter(f => f.estado === 'rechazada').length,
-    duplicadas: FILAS_PREVIEW.filter(f => f.estado === 'duplicada').length,
-  };
-
-  const filasValidas = FILAS_PREVIEW.filter(f => f.estado === 'aceptada' || f.estado === 'advertida');
-  const totalDebito = filasValidas.reduce((s, f) => s + f.debito, 0);
-  const totalCredito = filasValidas.reduce((s, f) => s + f.credito, 0);
-  const mapeoCompleto = CAMPOS.every(c => mapeo[c.campo]);
-
-  function grabarPlantilla() {
-    const nombre = nombrePlantilla.trim() || `Mapeo ${plantillas.length + 1}`;
-    const nueva: PlantillaMapeo = { id: `pl-${Date.now()}`, nombre, mapeo: { ...mapeo } };
-    const siguientes = [...plantillas, nueva];
-    setPlantillas(siguientes);
-    setNombrePlantilla('');
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(siguientes));
-    } catch {
-      // El mapeo queda disponible en memoria durante la sesión.
-    }
-  }
-
-  function usarPlantilla(plantilla: PlantillaMapeo) {
-    setMapeo({ ...MAPEO_DEFAULT, ...plantilla.mapeo });
-    setPaso(1);
-  }
-
-  function eliminarPlantilla(id: string) {
-    const siguientes = plantillas.filter(p => p.id !== id);
-    setPlantillas(siguientes);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(siguientes));
-    } catch {
-      // Ignorar fallo de almacenamiento.
-    }
-  }
-
-  function construirLineas(): LoteLinea[] {
-    return filasValidas.map((f, i) => {
-      const cuenta = CUENTAS.find(c => c.codigo === f.cuenta);
-      return {
-        id: `L${String(i + 1).padStart(2, '0')}`,
-        cuenta: f.cuenta,
-        nombreCuenta: cuenta?.nombre ?? f.cuenta,
-        nit: f.nit,
-        tercero: f.tercero,
-        centro: f.centro,
-        comprobante: f.comprobante,
-        documento: f.documento,
-        fecha: f.fecha,
-        debito: f.debito,
-        credito: f.credito,
-        base: f.base,
-        clase: f.clase,
-        docAfectado: '',
-        concepto: f.concepto,
-        errores: [],
-      };
-    });
-  }
-
-  async function importar() {
-    setImportando(true);
-    setProgreso(0);
-    for (let p = 0; p <= 100; p += 25) {
-      setProgreso(p);
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-    const lineas = construirLineas();
-    const existente = LOTES_INICIALES.find(l => l.id === loteDestino);
-    const lote: Lote = {
-      id: `lote-${Date.now()}`,
-      codigo: existente?.codigo ?? loteCodigo,
-      nombre: existente?.nombre ?? loteNombre,
-      periodo: '2026-02',
-      usuario: 'Laura Gómez',
-      origen: `Importación ${formato}`,
-      fecha: '2026-02-20',
-      lineasCount: lineas.length,
-      debito: totalDebito,
-      credito: totalCredito,
-      diferencia: 0,
-      erroresCount: 0,
-      estado: 'Borrador',
-      lineas,
+function prepararFilas(datos: ArchivoImportado | null, mapeo: Record<Campo, string>): FilaPreparada[] {
+  if (!datos) return [];
+  return datos.filas.map((raw, index) => {
+    const value = (field: Campo) => raw[mapeo[field]];
+    const line: LineaLoteWrite = {
+      fecha: normalizarFechaImportacion(value('fecha')),
+      cuenta: texto(value('cuenta')).replace(/\.0$/, ''),
+      nit: texto(value('nit')).replace(/\.0$/, ''),
+      centro: texto(value('centro')).replace(/\.0$/, ''),
+      comprobante: texto(value('comprobante')).replace(/\.0$/, '').toUpperCase().padStart(2, '0'),
+      tipoDocumento: texto(value('tipoDocumento')).toUpperCase(),
+      documento: texto(value('documento')).replace(/\.0$/, ''),
+      documentoAfectado: texto(value('documentoAfectado')).replace(/\.0$/, ''),
+      debito: dinero(value('debito')),
+      credito: dinero(value('credito')),
+      base: dinero(value('base')),
+      concepto: normalizarConceptoImportacion(value('concepto')),
     };
-    onCrearLote(lote);
-    setLoteCreado(lote);
-    setImportando(false);
-    setAviso(true);
+    const errores: string[] = [];
+    if (!line.fecha) errores.push('Fecha inválida');
+    if (!/^\d{1,12}$/.test(line.cuenta)) errores.push('Cuenta inválida');
+    if (!line.comprobante || line.comprobante.length > 2) errores.push('Comprobante inválido');
+    if (!line.tipoDocumento || line.tipoDocumento.length > 2) errores.push('Tipo documental inválido');
+    if (!line.documento || line.documento.length > 12) errores.push('Documento inválido');
+    if (!line.concepto) errores.push('El concepto está vacío');
+    if (![line.debito, line.credito, line.base].every(Number.isFinite)) errores.push('Valor no numérico');
+    if (line.debito < 0 || line.credito < 0 || line.base < 0) errores.push('Los valores no pueden ser negativos');
+    if ((line.debito > 0 && line.credito > 0) || (line.debito === 0 && line.credito === 0)) errores.push('Debe tener débito o crédito, no ambos');
+    if (line.nit.length > 11) errores.push('El tercero supera 11 caracteres');
+    if (line.centro.length > 7) errores.push('El centro supera 7 caracteres');
+    return { fila: index + 2, linea: line, errores };
+  });
+}
+
+interface Props { cia: string; onNavigate: (page: NavPage) => void }
+
+export default function Importaciones({ cia, onNavigate }: Props) {
+  const [paso, setPaso] = useState(0);
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [datos, setDatos] = useState<ArchivoImportado | null>(null);
+  const [mapeo, setMapeo] = useState<Record<Campo, string>>(() => sugerirMapeo([]));
+  const [lote, setLote] = useState('IMP1');
+  const [nombre, setNombre] = useState('Importación contable');
+  const [mes, setMes] = useState('01');
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
+  const [creado, setCreado] = useState<ResultadoImportacion | null>(null);
+  const [confirmar, setConfirmar] = useState(false);
+
+  const filas = useMemo(() => prepararFilas(datos, mapeo), [datos, mapeo]);
+  const erroresLocales = filas.reduce((total, row) => total + row.errores.length, 0);
+  const totalDebito = filas.reduce((total, row) => total + (Number.isFinite(row.linea.debito) ? row.linea.debito : 0), 0);
+  const totalCredito = filas.reduce((total, row) => total + (Number.isFinite(row.linea.credito) ? row.linea.credito : 0), 0);
+  const obligatoriosMapeados = CAMPOS.filter(field => field.obligatorio).every(field => mapeo[field.campo]);
+
+  async function leer(file: File, sheet = '') {
+    setCargando(true);
+    setError('');
+    setCreado(null);
+    try {
+      const response = await leerArchivoImportacion(file, sheet);
+      setArchivo(file);
+      setDatos(response);
+      setMapeo(sugerirMapeo(response.columnas));
+      setPaso(1);
+    } catch (cause: unknown) {
+      setDatos(null);
+      setError(cause instanceof Error ? cause.message : 'No fue posible leer el archivo.');
+    } finally {
+      setCargando(false);
+    }
   }
 
-  const badgeFila: Record<EstadoFila, string> = {
-    aceptada: 'bg-green-100 text-green-700',
-    advertida: 'bg-amber-100 text-amber-700',
-    rechazada: 'bg-red-100 text-red-700',
-    duplicada: 'bg-blue-100 text-blue-700',
-  };
+  function payload(): ImportacionLotePayload {
+    return {
+      lote: lote.trim().toUpperCase(), nombre: nombre.trim(), mes, usuario: 'WEB',
+      lineas: filas.map(row => row.linea),
+    };
+  }
 
-  return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 text-xs text-gray-400">Movimientos / Importaciones</div>
-          <h1 className="text-lg font-semibold text-gray-800">Importaciones</h1>
-          <p className="mt-1 text-xs text-gray-500">Asistente para importar movimientos contables desde XLS, XLSX, ADT, TXT y CSV.</p>
-        </div>
-        <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
-      </div>
+  async function crearLote() {
+    setConfirmar(false);
+    setCargando(true);
+    setError('');
+    try {
+      const result = await procesarImportacion(cia, payload(), false);
+      setCreado(result);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible crear el lote.');
+    } finally {
+      setCargando(false);
+    }
+  }
 
-      <div className="rounded-md border border-petroleum-100 bg-petroleum-50 px-3 py-2 text-xs text-petroleum-800">
-        <span className="font-semibold">Regla:</span> toda importación masiva termina en un lote para validación antes de contabilizar.
-      </div>
+  return <div className="max-w-screen-2xl space-y-4 p-4">
+    <div><div className="mb-1 text-xs text-gray-400">Movimientos / Importaciones</div><h1 className="text-lg font-semibold text-gray-800">Importación de movimientos</h1><p className="mt-1 text-xs text-gray-500">Prepare un lote contable desde un archivo, revíselo y actualícelo posteriormente desde la opción Lotes.</p></div>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {PASOS.map((s, i) => (
-          <div key={s} className="flex items-center shrink-0">
-            <button
-              type="button"
-              onClick={() => setPaso(i)}
-              disabled={i > paso || importando}
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded font-medium transition-colors ${
-                i === paso ? 'bg-petroleum-500 text-white' :
-                i < paso ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
-              }`}
-            >
-              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${
-                i < paso ? 'bg-green-100 text-green-700' : i === paso ? 'bg-white/30 text-white' : 'bg-gray-200 text-gray-500'
-              }`}>{i < paso ? '✓' : i + 1}</span>
-              {s}
-            </button>
-            {i < PASOS.length - 1 && <span className="text-gray-200 mx-1">›</span>}
-          </div>
-        ))}
-      </div>
+    <div className="flex items-center gap-2 overflow-x-auto">{PASOS.map((label, index) => <div key={label} className="flex shrink-0 items-center gap-2"><button type="button" disabled={index > paso || cargando || !!creado} onClick={() => setPaso(index)} className={`rounded px-3 py-1.5 text-xs font-medium ${index === paso ? 'bg-petroleum-500 text-white' : index < paso ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-400'}`}>{index < paso ? '✓' : index + 1} · {label}</button>{index < PASOS.length - 1 && <span className="text-gray-300">›</span>}</div>)}</div>
+    {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      {/* Paso 1: Archivo */}
-      {paso === 0 && (
-        <div className="bg-white rounded border border-gray-200 p-4 space-y-4">
-          <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-            <legend className="px-2 text-xs font-semibold text-petroleum-800">Archivo de origen</legend>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-gray-600">Archivo (XLS, XLSX, ADT, TXT, CSV)</label>
-                <input
-                  type="file"
-                  accept=".xls,.xlsx,.adt,.txt,.csv"
-                  className={`${INPUT} file:mr-2 file:rounded file:border-0 file:bg-petroleum-50 file:px-2 file:py-0.5 file:text-xs file:font-medium file:text-petroleum-700`}
-                  onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (f) setArchivo({ nombre: f.name, tamanio: formatearTamano(f.size) });
-                  }}
-                />
-                <p className="text-xs text-gray-400">Solo se muestra el nombre y el tamaño; el contenido no se lee en esta demostración.</p>
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-gray-600">Formato</label>
-                <select value={formato} onChange={e => setFormato(e.target.value)} className={SELECT}>
-                  {FORMATOS.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </div>
-            </div>
-          </fieldset>
+    {paso === 0 && <div className="space-y-4 rounded border border-gray-200 bg-white p-5"><div><label className="mb-1 block text-xs font-medium text-gray-700">Archivo de movimientos</label><input type="file" accept=".xlsx,.csv,.txt,.adt" disabled={cargando} onChange={event => { const file = event.target.files?.[0]; if (file) void leer(file); }} className={`${INPUT} file:mr-3 file:rounded file:border-0 file:bg-petroleum-50 file:px-3 file:py-1 file:text-xs file:text-petroleum-700`} /><p className="mt-2 text-xs text-gray-500">Formatos permitidos: XLSX, CSV, TXT y ADT. La primera fila de archivos tabulares debe contener los nombres de las columnas.</p></div>{cargando && <p className="text-xs text-petroleum-700">Leyendo y preparando el archivo…</p>}</div>}
 
-          {archivo ? (
-            <div className="flex items-center gap-3 rounded-md border border-green-200 bg-green-50 px-3 py-2.5 text-xs text-green-800">
-              <span className="text-base">✓</span>
-              <span className="font-mono font-medium">{archivo.nombre}</span>
-              <span className="text-green-600">({archivo.tamanio})</span>
-              <span className="ml-auto text-green-700">Archivo listo para revisar</span>
-            </div>
-          ) : (
-            <button type="button" onClick={() => setArchivo({ nombre: 'movimientos_febrero_2026.xlsx', tamanio: '1,4 MB' })} className={BUTTON_SECONDARY}>
-              Usar archivo de ejemplo (simulado)
-            </button>
-          )}
+    {paso === 1 && datos && <div className="space-y-4 rounded border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-end gap-3"><div className="min-w-64 flex-1"><div className="text-xs font-semibold text-gray-700">{datos.archivo}</div><div className="mt-1 text-xs text-gray-500">{datos.filas.length} filas · {datos.columnas.length} columnas</div></div>{datos.hojas.length > 1 && <div><label className="mb-1 block text-xs font-medium text-gray-600">Hoja</label><select value={datos.hoja} onChange={event => archivo && void leer(archivo, event.target.value)} className={INPUT}>{datos.hojas.map(sheet => <option key={sheet}>{sheet}</option>)}</select></div>}</div>
+      {datos.truncado && <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">El archivo supera 5.000 filas. Divídalo en varios lotes antes de continuar.</div>}
+      <fieldset className="rounded border border-gray-200 px-3 pb-3"><legend className="px-2 text-xs font-semibold text-petroleum-800">Relación de columnas</legend><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{CAMPOS.map(field => <div key={field.campo}><label className="mb-1 block text-xs font-medium text-gray-600">{field.label}{field.obligatorio && <span className="text-red-500"> *</span>}</label><select value={mapeo[field.campo]} onChange={event => setMapeo(current => ({ ...current, [field.campo]: event.target.value }))} className={INPUT}><option value="">— No incluida —</option>{datos.columnas.map(column => <option key={column} value={column}>{column}</option>)}</select></div>)}</div></fieldset>
+      <div className="flex justify-between"><button type="button" onClick={() => setPaso(0)} className={BUTTON_SECONDARY}>← Cambiar archivo</button><button type="button" disabled={!obligatoriosMapeados || datos.truncado} onClick={() => { const first = filas.find(row => row.linea.fecha)?.linea.fecha; if (first) setMes(first.slice(5, 7)); setPaso(2); }} className={BUTTON_PRIMARY}>Previsualizar →</button></div>
+    </div>}
 
-          <div className="flex justify-end">
-            <button type="button" disabled={!archivo} onClick={() => setPaso(1)} className={BUTTON_PRIMARY}>
-              Siguiente: hoja y mapeo →
-            </button>
-          </div>
-        </div>
-      )}
+    {paso === 2 && datos && <div className="space-y-4">
+      <div className="overflow-hidden rounded border border-gray-200 bg-white"><div className="flex flex-wrap items-center justify-between gap-2 border-b bg-gray-50 px-4 py-3"><span className="text-xs font-semibold text-gray-700">Previsualización de {filas.length} partidas</span><span className={`text-xs font-medium ${erroresLocales ? 'text-red-600' : 'text-green-700'}`}>{erroresLocales ? `${erroresLocales} observaciones de formato` : 'Formato básico correcto'}</span></div><div className="max-h-[28rem] overflow-auto"><table className="w-full text-xs"><thead className="sticky top-0 bg-gray-50"><tr>{['Fila', 'Fecha', 'Cuenta', 'Tercero', 'Centro', 'Comp.', 'Tipo', 'Documento', 'Débito', 'Crédito', 'Concepto', 'Estado'].map((title, index) => <th key={title} className={`whitespace-nowrap px-3 py-2 font-semibold text-gray-600 ${index === 8 || index === 9 ? 'text-right' : 'text-left'}`}>{title}</th>)}</tr></thead><tbody className="divide-y">{filas.map(row => <tr key={row.fila} className={row.errores.length ? 'bg-red-50' : ''}><td className="px-3 py-2 font-mono text-gray-500">{row.fila}</td><td className="px-3 py-2 font-mono">{row.linea.fecha || '—'}</td><td className="px-3 py-2 font-mono">{row.linea.cuenta || '—'}</td><td className="px-3 py-2 font-mono">{row.linea.nit || '—'}</td><td className="px-3 py-2">{row.linea.centro || '—'}</td><td className="px-3 py-2">{row.linea.comprobante}</td><td className="px-3 py-2">{row.linea.tipoDocumento}</td><td className="px-3 py-2 font-mono">{row.linea.documento}</td><td className="px-3 py-2 text-right font-mono">{row.linea.debito ? fmtCOP(row.linea.debito) : '—'}</td><td className="px-3 py-2 text-right font-mono">{row.linea.credito ? fmtCOP(row.linea.credito) : '—'}</td><td title={row.linea.concepto} className="max-w-56 truncate px-3 py-2">{row.linea.concepto}</td><td className={`px-3 py-2 ${row.errores.length ? 'text-red-700' : 'text-green-700'}`}>{row.errores.join(' · ') || 'Lista'}</td></tr>)}</tbody><tfoot className="sticky bottom-0 border-t bg-gray-50"><tr><td colSpan={8} className="px-3 py-2 text-right font-semibold">Totales</td><td className="px-3 py-2 text-right font-mono font-semibold">{fmtCOP(totalDebito)}</td><td className="px-3 py-2 text-right font-mono font-semibold">{fmtCOP(totalCredito)}</td><td colSpan={2} className={`px-3 py-2 font-medium ${Math.abs(totalDebito - totalCredito) < 0.01 ? 'text-green-700' : 'text-red-700'}`}>{Math.abs(totalDebito - totalCredito) < 0.01 ? 'Cuadrado' : `Diferencia ${fmtCOP(Math.abs(totalDebito - totalCredito))}`}</td></tr></tfoot></table></div></div>
+      <div className="rounded border border-gray-200 bg-white p-4"><fieldset className="rounded border border-gray-200 px-3 pb-3"><legend className="px-2 text-xs font-semibold text-petroleum-800">Lote de revisión</legend><div className="grid gap-3 sm:grid-cols-3"><div><label className="mb-1 block text-xs font-medium text-gray-600">Código</label><input value={lote} maxLength={4} onChange={event => setLote(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} className={`${INPUT} font-mono uppercase`} /></div><div><label className="mb-1 block text-xs font-medium text-gray-600">Mes</label><select value={mes} onChange={event => setMes(event.target.value)} className={INPUT}>{Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0')).map(value => <option key={value}>{value}</option>)}</select></div><div><label className="mb-1 block text-xs font-medium text-gray-600">Nombre</label><input value={nombre} maxLength={25} onChange={event => setNombre(event.target.value)} className={INPUT} /><div className="mt-1 text-right text-[11px] text-gray-400">{nombre.length}/25</div></div></div></fieldset><div className="mt-3 flex justify-between"><button type="button" onClick={() => setPaso(1)} className={BUTTON_SECONDARY}>← Ajustar columnas</button><button type="button" disabled={cargando || erroresLocales > 0 || filas.length < 2 || lote.length !== 4 || !nombre.trim() || nombre.trim().length > 25} onClick={() => setConfirmar(true)} className={BUTTON_PRIMARY}>Crear lote para revisión</button></div></div>
+    </div>}
 
-      {/* Paso 2: Hoja y mapeo */}
-      {paso === 1 && (
-        <div className="bg-white rounded border border-gray-200 p-4 space-y-4">
-          <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-            <legend className="px-2 text-xs font-semibold text-petroleum-800">Hoja y mapeo de columnas</legend>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-gray-600">Hoja del libro</label>
-                <select value={hoja} onChange={e => setHoja(e.target.value)} className={SELECT}>
-                  {['Movimientos', 'Hoja1', 'Resumen'].map(h => <option key={h} value={h}>{h}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-gray-600">Plantilla de mapeo guardada</label>
-                <div className="flex gap-2">
-                  <select className={SELECT} value="" onChange={e => {
-                    const p = plantillas.find(x => x.id === e.target.value);
-                    if (p) usarPlantilla(p);
-                  }}>
-                    <option value="">— Seleccionar —</option>
-                    {plantillas.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                  </select>
-                  {plantillas.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => eliminarPlantilla(plantillas[plantillas.length - 1].id)}
-                      title="Eliminar la última plantilla"
-                      className="rounded border border-gray-300 px-2 text-xs text-gray-500 hover:bg-gray-50"
-                    >
-                      🗑
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {CAMPOS.map(c => (
-                <div key={c.campo} className="grid items-center gap-1 sm:grid-cols-[7rem_minmax(0,1fr)]">
-                  <label className="text-xs font-medium text-gray-600">{c.label}</label>
-                  <select
-                    value={mapeo[c.campo] ?? ''}
-                    onChange={e => setMapeo(prev => ({ ...prev, [c.campo]: e.target.value }))}
-                    className={SELECT}
-                  >
-                    <option value="">— Sin mapear —</option>
-                    {COLUMNAS_FUENTE.map(col => <option key={col} value={col}>{col}</option>)}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </fieldset>
+    {confirmar && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"><h2 className="text-base font-semibold text-gray-900">Confirmar importación</h2><p className="mt-2 text-sm text-gray-600">Se creará el lote <strong>{lote}</strong> con {filas.length} partidas. Quedará en estado Borrador para revisarlo, verificarlo y actualizarlo desde Lotes.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setConfirmar(false)} className={BUTTON_SECONDARY}>Cancelar</button><button type="button" onClick={() => void crearLote()} className={BUTTON_PRIMARY}>Confirmar y crear lote</button></div></div></div>}
 
-          <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-            <legend className="px-2 text-xs font-semibold text-petroleum-800">Guardar plantilla de mapeo</legend>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="space-y-1.5 w-64">
-                <label className="block text-xs font-medium text-gray-600">Nombre de la plantilla</label>
-                <input value={nombrePlantilla} onChange={e => setNombrePlantilla(e.target.value)} placeholder="Mapeo estándar proveedores" className={INPUT} />
-              </div>
-              <button type="button" onClick={grabarPlantilla} disabled={!mapeoCompleto} className={BUTTON_SECONDARY}>
-                Guardar mapeo actual
-              </button>
-            </div>
-            {!mapeoCompleto && <p className="mt-2 text-xs text-amber-700">Asigne todas las columnas para poder guardar la plantilla.</p>}
-          </fieldset>
-
-          <div className="flex items-center justify-between">
-            <button type="button" onClick={() => setPaso(0)} className={BUTTON_SECONDARY}>← Anterior</button>
-            <button type="button" disabled={!mapeoCompleto} onClick={() => setPaso(2)} className={BUTTON_PRIMARY}>
-              Siguiente: previsualizar →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Paso 3: Previsualizar */}
-      {paso === 2 && (
-        <div className="bg-white rounded border border-gray-200 overflow-hidden">
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-            <div className="text-xs font-semibold text-gray-700">
-              Previsualización — hoja «{hoja}» ({archivo?.nombre})
-            </div>
-            <span className="text-xs text-gray-500">{FILAS_PREVIEW.length} filas leídas (muestra)</span>
-          </div>
-          <div className="table-fixed-header overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Fila</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Fecha</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Cuenta</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Tercero</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Documento</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Débito</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Crédito</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Concepto</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {FILAS_PREVIEW.map(f => (
-                  <tr key={f.fila} className="hoverable">
-                    <td className="px-3 py-2 font-mono text-gray-500">{f.fila}</td>
-                    <td className="px-3 py-2 font-mono text-gray-600">{f.fecha}</td>
-                    <td className="px-3 py-2 font-mono text-gray-700">{f.cuenta}</td>
-                    <td className="px-3 py-2 text-gray-600 max-w-44 truncate">{f.tercero || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-3 py-2 font-mono text-gray-600">{f.documento}</td>
-                    <td className="px-3 py-2 text-right font-mono text-gray-800">{f.debito > 0 ? fmtCOP(f.debito) : <span className="text-gray-200">—</span>}</td>
-                    <td className="px-3 py-2 text-right font-mono text-gray-500">{f.credito > 0 ? fmtCOP(f.credito) : <span className="text-gray-200">—</span>}</td>
-                    <td className="px-3 py-2 text-gray-500 max-w-48 truncate">{f.concepto}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-t border-gray-200">
-            <span className="text-xs text-gray-500">Los valores se validarán en el siguiente paso.</span>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setPaso(1)} className={BUTTON_SECONDARY}>← Anterior</button>
-              <button type="button" onClick={() => setPaso(3)} className={BUTTON_PRIMARY}>Validar archivo →</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Paso 4: Validar */}
-      {paso === 3 && (
-        <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2.5">
-              <div className="text-2xl font-semibold text-green-700">{conteos.aceptadas}</div>
-              <div className="text-xs text-green-800">Aceptadas</div>
-            </div>
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5">
-              <div className="text-2xl font-semibold text-amber-700">{conteos.advertidas}</div>
-              <div className="text-xs text-amber-800">Advertidas</div>
-            </div>
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5">
-              <div className="text-2xl font-semibold text-red-700">{conteos.rechazadas}</div>
-              <div className="text-xs text-red-800">Rechazadas</div>
-            </div>
-            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2.5">
-              <div className="text-2xl font-semibold text-blue-700">{conteos.duplicadas}</div>
-              <div className="text-xs text-blue-800">Duplicadas</div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded border border-gray-200 overflow-hidden">
-            <div className="border-b border-gray-100 px-4 py-3 text-xs font-semibold text-gray-700">Resultado por fila</div>
-            <div className="table-fixed-header overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Fila</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Documento</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Concepto</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Estado</th>
-                    <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Motivo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {FILAS_PREVIEW.map(f => (
-                    <tr key={f.fila} className={`hoverable ${f.estado === 'rechazada' ? 'row-error' : ''}`}>
-                      <td className="px-3 py-2 font-mono text-gray-500">{f.fila}</td>
-                      <td className="px-3 py-2 font-mono text-gray-600">{f.documento}</td>
-                      <td className="px-3 py-2 text-gray-600 max-w-48 truncate">{f.concepto}</td>
-                      <td className="px-3 py-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${badgeFila[f.estado]}`}>{f.estado}</span>
-                      </td>
-                      <td className="px-3 py-2 text-gray-500">{f.motivo || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="flex flex-wrap items-center gap-6 px-4 py-2.5 bg-gray-50 border-t border-gray-200">
-              <span className="text-xs text-gray-500">Total débitos importables: <span className="font-mono font-semibold text-gray-800">{fmtCOP(totalDebito)}</span></span>
-              <span className="text-xs text-gray-500">Total créditos importables: <span className="font-mono font-semibold text-gray-800">{fmtCOP(totalCredito)}</span></span>
-              <span className={`text-xs font-mono font-semibold ${totalDebito === totalCredito ? 'text-green-600' : 'text-red-600'}`}>
-                {totalDebito === totalCredito ? 'Cuadrado ✓' : `Descuadrado ${fmtCOP(Math.abs(totalDebito - totalCredito))}`}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded border border-gray-200 p-4">
-            <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-              <legend className="px-2 text-xs font-semibold text-petroleum-800">Lote destino</legend>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-gray-600">Destino de la importación</label>
-                  <select value={loteDestino} onChange={e => setLoteDestino(e.target.value)} className={SELECT}>
-                    <option value="nuevo">Nuevo lote</option>
-                    {LOTES_INICIALES.filter(l => l.periodo === '2026-02').map(l => (
-                      <option key={l.id} value={l.id}>{l.codigo} — {l.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                {loteDestino === 'nuevo' ? (
-                  <>
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-medium text-gray-600">Código del lote</label>
-                      <input value={loteCodigo} onChange={e => setLoteCodigo(e.target.value)} className={`${INPUT} font-mono`} maxLength={6} />
-                    </div>
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <label className="block text-xs font-medium text-gray-600">Nombre del lote</label>
-                      <input value={loteNombre} onChange={e => setLoteNombre(e.target.value)} className={INPUT} />
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-xs text-gray-500 self-end">Las filas importables se anexarán al lote existente seleccionado.</p>
-                )}
-              </div>
-            </fieldset>
-            <div className="mt-3 flex items-center justify-between">
-              <button type="button" onClick={() => setPaso(2)} className={BUTTON_SECONDARY}>← Anterior</button>
-              <button type="button" onClick={() => setPaso(4)} className={BUTTON_PRIMARY}>
-                Continuar a importación →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Paso 5: Importar */}
-      {paso === 4 && (
-        <div className="bg-white rounded border border-gray-200 p-4 space-y-4">
-          <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-            <legend className="px-2 text-xs font-semibold text-petroleum-800">Resumen de la importación</legend>
-            <dl className="grid gap-x-6 gap-y-1.5 text-xs sm:grid-cols-2">
-              {[
-                ['Archivo', archivo?.nombre ?? '—'],
-                ['Formato', formato],
-                ['Hoja', hoja],
-                ['Filas a importar', String(filasValidas.length)],
-                ['Total débitos', fmtCOP(totalDebito)],
-                ['Total créditos', fmtCOP(totalCredito)],
-                ['Lote destino', loteDestino === 'nuevo' ? `${loteCodigo} — ${loteNombre}` : LOTES_INICIALES.find(l => l.id === loteDestino)?.nombre ?? '—'],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-3 border-b border-gray-50 py-1.5">
-                  <dt className="text-gray-500">{k}</dt>
-                  <dd className="font-mono text-gray-800 text-right">{v}</dd>
-                </div>
-              ))}
-            </dl>
-          </fieldset>
-
-          {importando ? (
-            <div className="space-y-2">
-              <div className="h-2 w-full rounded bg-gray-100 overflow-hidden">
-                <div className="h-full bg-petroleum-500 transition-all" style={{ width: `${progreso}%` }} />
-              </div>
-              <p className="text-xs text-gray-500">Importando {progreso}% — preparando lote de validación…</p>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <button type="button" onClick={() => setPaso(3)} className={BUTTON_SECONDARY}>← Anterior</button>
-              <button type="button" onClick={importar} className={BUTTON_PRIMARY}>
-                Importar y crear lote
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {aviso && loteCreado && (
-        <Modal title="Importación terminada" onClose={() => setAviso(false)}>
-          <div className="px-5 py-4 space-y-3">
-            <p className="text-xs text-gray-600">
-              Se creó el lote <span className="font-mono font-semibold text-gray-800">{loteCreado.codigo}</span> — {loteCreado.nombre} con{' '}
-              <span className="font-mono">{loteCreado.lineasCount}</span> líneas, cuadrado, en estado Borrador.
-            </p>
-            <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
-              Débitos <span className="font-mono font-semibold text-gray-800">{fmtCOP(loteCreado.debito)}</span> · Créditos{' '}
-              <span className="font-mono font-semibold text-gray-800">{fmtCOP(loteCreado.credito)}</span> · Diferencia{' '}
-              <span className="font-mono font-semibold text-green-700">$ 0</span>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
-            <button type="button" onClick={() => setAviso(false)} className={BUTTON_SECONDARY}>Cerrar</button>
-            <button
-              type="button"
-              ref={avisoRef}
-              data-initial-focus
-              onClick={() => onNavigate('movimientos/lotes')}
-              className={BUTTON_PRIMARY}
-            >
-              Abrir lotes
-            </button>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
+    {creado && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"><div className="text-3xl text-green-600">✓</div><h2 className="mt-2 text-base font-semibold text-gray-900">Lote creado correctamente</h2><p className="mt-2 text-sm text-gray-600">El lote <strong>{creado.lote}</strong> quedó en Borrador con {creado.items} partidas. Revíselo y utilice Verificar antes de Actualizar.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setCreado(null)} className={BUTTON_SECONDARY}>Permanecer aquí</button><button type="button" onClick={() => onNavigate('movimientos/lotes')} className={BUTTON_PRIMARY}>Abrir Lotes</button></div></div></div>}
+  </div>;
 }

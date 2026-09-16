@@ -73,6 +73,26 @@ def register_direct_posting(user: str, document: str) -> None:
         )
 
 
+def register_document_annulment(user: str, document: str, reason: str) -> None:
+    """Deja trazabilidad de una anulacion confirmada sin alterar su transaccion."""
+    now = datetime.now()
+    audit_reason = f"Anulacion de documento. Motivo: {reason.strip()}"[:250]
+    with audit_connection() as connection:
+        _execute(
+            connection,
+            "INSERT INTO VISAUDI (USUARIO, HORA, MODULO, DOCUMENTO, MOTIVO, FECHA) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (ADO_TYPE_VARCHAR, 4, user[:4]),
+                (ADO_TYPE_VARCHAR, 10, now.strftime("%H:%M:%S")),
+                (ADO_TYPE_VARCHAR, 1, "T"),
+                (ADO_TYPE_VARCHAR, 12, document[:12]),
+                (ADO_TYPE_VARCHAR, 250, audit_reason),
+                (ADO_TYPE_INTEGER, 0, int(now.strftime("%Y%m%d"))),
+            ],
+        )
+
+
 def register_monthly_reprocess(
     user: str,
     year: int,

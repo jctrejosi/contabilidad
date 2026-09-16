@@ -28,6 +28,10 @@ búsqueda y paginación en Advantage. Esta tabla es compartida por todas las
 compañías. El alcance y las reglas pendientes de escritura están documentados
 en [`docs/TERCEROS_ADS.md`](docs/TERCEROS_ADS.md).
 
+La opción **Movimientos → Importaciones** lee archivos XLSX, CSV, TXT o ADT y crea
+un lote Borrador que debe verificarse antes de actualizarse. Su flujo y reglas
+están documentados en [`docs/IMPORTACIONES_ADS.md`](docs/IMPORTACIONES_ADS.md).
+
 ## Ejecución local
 
 Backend, desde la raíz de este repositorio:

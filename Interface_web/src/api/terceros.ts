@@ -19,6 +19,25 @@ interface ListarTercerosParams {
   estado?: EstadoTerceroQuery;
 }
 
+export interface TerceroCreate {
+  nit: string;
+  digito: string;
+  tipoDocumento: '13' | '31';
+  nombre: string;
+  nombreComercial: string;
+  primerNombre: string;
+  segundoNombre: string;
+  primerApellido: string;
+  segundoApellido: string;
+  direccion: string;
+  codigoCiudad: string;
+  ciudad: string;
+  telefono: string;
+  correo: string;
+  zona: string;
+  cupo: number;
+}
+
 const requestsInProgress = new Map<string, Promise<TercerosPageResponse>>();
 
 /** Consulta una página del maestro global; búsqueda y filtros se ejecutan en ADS. */
@@ -51,4 +70,18 @@ export function listarTerceros({
     });
   requestsInProgress.set(url, pending);
   return pending;
+}
+
+/** Crea el tercero activo con saldo inicial cero y devuelve el registro guardado. */
+export async function crearTercero(payload: TerceroCreate): Promise<Tercero> {
+  const response = await fetch('/api/terceros', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => null) as { item?: Tercero; detail?: string } | null;
+  if (!response.ok || !body?.item) {
+    throw new Error(body?.detail || 'No fue posible crear el tercero.');
+  }
+  return body.item;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { TERCEROS, MOVIMIENTOS_FEB, USUARIO, fmtCOP } from '../data/mock';
+import { MOVIMIENTOS_FEB, USUARIO, fmtCOP } from '../data/mock';
 import { listarCuentas } from '../api/cuentas';
 import { listarCentros } from '../api/centros';
 import { listarTerceros } from '../api/terceros';
@@ -7,6 +7,8 @@ import { listarComprobantes, type ComprobanteReal } from '../api/comprobantes';
 import { listarTiposDocumento, type TipoDocumentoReal } from '../api/tiposDocumento';
 import { contabilizarCaptura, type ResultadoContabilizacion } from '../api/contabilizacion';
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
+import CrearTerceroModal from '../components/CrearTerceroModal';
+import ConfirmarCrearTerceroModal from '../components/ConfirmarCrearTerceroModal';
 import type { CentroJerarquico } from '../data/configCentros';
 import type { Cuenta, Lote, LoteLinea, MovimientoLinea, Tercero } from '../types';
 
@@ -119,7 +121,6 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
   const [comprobante, setComprobante] = useState('');
   const [tipoDoc, setTipoDoc] = useState('');
   const [numDoc, setNumDoc] = useState('');
-  const [terceroHdr, setTerceroHdr] = useState('');
   const [concepto, setConcepto] = useState('');
   const [lineas, setLineas] = useState<Linea[]>([newLine(), newLine()]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -141,6 +142,8 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
   const [tercerosEncontrados, setTercerosEncontrados] = useState<Tercero[]>([]);
   const [tercerosCargando, setTercerosCargando] = useState(false);
   const [tercerosError, setTercerosError] = useState('');
+  const [crearTerceroParaLinea, setCrearTerceroParaLinea] = useState<{ lineId: number; termino: string } | null>(null);
+  const [terceroNoEncontrado, setTerceroNoEncontrado] = useState<{ lineId: number; termino: string } | null>(null);
   const [showPlantilla, setShowPlantilla] = useState(false);
   const [showExcel, setShowExcel] = useState(false);
   const [showCargarDoc, setShowCargarDoc] = useState(false);
@@ -348,6 +351,11 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
     try {
       const response = await listarTerceros({ page: 1, pageSize: 30, search: termino, estado: 'todos' });
       setTercerosEncontrados(response.items);
+      if (response.items.length === 0 && showTerceroPicker !== null) {
+        setTercerosError(`El tercero "${termino}" no existe.`);
+        setTerceroNoEncontrado({ lineId: showTerceroPicker, termino });
+        setShowTerceroPicker(null);
+      }
     } catch (cause: unknown) {
       setTercerosEncontrados([]);
       setTercerosError(cause instanceof Error ? cause.message : 'No fue posible buscar en FADCLI.');
@@ -597,7 +605,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
 
       {/* Header form */}
       <div className="shrink-0 bg-white border-b border-gray-200 px-4 py-3">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Período <span className="font-normal text-gray-400">(CONCTR)</span></label>
             <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
@@ -648,15 +656,6 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
               disabled={tipoDocumentoSeleccionado?.permiteModificarConsecutivo !== true}
               data-capture-nav="true"
               className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 disabled:bg-gray-100 disabled:text-gray-500" />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Tercero header</label>
-            <select value={terceroHdr} onChange={e => setTerceroHdr(e.target.value)}
-              data-capture-nav="true"
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1">
-              <option value="">— Sin tercero —</option>
-              {TERCEROS.map(t => <option key={t.nit} value={t.nit}>{t.nombre}</option>)}
-            </select>
           </div>
         </div>
         <div className="mt-2">
@@ -1118,6 +1117,24 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
       {(showCuentaPicker !== null || showTerceroPicker !== null) && (
         <div className="fixed inset-0 z-10" onClick={() => { setShowCuentaPicker(null); setShowTerceroPicker(null); }} />
       )}
+
+      {crearTerceroParaLinea && <CrearTerceroModal
+        initialTerm={crearTerceroParaLinea.termino}
+        onClose={() => setCrearTerceroParaLinea(null)}
+        onCreated={tercero => {
+          seleccionarTercero(crearTerceroParaLinea.lineId, tercero);
+          setCrearTerceroParaLinea(null);
+          setAviso({ tipo: 'success', texto: `Tercero ${tercero.nit} creado y asignado al movimiento.` });
+        }}
+      />}
+      {terceroNoEncontrado && <ConfirmarCrearTerceroModal
+        termino={terceroNoEncontrado.termino}
+        onCancel={() => setTerceroNoEncontrado(null)}
+        onConfirm={() => {
+          setCrearTerceroParaLinea(terceroNoEncontrado);
+          setTerceroNoEncontrado(null);
+        }}
+      />}
     </div>
   );
 }

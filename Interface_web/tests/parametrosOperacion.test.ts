@@ -14,12 +14,10 @@ test('representa exactamente CT00 a CT12; true significa período habilitado', (
   assert.equal(p.periodosHabilitados['01'], true);
 });
 
-test('los valores iniciales válidos y ambos modos de retención pueden guardarse localmente', () => {
+test('los valores iniciales representan un registro CONCTR válido', () => {
   const p = crearParametrosIniciales(empresa, 2026);
   assert.deepEqual(validarParametros(p), {});
   assert.ok(esParametrosGuardados(JSON.parse(JSON.stringify(p))));
-  p.modoRetencion = 'base-a-retencion';
-  assert.ok(esParametrosGuardados(p));
 });
 
 test('rechaza nombre, NIT, año y directorio inválidos', () => {
@@ -31,6 +29,7 @@ test('rechaza nombre, NIT, año y directorio inválidos', () => {
 test('acepta directorios Windows y UNC, sin afirmar que existen', () => {
   assert.ok(esRutaContableValida('C:\\VISION20\\CONTAB\\001\\'));
   assert.ok(esRutaContableValida('\\\\servidor\\contabilidad\\001\\'));
+  assert.ok(esRutaContableValida('\\VIS90'));
   for (const ruta of ['', 'C:', 'relativa', '\\\\servidor', 'C:\\ruta?invalida']) assert.equal(esRutaContableValida(ruta), false, ruta);
 });
 
@@ -40,5 +39,5 @@ test('ignora preferencias incompletas o dañadas', () => {
   const p = crearParametrosIniciales(empresa, 2026);
   assert.equal(esParametrosGuardados({ ...p, periodosHabilitados: {} }), false);
   assert.equal(esParametrosGuardados({ ...p, controlaUsuarioLotes: '1' }), false);
-  assert.equal(esParametrosGuardados({ ...p, modoRetencion: 'inexistente' }), false);
+  assert.equal(esParametrosGuardados({ ...p, codigoInterno: '101' }), false);
 });

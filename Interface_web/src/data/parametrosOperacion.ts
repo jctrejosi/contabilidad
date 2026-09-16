@@ -18,6 +18,7 @@ export type PeriodoOperacion = typeof PERIODOS_OPERACION[number]['codigo'];
 
 // Correspondencia con PARAMS()/DSIGRABA6() y el recurso PARAM_1 del legado.
 export interface ParametrosOperacion {
+  codigoInterno: number; // CONCTR.CTCODCIA; identificador heredado de solo lectura
   nombreEmpresa: string; // CONCTR.CTCIA
   nit: string; // CTNIT
   direccion: string; // CTDIRECC
@@ -29,8 +30,6 @@ export interface ParametrosOperacion {
   tercerosDocumentosPropios: boolean; // CTTERDOC
   controlaUsuarioLotes: boolean; // CTPUC: '1' / ' '
   comentarioCertificado: string; // CTLEY1
-  // MCR se muestra en PARAM_1, pero DSIGRABA6 no lo persiste en CONCTR.
-  modoRetencion: 'retencion-a-base' | 'base-a-retencion';
   periodosHabilitados: Record<PeriodoOperacion, boolean>; // CT00…CT12: true = habilitado
 }
 
@@ -38,6 +37,7 @@ export type ErroresParametros = Partial<Record<keyof ParametrosOperacion, string
 
 export function crearParametrosIniciales(empresa: { codigo: string; nombre: string; nit: string; digito: string }, anio: number): ParametrosOperacion {
   return {
+    codigoInterno: Number(empresa.codigo),
     nombreEmpresa: empresa.nombre,
     nit: `${empresa.nit}-${empresa.digito}`,
     direccion: '',
@@ -49,14 +49,14 @@ export function crearParametrosIniciales(empresa: { codigo: string; nombre: stri
     tercerosDocumentosPropios: false,
     controlaUsuarioLotes: true,
     comentarioCertificado: '',
-    modoRetencion: 'retencion-a-base',
     periodosHabilitados: Object.fromEntries(PERIODOS_OPERACION.map(p => [p.codigo, true])) as Record<PeriodoOperacion, boolean>,
   };
 }
 
 export function esRutaContableValida(ruta: string): boolean {
-  // Sólo valida la sintaxis. Comprobar la existencia requiere el servicio del servidor.
-  return /^(?:[a-z]:\\|\\\\[^\\/]+\\[^\\/]+(?:\\|$))/i.test(ruta.trim())
+  // CTDIREC también contiene rutas heredadas desde la raíz, por ejemplo \VIS90.
+  // Sólo se valida sintaxis; la ruta no es la conexión ADS usada por la API.
+  return /^(?:[a-z]:\\|\\\\[^\\/]+\\[^\\/]+(?:\\|$)|\\[^\\/])/i.test(ruta.trim())
     && !/[<>"|?*\u0000-\u001f]/.test(ruta.trim());
 }
 
@@ -78,9 +78,9 @@ export function esParametrosGuardados(valor: unknown): valor is ParametrosOperac
   const p = valor as Record<string, unknown>;
   const textos = ['nombreEmpresa', 'nit', 'direccion', 'ciudad', 'directorioContabilidad', 'anioOperacion', 'contabilidadConciliacion', 'comentarioCertificado'];
   const controles = ['verificaDocumentosLotes', 'tercerosDocumentosPropios', 'controlaUsuarioLotes'];
-  return textos.every(campo => typeof p[campo] === 'string')
+  return typeof p.codigoInterno === 'number'
+    && textos.every(campo => typeof p[campo] === 'string')
     && controles.every(campo => typeof p[campo] === 'boolean')
-    && (p.modoRetencion === 'retencion-a-base' || p.modoRetencion === 'base-a-retencion')
     && !!p.periodosHabilitados && typeof p.periodosHabilitados === 'object'
     && PERIODOS_OPERACION.every(periodo => typeof (p.periodosHabilitados as Record<string, unknown>)[periodo.codigo] === 'boolean');
 }

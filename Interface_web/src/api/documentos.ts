@@ -51,6 +51,18 @@ export interface DocumentosResponse {
   sharedAcrossCompanies: false;
 }
 
+export interface ResultadoAnulacion {
+  documento: string;
+  partidasRetiradas: number;
+  totalDebito: number;
+  totalCredito: number;
+  cuentasRecalculadas: number;
+  tercerosRecalculados: number;
+  centrosRecalculados: number;
+  dryRun: boolean;
+  advertencia: string;
+}
+
 function optional(params: URLSearchParams, name: string, value?: string) {
   if (value?.trim()) params.set(name, value.trim());
 }
@@ -96,4 +108,34 @@ export async function consultarDetalleDocumento(
     throw new Error(body?.detail || 'No fue posible consultar el detalle en MOV01.');
   }
   return body.items;
+}
+
+/** Retira un documento seleccionado y solicita el recálculo contable atómico. */
+export async function anularDocumento(
+  cia: string,
+  documento: DocumentoContable,
+  motivo: string,
+  usuario = 'WEB',
+): Promise<ResultadoAnulacion> {
+  const response = await fetch('/api/documentos/anular', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cia,
+      id: documento.id,
+      documento: documento.documento,
+      comprobante: documento.comprobante,
+      tipoDocumento: documento.tipoDocumento,
+      fecha: documento.fecha,
+      usuario,
+      motivo,
+    }),
+  });
+  const body = await response.json().catch(() => null) as
+    | { item?: ResultadoAnulacion; detail?: string }
+    | null;
+  if (!response.ok || !body?.item) {
+    throw new Error(body?.detail || 'No fue posible completar la anulación.');
+  }
+  return body.item;
 }

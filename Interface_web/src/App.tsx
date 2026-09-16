@@ -119,10 +119,10 @@ export default function App() {
         return <CapturaDirecta cia={companiaActiva.codigo} onCrearLote={crearLote} />;
 
       case 'movimientos/anulacion':
-        return <Anulacion />;
+        return <Anulacion cia={companiaActiva.codigo} />;
 
       case 'movimientos/importaciones':
-        return <Importaciones onNavigate={navigate} onCrearLote={crearLote} />;
+        return <Importaciones cia={companiaActiva.codigo} onNavigate={navigate} />;
 
       case 'movimientos/nomina':
         return <Nomina onNavigate={navigate} onCrearLote={crearLote} />;
@@ -193,7 +193,7 @@ export default function App() {
         return <Consolidacion />;
 
       case 'config/parametros':
-        return <ParametrosOperacion onExit={() => navigate('dashboard')} />;
+        return <ParametrosOperacion cia={companiaActiva.codigo} onExit={() => navigate('dashboard')} />;
 
       case 'config/plan-cuentas':
         return <PlanCuentas cia={companiaActiva.codigo} />;

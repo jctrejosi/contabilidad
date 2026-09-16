@@ -286,9 +286,10 @@ def _validate_masters(connection: Any, data: dict[str, Any]) -> tuple[dict[str, 
         if not _boolean(account.get("MTC")):
             raise PostingValidationError(f"Línea {line['numero']}: la cuenta no es afectable.")
 
-        requires_third_party = _boolean(account.get("MCTAPAGOS"))
-        requires_cost_center = _boolean(account.get("MCOSTOS"))
         fiscal_type = _text(account.get("MIVA_RET")).upper() or "O"
+        # VERIFI2 también exige tercero para cuentas de IVA o retención.
+        requires_third_party = _boolean(account.get("MCTAPAGOS")) or fiscal_type in {"I", "R"}
+        requires_cost_center = _boolean(account.get("MCOSTOS"))
         third_party_name = ""
         if requires_third_party and not line["nit"]:
             raise PostingValidationError(f"Línea {line['numero']}: la cuenta requiere tercero.")
@@ -503,8 +504,8 @@ def _insert_movement(connection: Any, data: dict[str, Any], line: dict[str, Any]
         connection,
         "INSERT INTO MOV01 "
         "(CONCIA, CONANO, CONMES, CODIGO, NIT, NITN, TFECHA, TCOMPR, TFASE, "
-        "TIPODOC, TDOCUM, TDOCUM2, TDETALLE, TFECDOC, TVALOR, TBASE, TIVA_RET, TUSUA) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "TIPODOC, TDOCUM, TDOCUM2, TDETALLE, TFECDOC, TVALOR, TBASE, TIVA_RET, TUSUA, TARCHI) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
             (ADO_TYPE_INTEGER, 0, data["cia"]),
             (ADO_TYPE_DOUBLE, 0, float(data["anio"])),
@@ -524,6 +525,7 @@ def _insert_movement(connection: Any, data: dict[str, Any], line: dict[str, Any]
             (ADO_TYPE_DOUBLE, 0, float(line["base"])),
             (ADO_TYPE_VARCHAR, 1, line["tipoFiscal"]),
             (ADO_TYPE_VARCHAR, 4, data["usuario"]),
+            (ADO_TYPE_VARCHAR, 4, str(data.get("lote", ""))[:4]),
         ],
     )
 
