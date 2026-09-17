@@ -5,7 +5,11 @@ from io import BytesIO
 import pytest
 from openpyxl import Workbook
 
-from backend.importaciones_repository import ImportFileValidationError, read_import_file
+from backend.importaciones_repository import (
+    MAX_IMPORT_BYTES,
+    ImportFileValidationError,
+    read_import_file,
+)
 
 
 def test_reads_semicolon_csv_with_headers_and_rows() -> None:
@@ -42,3 +46,9 @@ def test_reads_selected_xlsx_sheet_and_serializes_dates() -> None:
 def test_rejects_legacy_xls_with_actionable_message() -> None:
     with pytest.raises(ImportFileValidationError, match="XLSX o CSV"):
         read_import_file("movimientos.xls", b"legacy")
+
+
+def test_rejects_files_larger_than_25_mb() -> None:
+    assert MAX_IMPORT_BYTES == 25 * 1024 * 1024
+    with pytest.raises(ImportFileValidationError, match="25 MB"):
+        read_import_file("movimientos.csv", b"x" * (MAX_IMPORT_BYTES + 1))

@@ -20,7 +20,8 @@ import win32com.client
 from .ads_repository import _rows
 
 
-MAX_IMPORT_BYTES = 10 * 1024 * 1024
+MAX_IMPORT_MB = 25
+MAX_IMPORT_BYTES = MAX_IMPORT_MB * 1024 * 1024
 MAX_IMPORT_ROWS = 5000
 
 
@@ -175,7 +176,9 @@ def read_import_file(filename: str, content: bytes, *, sheet_name: str = "") -> 
     if not content:
         raise ImportFileValidationError("Seleccione un archivo con informacion.")
     if len(content) > MAX_IMPORT_BYTES:
-        raise ImportFileValidationError("El archivo supera el limite de 10 MB.")
+        raise ImportFileValidationError(
+            f"El archivo supera el limite de {MAX_IMPORT_MB} MB."
+        )
     extension = Path(filename or "").suffix.lower()
     if extension in {".csv", ".txt"}:
         result = _read_delimited(content)

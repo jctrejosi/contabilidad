@@ -9,7 +9,7 @@ queda en estado **Borrador** y debe pasar posteriormente por las acciones
 
 ## Flujo funcional
 
-1. El usuario selecciona un archivo XLSX, CSV, TXT o ADT de máximo 10 MB.
+1. El usuario selecciona un archivo XLSX, CSV, TXT o ADT de máximo 25 MB.
 2. El servidor lee hasta 5.000 filas y devuelve las hojas, columnas y valores.
 3. El usuario relaciona las columnas del archivo con los campos contables.
 4. La pantalla normaliza fechas, importes y códigos y presenta todas las filas.
