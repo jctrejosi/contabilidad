@@ -9,8 +9,27 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./schema:/docker-entrypoint-initdb.d/schema:ro
+      # PostgreSQL 18+ guarda los datos en /var/lib/postgresql/<major>/docker, por
+      # eso el volumen se monta en el directorio padre. Montarlo en
+      # /var/lib/postgresql/data (layout anterior a 18) hace que la imagen aborte
+      # el arranque para no perder datos de una instalación previa.
+      - pgdata:/var/lib/postgresql
+      # El entrypoint solo ejecuta archivos en la raíz de
+      # /docker-entrypoint-initdb.d: los subdirectorios caen en la rama
+      # "ignoring". Por eso el esquema se monta archivo por archivo, dejando que
+      # el orden alfabético reproduzca el de scripts/up.sh (schema → funciones →
+      # seed).
+      - ./schema/01_dominios.sql:/docker-entrypoint-initdb.d/01_dominios.sql:ro
+      - ./schema/02_nucleo.sql:/docker-entrypoint-initdb.d/02_nucleo.sql:ro
+      - ./schema/03_maestros.sql:/docker-entrypoint-initdb.d/03_maestros.sql:ro
+      - ./schema/04_movimientos.sql:/docker-entrypoint-initdb.d/04_movimientos.sql:ro
+      - ./schema/05_saldos.sql:/docker-entrypoint-initdb.d/05_saldos.sql:ro
+      - ./schema/06_impuestos.sql:/docker-entrypoint-initdb.d/06_impuestos.sql:ro
+      - ./schema/07_procesos.sql:/docker-entrypoint-initdb.d/07_procesos.sql:ro
+      - ./schema/08_seguridad.sql:/docker-entrypoint-initdb.d/08_seguridad.sql:ro
+      - ./schema/09_presupuesto.sql:/docker-entrypoint-initdb.d/09_presupuesto.sql:ro
+      - ./schema/10_indices.sql:/docker-entrypoint-initdb.d/10_indices.sql:ro
+      - ./schema/11_ampliaciones.sql:/docker-entrypoint-initdb.d/11_ampliaciones.sql:ro
       - ./funciones.sql:/docker-entrypoint-initdb.d/20_funciones.sql:ro
       - ./seed.sql:/docker-entrypoint-initdb.d/30_seed.sql:ro
     healthcheck:

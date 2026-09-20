@@ -1,4 +1,7 @@
 /ADD_CONTAB
 backend/.env
+backend/.venv/
 backend/__pycache__/
 backend/.pytest_cache/
+/tmp/dev/
+/logs/

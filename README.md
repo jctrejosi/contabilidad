@@ -34,6 +34,24 @@ están documentados en [`docs/IMPORTACIONES_ADS.md`](docs/IMPORTACIONES_ADS.md).
 
 ## Ejecución local
 
+La forma recomendada es el script `dev.js`, que comprueba e instala lo que
+falte (entorno virtual, `requirements.txt`, `node_modules`), levanta la base de
+datos PostgreSQL de referencia, el backend y la interfaz, y muestra las URLs:
+
+```powershell
+node dev.js            # levanta todo y libera la terminal
+node dev.js --check    # solo verifica herramientas y dependencias
+node dev.js --stop     # detiene los servicios levantados
+node dev.js --no-db    # omite PostgreSQL (backend sobre Advantage)
+```
+
+Los servicios quedan corriendo en segundo plano y cada uno escribe su registro
+en `logs/<servicio>.log` (`backend.log`, `web.log`, `db.log`). La salida de los
+servicios no se canaliza a la consola: la terminal solo muestra el progreso del
+arranque y las URLs, y queda libre al terminar.
+
+También se pueden levantar las piezas por separado.
+
 Backend, desde la raíz de este repositorio:
 
 ```powershell
