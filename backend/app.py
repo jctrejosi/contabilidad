@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from fastapi import FastAPI, File, HTTPException, Path, Query, Response, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import store
@@ -36,6 +36,13 @@ from .lotes_repository import (
     LotValidationError,
 )
 from .importaciones_repository import read_import_file
+from .saldos_anuales_repository import list_annual_balances
+from .movimiento_anual_cuenta_repository import annual_account_detail, annual_account_summary
+from .movimiento_anual_tercero_repository import annual_third_party_detail, annual_third_party_summary
+from .movimiento_anual_centro_repository import annual_cost_center_detail, annual_cost_center_summary
+from .saldos_cuenta_centro_repository import list_account_balances, list_centers_for_account
+from .documento_especifico_repository import specific_document
+from .comparativos_repository import compare_values
 from .contabilizacion_repository import (
     PostingConflict,
     PostingValidationError,
@@ -44,6 +51,7 @@ from .balance_comprobacion_repository import (
     export_trial_balance_pdf,
     export_trial_balance_xlsx,
 )
+from .informes_adicionales_repository import build_additional_report, export_additional_report
 from .reproceso_mensual_repository import (
     MonthlyReprocessValidationError,
 )
@@ -461,6 +469,178 @@ def monthly_movements(
     return {**result, "source": "MOV01", "sharedAcrossCompanies": False}
 
 
+@app.get("/api/consultas/saldos-anuales", summary="Saldos y comportamiento anual")
+def annual_balances(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=18),
+    filtro: Literal["generales", "todos", "retenciones", "iva"] = Query("generales"),
+    cuenta: str = Query("", max_length=30), page: int = Query(1, ge=1),
+    page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """CONSUL_2 y CONSUL_21: acumulados de CONMAE y CONTERCE."""
+    try:
+        return list_annual_balances(cia, anio, mes, filter_type=filtro, account_search=cuenta, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/movimiento-anual-cuenta", summary="Movimiento anual por cuenta")
+def annual_movement_by_account(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(min_length=1, max_length=12, pattern=r"^[0-9]+$"),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+) -> dict[str, object]:
+    """CONSUL_3: saldos y meses de la cuenta, con rango opcional de NIT."""
+    try:
+        return annual_account_summary(cia, anio, cuenta, nit_from=nit_desde, nit_to=nit_hasta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/movimiento-anual-cuenta/detalle", summary="Detalle mensual de cuenta")
+def annual_movement_by_account_detail(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=12), cuenta: str = Query(pattern=r"^[0-9]{1,12}$"),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    page: int = Query(1, ge=1), page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    try:
+        return annual_account_detail(cia, anio, mes, cuenta, nit_from=nit_desde, nit_to=nit_hasta, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/movimiento-anual-tercero", summary="Movimiento anual por tercero")
+def annual_movement_by_third_party(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    tercero: str = Query(min_length=1, max_length=15, pattern=r"^[0-9]+$"),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+) -> dict[str, object]:
+    """CONSUL_4: movimiento de FADCLI/CONTERCE/MOV01."""
+    try:
+        return annual_third_party_summary(cia, anio, tercero, account_from=cuenta_desde, account_to=cuenta_hasta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/movimiento-anual-tercero/detalle", summary="Detalle mensual de tercero")
+def annual_movement_by_third_party_detail(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=12), tercero: str = Query(pattern=r"^[0-9]{1,15}$"),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    page: int = Query(1, ge=1), page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    try:
+        return annual_third_party_detail(cia, anio, mes, tercero, account_from=cuenta_desde, account_to=cuenta_hasta, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/movimiento-anual-centro", summary="Movimiento anual por centro de costo")
+def annual_movement_by_cost_center(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    centro: str = Query(min_length=1, max_length=7),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+) -> dict[str, object]:
+    """CONSUL_5: saldos y meses del centro de costo."""
+    try:
+        return annual_cost_center_summary(cia, anio, centro, account_from=cuenta_desde, account_to=cuenta_hasta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/movimiento-anual-centro/detalle", summary="Detalle mensual de centro de costo")
+def annual_movement_by_cost_center_detail(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=12), centro: str = Query(min_length=1, max_length=7),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    page: int = Query(1, ge=1), page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    try:
+        return annual_cost_center_detail(cia, anio, mes, centro, account_from=cuenta_desde, account_to=cuenta_hasta, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/saldos-cuenta-centro/cuentas", summary="Saldos de cuentas por centro")
+def account_cost_center_balances(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=18), buscar: str = Query("", max_length=60),
+    page: int = Query(1, ge=1), page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """CONSUL_7: saldos por cuenta y búsqueda por nombre o código."""
+    try:
+        return list_account_balances(cia, anio, mes, search=buscar, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/saldos-cuenta-centro/centros", summary="Centros de una cuenta")
+def cost_centers_for_account(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=18), cuenta: str = Query(pattern=r"^[0-9]{1,12}$"),
+) -> dict[str, object]:
+    try:
+        return list_centers_for_account(cia, anio, mes, cuenta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/saldos-cuenta-centro/detalle", summary="Partidas por cuenta y centro")
+def account_cost_center_detail(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=18), cuenta: str = Query(pattern=r"^[0-9]{1,12}$"),
+    centro: str = Query(max_length=7), page: int = Query(1, ge=1),
+    page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    try:
+        return store.list_monthly_movements(cia, anio, mes, page=page, page_size=page_size, account_from=cuenta, account_to=cuenta, cost_center=centro)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/documento-especifico", summary="Documento propio o afectado")
+def specific_document_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    mes: int = Query(ge=1, le=18), tipo_documento: str = Query(alias="tipoDocumento", min_length=1, max_length=2),
+    documento: str = Query(min_length=1, max_length=12),
+    buscar_por: Literal["propio", "afectado"] = Query("propio", alias="buscarPor"),
+) -> dict[str, object]:
+    """CONSUL_8: localiza el documento según TDOCUM o TDOCUM2."""
+    try:
+        return specific_document(cia, anio, mes, tipo_documento, documento, search_by=buscar_por)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consultas/comparativos", summary="Comparar compañías, centros o meses")
+def comparisons_endpoint(
+    tipo: Literal["companias", "centros", "meses"], cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100), mes_a: int = Query(alias="mesA", ge=1, le=12),
+    cia_b: str = Query("", alias="ciaB", max_length=3), mes_b: int = Query(0, alias="mesB", ge=0, le=12),
+    modo: Literal["saldo", "movimiento"] = Query("saldo"),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    centro_desde: str = Query("", alias="centroDesde", max_length=7),
+    centro_hasta: str = Query("", alias="centroHasta", max_length=7),
+    buscar: str = Query("", max_length=60), page: int = Query(1, ge=1),
+    page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """CONSULCO, CONSULCO2 y CONSULME con los filtros del legado."""
+    try:
+        return compare_values(tipo, cia, anio, mes_a, cia_b=cia_b, month_b=mes_b, mode=modo, account_from=cuenta_desde, account_to=cuenta_hasta, nit_from=nit_desde, nit_to=nit_hasta, center_from=centro_desde, center_to=centro_hasta, search=buscar, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
 @app.get("/api/documentos", summary="Consultar cabeceras de documentos contabilizados")
 def documents(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
@@ -807,6 +987,63 @@ def export_trial_balance(
         content=content,
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/informes/adicionales/{report_id}", summary="Generar informe contable adicional")
+def additional_report_endpoint(
+    report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit: str = Query("", max_length=15),
+      centro: str = Query("", max_length=7),
+      comprobante: str = Query("", max_length=2),
+      comprobante_hasta: str = Query("", alias="comprobanteHasta", max_length=2),
+      tipo_documento: str = Query("", alias="tipoDocumento", max_length=2),
+      tipo_documento_hasta: str = Query("", alias="tipoDocumentoHasta", max_length=2),
+    documento_desde: str = Query("", alias="documentoDesde", max_length=12),
+    documento_hasta: str = Query("", alias="documentoHasta", max_length=12),
+    buscar: str = Query("", max_length=60),
+    nivel: int = Query(6, ge=4, le=12),
+    incluir_ceros: bool = Query(False, alias="incluirCeros"),
+) -> dict[str, object]:
+    """Lee Advantage con los parámetros originales; no modifica tablas."""
+    try:
+        return build_additional_report(
+            report_id, cia, anio, mes_desde, mes_hasta,
+            account_from=cuenta_desde, account_to=cuenta_hasta, nit=nit,
+              center=centro, voucher=comprobante, voucher_to=comprobante_hasta,
+              document_type=tipo_documento, document_type_to=tipo_documento_hasta,
+            document_from=documento_desde, document_to=documento_hasta,
+            search=buscar, level=nivel, include_zero=incluir_ceros,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/adicionales/{report_id}/exportar", summary="Exportar informe contable adicional")
+def export_additional_report_endpoint(
+    report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
+    formato: Literal["pdf", "xlsx", "csv"] = Query(),
+    report: dict[str, object] = Depends(additional_report_endpoint),
+) -> Response:
+    """Reutiliza exactamente los filtros y datos de la consulta visible."""
+    try:
+        content = export_additional_report(report, formato)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    media = {
+        "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "csv": "text/csv; charset=utf-8",
+    }[formato]
+    return Response(
+        content=content, media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{report_id}_{report["anio"]}.{formato}"'},
     )
 
 

@@ -137,25 +137,25 @@ export default function App() {
         return <MovimientoMensual cia={companiaActiva.codigo} onOpenDocumento={openDocumento} />;
 
       case 'consultas/saldos-anuales':
-        return <SaldosAnuales />;
+        return <SaldosAnuales cia={companiaActiva.codigo} />;
 
       case 'consultas/anual-cuenta':
-        return <AnualCuenta />;
+        return <AnualCuenta cia={companiaActiva.codigo} />;
 
       case 'consultas/anual-tercero':
-        return <AnualTercero />;
+        return <AnualTercero cia={companiaActiva.codigo} />;
 
       case 'consultas/anual-centro':
-        return <AnualCentro />;
+        return <AnualCentro cia={companiaActiva.codigo} />;
 
       case 'consultas/saldos-cuenta-centro':
-        return <SaldosCuentaCentro />;
+        return <SaldosCuentaCentro cia={companiaActiva.codigo} />;
 
       case 'consultas/documento-especifico':
-        return <DocumentoEspecifico onOpenDocumento={openDocumento} />;
+        return <DocumentoEspecifico cia={companiaActiva.codigo} onOpenDocumento={openDocumento} />;
 
       case 'consultas/comparativos':
-        return <Comparativos />;
+        return <Comparativos cia={companiaActiva.codigo} />;
 
       case 'informes/documentos':
         return <Informes cia={companiaActiva.codigo} initialCategory="documentos" onNavigate={navigate} />;

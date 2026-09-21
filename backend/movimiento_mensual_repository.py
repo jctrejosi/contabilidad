@@ -138,8 +138,8 @@ def list_monthly_movements(
     company_id = normalize_company_code(cia)
     if not 1900 <= year <= 2100:
         raise ValueError("El año consultado no es válido.")
-    if not 1 <= month <= 12:
-        raise ValueError("El mes consultado debe estar entre 1 y 12.")
+    if not 1 <= month <= 18:
+        raise ValueError("El período consultado debe estar entre 1 y 18.")
     if page < 1:
         raise ValueError("La página debe ser mayor o igual a 1.")
     if not 1 <= page_size <= 200:

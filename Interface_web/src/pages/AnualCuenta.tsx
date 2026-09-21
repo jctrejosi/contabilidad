@@ -1,326 +1,110 @@
-import { useMemo, useState } from 'react';
-import { CUENTAS, MOVIMIENTOS_FEB, fmtCOP } from '../data/mock';
-import type { MovimientoLinea } from '../types';
+import { useEffect, useMemo, useState } from 'react';
+import { listarCuentas } from '../api/cuentas';
+import { consultarDetalleAnualCuenta, consultarMovimientoAnualCuenta, type DetalleAnualCuentaResponse, type MesMovimientoAnual, type MovimientoAnualCuentaResponse } from '../api/movimientoAnualCuenta';
+import { consultarPeriodoOperacion } from '../api/periodoOperacion';
+import type { Cuenta } from '../types';
 
-const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const SELECT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
+const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100 disabled:bg-gray-100 disabled:text-gray-400';
+const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const money = (value: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 
-const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+export default function AnualCuenta({ cia }: { cia: string }) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [accounts, setAccounts] = useState<Cuenta[]>([]);
+  const [account, setAccount] = useState('');
+  const [nitFrom, setNitFrom] = useState('');
+  const [nitTo, setNitTo] = useState('');
+  const [result, setResult] = useState<MovimientoAnualCuentaResponse | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [details, setDetails] = useState<Record<number, DetalleAnualCuentaResponse>>({});
+  const [loading, setLoading] = useState(false);
+  const [loadingMonth, setLoadingMonth] = useState<number | null>(null);
+  const [error, setError] = useState('');
 
-const ABC = { nit: '800.100.200', nombre: 'Empresa ABC Comercial S.A.S.' };
-const XYZ = { nit: '900.200.300', nombre: 'Comercial XYZ Distribuciones Ltda.' };
-const STN = { nit: '860.050.010', nombre: 'Suministros Técnicos del Norte Ltda.' };
-const GARCIA = { nit: '12.345.678', nombre: 'García Moreno Juan Pablo' };
-const LOPEZ = { nit: '23.456.789', nombre: 'López Vargas María Fernanda' };
-const MARTINEZ = { nit: '34.567.890', nombre: 'Martínez Rojas Ana Lucía' };
+  useEffect(() => {
+    let active = true;
+    setAccount(''); setNitFrom(''); setNitTo(''); setResult(null); setExpanded(null); setDetails({}); setError('');
+    Promise.all([consultarPeriodoOperacion(cia), listarCuentas(cia)]).then(([period, items]) => {
+      if (!active) return;
+      setYear(period.anio); setAccounts(items);
+    }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : 'No fue posible cargar las cuentas.'); });
+    return () => { active = false; };
+  }, [cia]);
 
-function nombreCuenta(codigo: string): string {
-  return CUENTAS.find(c => c.codigo === codigo)?.nombre ?? codigo;
-}
+  const selectedAccount = useMemo(() => {
+    const search = account.trim().toLocaleUpperCase('es-CO');
+    return accounts.find(item => item.codigo === account.trim())
+      ?? accounts.find(item => item.nombre.trim().toLocaleUpperCase('es-CO') === search);
+  }, [accounts, account]);
+  const allowsThird = Boolean(selectedAccount?.requiereTercero || selectedAccount?.claseIVA || selectedAccount?.claseRetencion);
+  function clearResult() { setResult(null); setExpanded(null); setDetails({}); }
 
-/** Movimientos anuales coherentes: febrero real (MOVIMIENTOS_FEB + complemento NOM2) y mocks locales cuadrados para los demás meses. */
-function generarMovs(): MovimientoLinea[] {
-  const out: MovimientoLinea[] = [];
-  let seq = 0;
-  const add = (mes: number, dia: number, comprobante: string, tipoDoc: string, documento: string, cuenta: string, nit: string, tercero: string, centro: string, debito: number, credito: number, concepto: string, origen: string, lote: string, docAfectado = '') => {
-    seq += 1;
-    out.push({
-      id: `G${String(seq).padStart(3, '0')}`,
-      periodo: `2026-${String(mes).padStart(2, '0')}`,
-      fecha: `2026-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
-      comprobante, tipoDoc, documento, cuenta, nombreCuenta: nombreCuenta(cuenta),
-      nit, tercero, centro, debito, credito, base: 0, clase: cuenta === '236540' ? 'RETFTE' : '', docAfectado, concepto, origen, lote,
-    });
-  };
-
-  // Febrero: datos reales del libro + complemento para que el flujo cuadre por completo.
-  out.push(...MOVIMIENTOS_FEB);
-  const C = (mes: number, dia: number, comprobante: string, tipoDoc: string, documento: string, cuenta: string, nit: string, tercero: string, centro: string, debito: number, credito: number, concepto: string) => {
-    seq += 1;
-    out.push({
-      id: `C${String(seq).padStart(3, '0')}`,
-      periodo: `2026-${String(mes).padStart(2, '0')}`,
-      fecha: `2026-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
-      comprobante, tipoDoc, documento, cuenta, nombreCuenta: nombreCuenta(cuenta),
-      nit, tercero, centro, debito, credito, base: 0, clase: cuenta === '236540' ? 'RETFTE' : '', docAfectado: '', concepto, origen: 'Nómina', lote: 'NOM2',
-    });
-  };
-  C(2, 28, 'CE-000245', 'NOM', 'NOM-2026-02', '510506', GARCIA.nit, GARCIA.nombre, 'ADM', 800000, 0, 'Prestaciones febrero ADM');
-  C(2, 28, 'CE-000245', 'NOM', 'NOM-2026-02', '510506', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 600000, 0, 'Prestaciones febrero OPE');
-  C(2, 28, 'CE-000245', 'NOM', 'NOM-2026-02', '510506', GARCIA.nit, GARCIA.nombre, 'ADM', 1200000, 0, 'Aportes seguridad social feb');
-  C(2, 28, 'CE-000245', 'NOM', 'NOM-2026-02', '250505', GARCIA.nit, GARCIA.nombre, 'ADM', 0, 800000, 'Prestaciones por pagar feb ADM');
-  C(2, 28, 'CE-000245', 'NOM', 'NOM-2026-02', '250505', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 0, 600000, 'Prestaciones por pagar feb OPE');
-  C(2, 20, 'CE-000246', 'RB', 'RB-2026-006', '510506', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 390000, 0, 'Reembolso caja menor transporte');
-  C(2, 20, 'CE-000246', 'RB', 'RB-2026-006', '110505', '', '', '', 0, 390000, 'Reembolso caja menor');
-
-  // Enero: recaudos, pagos, nómina y obligaciones.
-  add(1, 8, 'CI-000143', 'FV', 'FV-2026-008', '111005', ABC.nit, ABC.nombre, '', 7500000, 0, 'Recaudo factura ventas', 'Manual', 'CI-003', 'FV-2025-140');
-  add(1, 8, 'CI-000143', 'FV', 'FV-2026-008', '130505', ABC.nit, ABC.nombre, '', 0, 7500000, 'Recaudo factura ventas', 'Manual', 'CI-003', 'FV-2025-140');
-  add(1, 20, 'CI-000144', 'FV', 'FV-2026-009', '111005', XYZ.nit, XYZ.nombre, '', 4500000, 0, 'Recaudo factura ventas', 'Manual', 'CI-003', 'FV-2025-141');
-  add(1, 20, 'CI-000144', 'FV', 'FV-2026-009', '130505', XYZ.nit, XYZ.nombre, '', 0, 4500000, 'Recaudo factura ventas', 'Manual', 'CI-003', 'FV-2025-141');
-  add(1, 15, 'CE-000241', 'OR', 'OR-2026-021', '111005', STN.nit, STN.nombre, '', 0, 3200000, 'Pago proveedor materiales', 'Manual', 'CE-001');
-  add(1, 15, 'CE-000241', 'OR', 'OR-2026-021', '130505', STN.nit, STN.nombre, '', 3200000, 0, 'Pago proveedor materiales', 'Manual', 'CE-001');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '510506', GARCIA.nit, GARCIA.nombre, 'ADM', 4500000, 0, 'Sueldo enero Administración', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '510506', LOPEZ.nit, LOPEZ.nombre, 'VEN', 3200000, 0, 'Sueldo enero Ventas', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '510506', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 2300000, 0, 'Sueldo enero Operaciones', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '510506', GARCIA.nit, GARCIA.nombre, 'ADM', 1400000, 0, 'Prestaciones enero ADM', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '510506', GARCIA.nit, GARCIA.nombre, 'ADM', 1200000, 0, 'Aportes seguridad social ene', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '250505', GARCIA.nit, GARCIA.nombre, 'ADM', 0, 4500000, 'Obligación nómina ene ADM', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '250505', LOPEZ.nit, LOPEZ.nombre, 'VEN', 0, 3200000, 'Obligación nómina ene VEN', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '250505', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 0, 2300000, 'Obligación nómina ene OPE', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '250505', GARCIA.nit, GARCIA.nombre, 'ADM', 0, 1400000, 'Prestaciones por pagar ene ADM', 'Nómina', 'NOM1');
-  add(1, 28, 'CE-000242', 'NOM', 'NOM-2026-01', '236540', '', '', '', 0, 1200000, 'Retención nómina enero', 'Nómina', 'NOM1');
-  add(1, 31, 'NO-000087', 'NO', 'NO-2026-087', '250505', '', '', '', 10000000, 0, 'Pago nómina enero', 'Manual', 'NO-001');
-  add(1, 31, 'NO-000087', 'NO', 'NO-2026-087', '111005', '', '', '', 0, 10000000, 'Pago nómina enero', 'Manual', 'NO-001');
-  add(1, 31, 'NO-000088', 'NO', 'NO-2026-088', '236540', '', '', '', 1200000, 0, 'Pago retención enero', 'Manual', 'NO-001');
-  add(1, 31, 'NO-000088', 'NO', 'NO-2026-088', '111005', '', '', '', 0, 1200000, 'Pago retención enero', 'Manual', 'NO-001');
-  add(1, 31, 'NO-000089', 'NO', 'NO-2026-089', '240805', '', '', '', 2850000, 0, 'Pago IVA bimestre nov-dic', 'Manual', 'NO-001');
-  add(1, 31, 'NO-000089', 'NO', 'NO-2026-089', '111005', '', '', '', 0, 2850000, 'Pago IVA bimestre nov-dic', 'Manual', 'NO-001');
-  add(1, 22, 'CE-000241', 'RB', 'RB-2026-005', '510506', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 390000, 0, 'Reembolso caja menor', 'Manual', 'CE-001');
-  add(1, 22, 'CE-000241', 'RB', 'RB-2026-005', '110505', '', '', '', 0, 390000, 'Reembolso caja menor', 'Manual', 'CE-001');
-
-  // Marzo a diciembre: ciclo mensual de recaudos, pagos, nómina y obligaciones.
-  let sueldoPrevio = 12600000;
-  for (let m = 3; m <= 12; m += 1) {
-    const recaudo = 6500000 + m * 300000;
-    const pagoProv = 2600000 + m * 200000;
-    const sueldo = m === 6 || m === 12 ? 13500000 : 12100000;
-    const tRecaudo = m % 2 === 0 ? ABC : XYZ;
-    const tCaja = m % 2 === 0 ? GARCIA : MARTINEZ;
-    const centroCaja = m % 2 === 0 ? 'ADM' : 'OPE';
-    const mes = String(m).padStart(2, '0');
-
-    add(m, 5, `CI-0001${44 + m}`, 'FV', `FV-2026-0${10 + m}`, '111005', tRecaudo.nit, tRecaudo.nombre, '', recaudo, 0, 'Recaudo factura ventas', 'Manual', 'CI-003', `FV-2026-0${10 + m - 1}`);
-    add(m, 5, `CI-0001${44 + m}`, 'FV', `FV-2026-0${10 + m}`, '130505', tRecaudo.nit, tRecaudo.nombre, '', 0, recaudo, 'Recaudo factura ventas', 'Manual', 'CI-003', `FV-2026-0${10 + m - 1}`);
-    add(m, 15, `CE-0002${44 + m}`, 'OR', `OR-2026-0${20 + m}`, '111005', STN.nit, STN.nombre, '', 0, pagoProv, 'Pago proveedor materiales', 'Manual', 'CE-001');
-    add(m, 15, `CE-0002${44 + m}`, 'OR', `OR-2026-0${20 + m}`, '130505', STN.nit, STN.nombre, '', pagoProv, 0, 'Pago proveedor materiales', 'Manual', 'CE-001');
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '510506', GARCIA.nit, GARCIA.nombre, 'ADM', Math.round(sueldo * 0.42), 0, `Sueldo mes ${m} Administración`, 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '510506', LOPEZ.nit, LOPEZ.nombre, 'VEN', Math.round(sueldo * 0.3), 0, `Sueldo mes ${m} Ventas`, 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '510506', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', Math.round(sueldo * 0.28), 0, `Sueldo mes ${m} Operaciones`, 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '250505', GARCIA.nit, GARCIA.nombre, 'ADM', 0, Math.round(sueldo * 0.42), `Obligación nómina mes ${m} ADM`, 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '250505', LOPEZ.nit, LOPEZ.nombre, 'VEN', 0, Math.round(sueldo * 0.3), `Obligación nómina mes ${m} VEN`, 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '250505', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 0, Math.round(sueldo * 0.28), `Obligación nómina mes ${m} OPE`, 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '510506', GARCIA.nit, GARCIA.nombre, 'ADM', 1200000, 0, 'Aportes seguridad social', 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '236540', '', '', '', 0, 1200000, 'Aportes por pagar', 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '510506', GARCIA.nit, GARCIA.nombre, 'ADM', 800000, 0, 'Prestaciones ADM', 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '510506', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 600000, 0, 'Prestaciones OPE', 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '250505', GARCIA.nit, GARCIA.nombre, 'ADM', 0, 800000, 'Prestaciones por pagar ADM', 'Nómina', `NOM${m}`);
-    add(m, 28, `CE-0002${45 + m}`, 'NOM', `NOM-2026-${mes}`, '250505', MARTINEZ.nit, MARTINEZ.nombre, 'OPE', 0, 600000, 'Prestaciones por pagar OPE', 'Nómina', `NOM${m}`);
-    add(m, 28, `NO-0000${86 + m}`, 'NO', `NO-2026-0${86 + m}`, '250505', '', '', '', sueldoPrevio, 0, `Pago nómina mes ${m - 1}`, 'Manual', 'NO-001');
-    add(m, 28, `NO-0000${86 + m}`, 'NO', `NO-2026-0${86 + m}`, '111005', '', '', '', 0, sueldoPrevio, `Pago nómina mes ${m - 1}`, 'Manual', 'NO-001');
-    add(m, 30, `NO-0000${87 + m}`, 'NO', `NO-2026-0${87 + m}`, '236540', '', '', '', 1200000, 0, 'Pago retención del mes', 'Manual', 'NO-001');
-    add(m, 30, `NO-0000${87 + m}`, 'NO', `NO-2026-0${87 + m}`, '111005', '', '', '', 0, 1200000, 'Pago retención del mes', 'Manual', 'NO-001');
-    if (m % 2 === 1) {
-      add(m, 30, `NO-0000${88 + m}`, 'NO', `NO-2026-0${88 + m}`, '240805', '', '', '', 2850000, 0, 'Pago IVA bimestral', 'Manual', 'NO-001');
-      add(m, 30, `NO-0000${88 + m}`, 'NO', `NO-2026-0${88 + m}`, '111005', '', '', '', 0, 2850000, 'Pago IVA bimestral', 'Manual', 'NO-001');
-    }
-    add(m, 20, `CE-0002${46 + m}`, 'RB', `RB-2026-0${6 + m}`, '510506', tCaja.nit, tCaja.nombre, centroCaja, 390000, 0, 'Reembolso caja menor', 'Manual', 'CE-001');
-    add(m, 20, `CE-0002${46 + m}`, 'RB', `RB-2026-0${6 + m}`, '110505', '', '', '', 0, 390000, 'Reembolso caja menor', 'Manual', 'CE-001');
-    sueldoPrevio = sueldo;
+  async function consult() {
+    if (!account.trim()) { setError('Seleccione o digite la cuenta que desea consultar.'); return; }
+    if (!selectedAccount) { setError('Seleccione una cuenta válida de la lista de resultados.'); return; }
+    setLoading(true); setError(''); setExpanded(null); setDetails({});
+    try {
+      setAccount(selectedAccount.codigo);
+      setResult(await consultarMovimientoAnualCuenta({ cia, anio: year, cuenta: selectedAccount.codigo, nitDesde: nitFrom, nitHasta: nitTo }));
+    } catch (cause) {
+      setResult(null); setError(cause instanceof Error ? cause.message : 'No fue posible consultar el movimiento anual.');
+    } finally { setLoading(false); }
   }
 
-  return out;
-}
+  async function loadMonth(month: number, page: number, append: boolean) {
+    if (!result) return;
+    setLoadingMonth(month); setError('');
+    try {
+      const response = await consultarDetalleAnualCuenta({ cia, anio: year, cuenta: result.cuenta, nitDesde: result.nitDesde, nitHasta: result.nitHasta, mes: month, page, pageSize: 100 });
+      setDetails(current => ({ ...current, [month]: append && current[month] ? { ...response, items: [...current[month].items, ...response.items] } : response }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible consultar el detalle del mes.');
+    } finally { setLoadingMonth(null); }
+  }
 
-export default function AnualCuenta() {
-  const [cuentaSel, setCuentaSel] = useState('510506');
-  const [expandido, setExpandido] = useState<number | null>(null);
-  const [showExport, setShowExport] = useState(false);
+  async function toggleMonth(month: number) {
+    if (!result) return;
+    if (expanded === month) { setExpanded(null); return; }
+    setExpanded(month);
+    if (!details[month]) await loadMonth(month, 1, false);
+  }
 
-  const movs = useMemo(generarMovs, []);
-  const cuenta = CUENTAS.find(c => c.codigo === cuentaSel);
-  const lineasCuenta = movs.filter(m => m.cuenta === cuentaSel);
-
-  const meses = MESES.map((nombre, i) => {
-    const mes = i + 1;
-    const delMes = lineasCuenta.filter(m => Number(m.fecha.slice(5, 7)) === mes);
-    return {
-      nombre,
-      mes,
-      debito: delMes.reduce((s, l) => s + l.debito, 0),
-      credito: delMes.reduce((s, l) => s + l.credito, 0),
-      lineas: delMes,
-    };
-  });
-
-  const saldoInicial = cuenta?.saldoInicial ?? 0;
-  const totalDeb = meses.reduce((s, m) => s + m.debito, 0);
-  const totalCred = meses.reduce((s, m) => s + m.credito, 0);
-  const saldoFinal = saldoInicial + totalDeb - totalCred;
-
-  return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 text-xs text-gray-400">Consultas / Anual por cuenta</div>
-          <h1 className="text-lg font-semibold text-gray-800">Anual por cuenta</h1>
-          <p className="mt-1 text-xs text-gray-500">Movimiento anual agrupado por cuenta con detalle mensual expandible.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
-          <button type="button" onClick={() => window.print()} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">⎙ Imprimir</button>
-          <div className="relative">
-            <button type="button" onClick={() => setShowExport(v => !v)} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">↓ Exportar ▾</button>
-            {showExport && (
-              <div className="absolute right-0 top-8 bg-white rounded border border-gray-200 shadow-lg z-20 py-1 w-36">
-                {['PDF', 'XLSX', 'CSV'].map(f => (
-                  <button key={f} type="button" onClick={() => setShowExport(false)} className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">{f}</button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded border border-gray-200 p-3">
-        <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-          <legend className="px-2 text-xs font-semibold text-petroleum-800">Filtros</legend>
-          <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Cuenta</label>
-              <select value={cuentaSel} onChange={e => { setCuentaSel(e.target.value); setExpandido(null); }} className={SELECT}>
-                {CUENTAS.filter(c => c.afectable).map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nombre}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Año</label>
-              <input value="2026" readOnly className={INPUT} />
-            </div>
-          </div>
-        </fieldset>
-      </div>
-
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
-        <div className="table-fixed-header overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Mes</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Débito</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Crédito</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Saldo del mes</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Saldo acumulado</th>
-                <th className="px-3 py-2.5 w-24" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              <tr className="bg-gray-50/50">
-                <td className="px-3 py-2 text-gray-600">Saldo inicial</td>
-                <td />
-                <td />
-                <td />
-                <td className="px-3 py-2 text-right font-mono text-gray-700">{fmtCOP(saldoInicial)}</td>
-                <td />
-              </tr>
-              {meses.map((m, i) => {
-                const acumulado = saldoInicial + meses.slice(0, i + 1).reduce((s, x) => s + x.debito - x.credito, 0);
-                return (
-                  <FilaMes
-                    key={m.mes}
-                    mes={m.nombre}
-                    debito={m.debito}
-                    credito={m.credito}
-                    acumulado={acumulado}
-                    expandido={expandido === m.mes}
-                    onToggle={() => setExpandido(expandido === m.mes ? null : m.mes)}
-                    lineas={m.lineas}
-                    cuenta={cuentaSel}
-                  />
-                );
-              })}
-            </tbody>
-            <tfoot className="bg-gray-50 border-t border-gray-200">
-              <tr>
-                <td className="px-3 py-2 text-xs font-semibold text-gray-700">TOTAL AÑO</td>
-                <td className="px-3 py-2 text-right font-mono font-bold text-gray-800">{fmtCOP(totalDeb)}</td>
-                <td className="px-3 py-2 text-right font-mono font-bold text-gray-800">{fmtCOP(totalCred)}</td>
-                <td />
-                <td className="px-3 py-2 text-right font-mono font-bold text-gray-800">{fmtCOP(saldoFinal)}</td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        {lineasCuenta.length === 0 && (
-          <div className="px-4 py-10 text-center">
-            <div className="text-2xl mb-2 text-gray-300">⊟</div>
-            <div className="text-xs text-gray-500">Sin resultados — esta cuenta no tiene movimiento en el año.</div>
-          </div>
-        )}
-      </div>
-
-      {showExport && <div className="fixed inset-0 z-10" onClick={() => setShowExport(false)} />}
+  return <div className="max-w-screen-2xl space-y-4 p-4">
+    <div><div className="mb-1 text-xs text-gray-400">Consultas / Movimiento anual por cuenta</div><h1 className="text-lg font-semibold text-gray-800">Movimiento anual por cuenta</h1><p className="mt-1 text-xs text-gray-500">Consulte el comportamiento de una cuenta durante el ejercicio y despliegue el detalle de cada mes.</p></div>
+    <div className="rounded border border-gray-200 bg-white p-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1fr)_110px_170px_170px_auto]">
+      <Field label="Cuenta"><input list="annual-account-list" value={account} maxLength={60} onChange={event => { setAccount(event.target.value); setNitFrom(''); setNitTo(''); setError(''); clearResult(); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); consult(); } }} placeholder="Código o nombre de la cuenta" className={INPUT} /><datalist id="annual-account-list">{accounts.map(item => <option key={item.codigo} value={item.codigo} label={item.nombre}>{item.nombre}</option>)}</datalist>{selectedAccount && <div className="mt-1 truncate text-xs text-gray-500" title={selectedAccount.nombre}><span className="font-mono">{selectedAccount.codigo}</span> · {selectedAccount.nombre}</div>}</Field>
+      <Field label="Año"><input value={year} readOnly className={`${INPUT} bg-gray-50 font-mono`} /></Field>
+      <Field label="NIT inicial"><input value={nitFrom} onChange={event => { setNitFrom(event.target.value.slice(0, 15)); clearResult(); }} disabled={Boolean(selectedAccount) && !allowsThird} placeholder="Todos" className={`${INPUT} font-mono`} /></Field>
+      <Field label="NIT final"><input value={nitTo} onChange={event => { setNitTo(event.target.value.slice(0, 15)); clearResult(); }} disabled={Boolean(selectedAccount) && !allowsThird} placeholder="Todos" className={`${INPUT} font-mono`} /></Field>
+      <div className="flex items-end"><button type="button" onClick={consult} disabled={loading} className="rounded bg-petroleum-500 px-5 py-2 text-xs font-medium text-white disabled:opacity-60">{loading ? 'Consultando…' : 'Consultar'}</button></div>
+    </div></div>
+    {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+    <div className="overflow-hidden rounded border border-gray-200 bg-white">
+      {result && <div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3"><span className="font-mono text-sm font-semibold text-gray-800">{result.cuenta}</span><span className="ml-3 text-sm text-gray-600">{result.nombre}</span></div>}
+      <div className="overflow-x-auto"><table className="w-full text-xs">
+        <thead className="border-b border-gray-200 bg-gray-50"><tr>{['Mes', 'Débito', 'Crédito', 'Saldo del mes', 'Saldo acumulado', ''].map((heading, index) => <th key={`${heading}-${index}`} className={`whitespace-nowrap px-3 py-2.5 font-semibold text-gray-600 ${index > 0 && index < 5 ? 'text-right' : 'text-left'}`}>{heading}</th>)}</tr></thead>
+        <tbody className="divide-y divide-gray-50">
+          {!result && !loading && <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-500">Seleccione una cuenta y pulse Consultar.</td></tr>}
+          {loading && <tr><td colSpan={6} className="px-4 py-12 text-center text-gray-500">Consultando el ejercicio…</td></tr>}
+          {result && <tr className="bg-gray-50/40"><td className="px-3 py-2 text-gray-600">Saldo inicial</td><td colSpan={3} /><Money value={result.saldoInicial} strong /><td /></tr>}
+          {result?.meses.map(month => <MonthRow key={month.mes} month={month} expanded={expanded === month.mes} loading={loadingMonth === month.mes} detail={details[month.mes]} account={result.cuenta} onToggle={() => toggleMonth(month.mes)} onMore={() => loadMonth(month.mes, (details[month.mes]?.page ?? 0) + 1, true)} />)}
+        </tbody>
+        {result && <tfoot className="border-t-2 border-gray-200 bg-gray-50"><tr><td className="px-3 py-2 font-semibold text-gray-700">TOTAL AÑO</td><Money value={result.totalDebito} strong /><Money value={result.totalCredito} strong /><td /><Money value={result.saldoFinal} strong /><td /></tr></tfoot>}
+      </table></div>
     </div>
-  );
+  </div>;
 }
 
-function FilaMes({ mes, debito, credito, acumulado, expandido, onToggle, lineas, cuenta }: {
-  mes: string;
-  debito: number;
-  credito: number;
-  acumulado: number;
-  expandido: boolean;
-  onToggle: () => void;
-  lineas: MovimientoLinea[];
-  cuenta: string;
-}) {
-  const saldoMes = debito - credito;
-  return (
-    <>
-      <tr className="hoverable cursor-pointer" onClick={onToggle}>
-        <td className="px-3 py-2 font-medium text-gray-700">
-          <span className="text-gray-400 mr-1.5">{expandido ? '▾' : '▸'}</span>{mes}
-        </td>
-        <td className="px-3 py-2 text-right font-mono text-gray-800">{debito > 0 ? fmtCOP(debito) : <span className="text-gray-200">—</span>}</td>
-        <td className="px-3 py-2 text-right font-mono text-gray-500">{credito > 0 ? fmtCOP(credito) : <span className="text-gray-200">—</span>}</td>
-        <td className={`px-3 py-2 text-right font-mono ${saldoMes >= 0 ? 'text-gray-800' : 'text-red-600'}`}>{saldoMes !== 0 ? fmtCOP(saldoMes) : <span className="text-gray-200">—</span>}</td>
-        <td className="px-3 py-2 text-right font-mono font-medium text-gray-800">{fmtCOP(acumulado)}</td>
-        <td className="px-3 py-2 text-right">
-          <button type="button" onClick={e => { e.stopPropagation(); onToggle(); }} className="text-xs text-petroleum-600 hover:underline">
-            {expandido ? 'Ocultar' : 'Ver detalle'}
-          </button>
-        </td>
-      </tr>
-      {expandido && (
-        <tr>
-          <td colSpan={6} className="px-3 py-3 bg-gray-50/60">
-            {lineas.length === 0 ? (
-              <div className="text-center py-4 text-xs text-gray-500">Sin movimientos en {mes.toLowerCase()} para la cuenta {cuenta}.</div>
-            ) : (
-              <div className="rounded border border-gray-200 bg-white overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600">Fecha</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600">Comprobante</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600">Documento</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600">Tercero</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600">Centro</th>
-                      <th className="px-3 py-2 text-right font-semibold text-gray-600">Débito</th>
-                      <th className="px-3 py-2 text-right font-semibold text-gray-600">Crédito</th>
-                      <th className="px-3 py-2 text-left font-semibold text-gray-600">Concepto</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {lineas.map(l => (
-                      <tr key={l.id}>
-                        <td className="px-3 py-1.5 font-mono text-gray-600">{l.fecha}</td>
-                        <td className="px-3 py-1.5 font-mono text-gray-700">{l.comprobante}</td>
-                        <td className="px-3 py-1.5 font-mono text-gray-600">{l.documento}</td>
-                        <td className="px-3 py-1.5 text-gray-600 max-w-44 truncate">{l.tercero || <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-1.5 text-gray-600">{l.centro || <span className="text-gray-300">—</span>}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-gray-800">{l.debito > 0 ? fmtCOP(l.debito) : <span className="text-gray-200">—</span>}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-gray-500">{l.credito > 0 ? fmtCOP(l.credito) : <span className="text-gray-200">—</span>}</td>
-                        <td className="px-3 py-1.5 text-gray-500">{l.concepto}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </td>
-        </tr>
-      )}
-    </>
-  );
+function MonthRow({ month, expanded, loading, detail, account, onToggle, onMore }: { month: MesMovimientoAnual; expanded: boolean; loading: boolean; detail?: DetalleAnualCuentaResponse; account: string; onToggle: () => void; onMore: () => void }) {
+  return <>
+    <tr onClick={onToggle} className="cursor-pointer hover:bg-gray-50"><td className="px-3 py-2 font-medium text-gray-700"><span className="mr-1.5 text-gray-400">{expanded ? '▾' : '▸'}</span>{String(month.mes).padStart(2, '0')} · {MONTHS[month.mes - 1]}</td><Money value={month.debito} /><Money value={month.credito} /><Money value={month.saldoMes} /><Money value={month.saldoAcumulado} strong /><td className="px-3 py-2 text-right"><button type="button" onClick={event => { event.stopPropagation(); onToggle(); }} className="text-petroleum-600 hover:underline">{expanded ? 'Ocultar' : 'Ver detalle'}</button></td></tr>
+    {expanded && <tr><td colSpan={6} className="bg-gray-50/60 px-3 py-3">
+      {loading && !detail && <div className="py-5 text-center text-gray-500">Consultando movimientos…</div>}
+      {!loading && detail && !detail.items.length && <div className="py-5 text-center text-gray-500">No existen movimientos en {MONTHS[month.mes - 1].toLowerCase()} para la cuenta {account}.</div>}
+      {detail && detail.items.length > 0 && <div className="overflow-x-auto rounded border border-gray-200 bg-white"><table className="w-full text-xs"><thead className="border-b border-gray-200 bg-gray-50"><tr>{['Fecha', 'Comprobante', 'Tipo', 'Documento', 'NIT', 'Centro', 'Débito', 'Crédito', 'Concepto'].map((heading, index) => <th key={heading} className={`whitespace-nowrap px-3 py-2 font-semibold text-gray-600 ${index === 6 || index === 7 ? 'text-right' : 'text-left'}`}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-gray-50">{detail.items.map((item, index) => <tr key={`${item.documento}-${item.secuencia}-${index}`}><td className="whitespace-nowrap px-3 py-1.5 font-mono text-gray-600">{item.fecha || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-700">{item.comprobante || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-600">{item.tipoDoc || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-600">{item.documento || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-600">{item.nit || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-600">{item.centro || '—'}</td><Money value={item.debito} /><Money value={item.credito} /><td className="max-w-80 truncate px-3 py-1.5 text-gray-600" title={item.concepto}>{item.concepto || '—'}</td></tr>)}</tbody></table>{detail.hasMore && <div className="border-t border-gray-200 p-2 text-center"><button type="button" onClick={onMore} disabled={loading} className="rounded border border-gray-300 px-3 py-1 text-xs disabled:opacity-50">{loading ? 'Consultando…' : 'Mostrar más movimientos'}</button></div>}</div>}
+    </td></tr>}
+  </>;
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div><label className="mb-1 block text-xs font-medium text-gray-600">{label}</label>{children}</div>; }
+function Money({ value, strong = false }: { value: number; strong?: boolean }) { return <td className={`whitespace-nowrap px-3 py-2 text-right font-mono ${strong ? 'font-semibold text-gray-800' : value < 0 ? 'text-red-700' : 'text-gray-700'}`}>{value ? money(value) : '—'}</td>; }

@@ -1,223 +1,28 @@
-import { useState } from 'react';
-import { fmtCOP } from '../data/mock';
-
-const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const SELECT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
-
-type Tab = 'contabilidades' | 'centros' | 'meses';
-
-interface FilaComparativo {
-  clave: string;
-  nombre: string;
-  aDebito: number;
-  aCredito: number;
-  bDebito: number;
-  bCredito: number;
+import { useEffect, useState } from 'react';
+import { listarCompanias } from '../api/companias';
+import { consultarComparativo, type ComparativoResponse, type ModoComparativo, type TipoComparativo } from '../api/consultasRestantes';
+import { consultarPeriodoOperacion } from '../api/periodoOperacion';
+import type { CompaniaSesion } from '../types';
+const INPUT='w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-petroleum-500';
+const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const money=(v:number)=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP'}).format(v);
+const LABELS:Record<TipoComparativo,string>={companias:'Dos contabilidades',centros:'Centros entre contabilidades',meses:'Dos meses'};
+export default function Comparativos({cia}:{cia:string}){
+  const [type,setType]=useState<TipoComparativo>('companias'),[mode,setMode]=useState<ModoComparativo>('saldo'),[year,setYear]=useState(new Date().getFullYear()),[monthA,setMonthA]=useState(1),[monthB,setMonthB]=useState(2),[companyB,setCompanyB]=useState('');
+  const [companies,setCompanies]=useState<CompaniaSesion[]>([]),[accountFrom,setAccountFrom]=useState(''),[accountTo,setAccountTo]=useState(''),[nitFrom,setNitFrom]=useState(''),[nitTo,setNitTo]=useState(''),[centerFrom,setCenterFrom]=useState(''),[centerTo,setCenterTo]=useState(''),[search,setSearch]=useState('');
+  const [result,setResult]=useState<ComparativoResponse|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState('');
+  useEffect(()=>{Promise.all([consultarPeriodoOperacion(cia),listarCompanias()]).then(([p,c])=>{setYear(p.anio);const m=Number(p.periodoSugerido.slice(5,7))||1;setMonthA(Math.min(m,12));setMonthB(m>1?m-1:2);setCompanies(c);setCompanyB(c.find(x=>x.codigo!==cia.padStart(3,'0'))?.codigo||'');}).catch(e=>setError(e instanceof Error?e.message:'No fue posible cargar los filtros.'));setResult(null);},[cia]);
+  async function consult(page=1){setLoading(true);setError('');try{setResult(await consultarComparativo({tipo:type,cia,anio:year,mesA:monthA,ciaB:type==='meses'?undefined:companyB,mesB:type==='meses'?monthB:undefined,modo:mode,cuentaDesde:accountFrom,cuentaHasta:accountTo,nitDesde:nitFrom,nitHasta:nitTo,centroDesde:centerFrom,centroHasta:centerTo,buscar:search,page}));}catch(e){setResult(null);setError(e instanceof Error?e.message:'No fue posible comparar.');}finally{setLoading(false);}}
+  function exportCsv(){if(!result)return;const lines=['codigo;nombre;valor_a;valor_b;diferencia;porcentaje',...result.items.map(x=>[x.clave,x.nombre,x.valorA,x.valorB,x.diferencia,x.porcentaje].join(';'))];const url=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=`comparativo_${type}_${year}.csv`;a.click();URL.revokeObjectURL(url);}
+  const labelA=type==='meses'?`${String(monthA).padStart(2,'0')} · ${MONTHS[monthA-1]}`:`Compañía ${cia.padStart(3,'0')}`;
+  const labelB=type==='meses'?`${String(monthB).padStart(2,'0')} · ${MONTHS[monthB-1]}`:`Compañía ${companyB}`;
+  return <div className="max-w-screen-2xl space-y-4 p-4"><div className="flex justify-between"><div><div className="text-xs text-gray-400">Consultas / Comparativos</div><h1 className="text-lg font-semibold text-gray-800">Consultas comparativas</h1><p className="mt-1 text-xs text-gray-500">Compare saldos o movimientos netos con los rangos usados por el sistema original.</p></div>{result&&<button onClick={exportCsv} className="h-8 rounded border px-3 text-xs">↓ Exportar CSV</button>}</div>
+    <div className="flex border-b">{(Object.keys(LABELS) as TipoComparativo[]).map(t=><button key={t} onClick={()=>{setType(t);setResult(null);}} className={`border-b-2 px-4 py-2 text-xs ${type===t?'border-petroleum-500 text-petroleum-700':'border-transparent text-gray-500'}`}>{LABELS[t]}</button>)}</div>
+    <div className="rounded border bg-white p-4"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6"><Field label="Año"><input value={year} readOnly className={INPUT}/></Field><Field label="Mes A"><Month value={monthA} set={setMonthA}/></Field>{type==='meses'?<Field label="Mes B"><Month value={monthB} set={setMonthB}/></Field>:<Field label="Compañía B"><select value={companyB} onChange={e=>setCompanyB(e.target.value)} className={INPUT}><option value="">Seleccione</option>{companies.filter(c=>c.codigo!==cia.padStart(3,'0')).map(c=><option key={c.codigo} value={c.codigo}>{c.codigo} · {c.nombre}</option>)}</select></Field>}<Field label="Cuenta inicial"><input value={accountFrom} onChange={e=>setAccountFrom(e.target.value)} className={INPUT}/></Field><Field label="Cuenta final"><input value={accountTo} onChange={e=>setAccountTo(e.target.value)} className={INPUT}/></Field><Field label="Buscar"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={type==='centros'?'Centro o nombre':'Cuenta o nombre'} className={INPUT}/></Field><Field label="NIT inicial"><input value={nitFrom} onChange={e=>setNitFrom(e.target.value)} className={INPUT}/></Field><Field label="NIT final"><input value={nitTo} onChange={e=>setNitTo(e.target.value)} className={INPUT}/></Field>{type==='centros'&&<><Field label="Centro inicial"><input value={centerFrom} onChange={e=>setCenterFrom(e.target.value)} className={INPUT}/></Field><Field label="Centro final"><input value={centerTo} onChange={e=>setCenterTo(e.target.value)} className={INPUT}/></Field></>}<div className="flex items-end gap-3"><label className="text-xs"><input type="radio" checked={mode==='saldo'} onChange={()=>setMode('saldo')}/> Saldos</label><label className="text-xs"><input type="radio" checked={mode==='movimiento'} onChange={()=>setMode('movimiento')}/> Movimientos</label></div><div className="flex items-end"><button onClick={()=>consult(1)} disabled={loading} className="rounded bg-petroleum-500 px-5 py-2 text-xs text-white">{loading?'Comparando…':'Consultar'}</button></div></div></div>
+    {error&&<div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+    <div className="overflow-hidden rounded border bg-white"><div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b bg-gray-50"><th className="px-3 py-2 text-left">Código</th><th className="px-3 py-2 text-left">Nombre</th><th className="px-3 py-2 text-right">{labelA}</th><th className="px-3 py-2 text-right">{labelB}</th><th className="px-3 py-2 text-right">Diferencia</th><th className="px-3 py-2 text-right">Diferencia %</th></tr></thead><tbody className="divide-y">{!result&&!loading&&<tr><td colSpan={6} className="p-12 text-center text-gray-500">Configure los filtros y pulse Consultar.</td></tr>}{result&&!result.items.length&&<tr><td colSpan={6} className="p-12 text-center text-gray-500">No hay resultados para los rangos seleccionados.</td></tr>}{result?.items.map(x=><tr key={x.clave} className={x.diferencia?'bg-red-50/40':''}><td className="px-3 py-2 font-mono">{x.clave}</td><td className="px-3 py-2">{x.nombre}</td><Money v={x.valorA}/><Money v={x.valorB}/><Money v={x.diferencia}/><td className="px-3 py-2 text-right font-mono">{x.porcentaje.toFixed(3)}%</td></tr>)}</tbody></table></div>{result&&<div className="flex justify-end gap-2 border-t p-2"><button disabled={result.page<=1} onClick={()=>consult(result.page-1)} className="rounded border px-3 py-1 text-xs disabled:opacity-40">Anterior</button><button disabled={!result.hasMore} onClick={()=>consult(result.page+1)} className="rounded border px-3 py-1 text-xs disabled:opacity-40">Siguiente</button></div>}</div>
+  </div>;
 }
-
-// Febrero contabilidad 001 (libro real + complemento NOM2, cuadrado).
-const FEB_001: FilaComparativo[] = [
-  { clave: '110505', nombre: 'Caja general', aDebito: 0, aCredito: 390000, bDebito: 0, bCredito: 0 },
-  { clave: '111005', nombre: 'Bancos moneda nacional', aDebito: 8500000, aCredito: 4100000, bDebito: 8200000, bCredito: 4100000 },
-  { clave: '130505', nombre: 'Clientes nacionales', aDebito: 4100000, aCredito: 8500000, bDebito: 4400000, bCredito: 8200000 },
-  { clave: '236540', nombre: 'Retenciones y aportes de nómina', aDebito: 0, aCredito: 1200000, bDebito: 0, bCredito: 1200000 },
-  { clave: '250505', nombre: 'Salarios por pagar', aDebito: 0, aCredito: 11400000, bDebito: 0, bCredito: 11400000 },
-  { clave: '510506', nombre: 'Sueldos y salarios', aDebito: 12990000, aCredito: 0, bDebito: 12990000, bCredito: 0 },
-];
-
-// Centros de febrero (nómina con centro), 001 vs 002.
-const CENTROS_FEB: FilaComparativo[] = [
-  { clave: 'ADM', nombre: 'Administración', aDebito: 6500000, aCredito: 5300000, bDebito: 6500000, bCredito: 5300000 },
-  { clave: 'VEN', nombre: 'Ventas', aDebito: 3200000, aCredito: 3200000, bDebito: 3200000, bCredito: 3200000 },
-  { clave: 'OPE', nombre: 'Operaciones', aDebito: 3290000, aCredito: 2900000, bDebito: 2900000, bCredito: 2900000 },
-];
-
-// Enero contabilidad 001.
-const ENE_001: FilaComparativo[] = [
-  { clave: '110505', nombre: 'Caja general', aDebito: 0, aCredito: 390000, bDebito: 0, bCredito: 0 },
-  { clave: '111005', nombre: 'Bancos moneda nacional', aDebito: 12000000, aCredito: 17250000, bDebito: 0, bCredito: 0 },
-  { clave: '130505', nombre: 'Clientes nacionales', aDebito: 3200000, aCredito: 12000000, bDebito: 0, bCredito: 0 },
-  { clave: '236540', nombre: 'Retenciones y aportes de nómina', aDebito: 1200000, aCredito: 1200000, bDebito: 0, bCredito: 0 },
-  { clave: '240805', nombre: 'IVA por pagar', aDebito: 2850000, aCredito: 0, bDebito: 0, bCredito: 0 },
-  { clave: '250505', nombre: 'Salarios por pagar', aDebito: 10000000, aCredito: 11400000, bDebito: 0, bCredito: 0 },
-  { clave: '510506', nombre: 'Sueldos y salarios', aDebito: 11790000, aCredito: 0, bDebito: 0, bCredito: 0 },
-];
-
-const TAB_LABEL: Record<Tab, string> = {
-  contabilidades: 'Contabilidades',
-  centros: 'Centros',
-  meses: 'Meses',
-};
-
-function exportarDiferencias(filas: FilaComparativo[], nombre: string) {
-  const cabecera = 'clave;nombre;a_debito;a_credito;b_debito;b_credito;dif_debito;dif_credito';
-  const lineas = filas
-    .filter(f => f.aDebito !== f.bDebito || f.aCredito !== f.bCredito)
-    .map(f => [f.clave, f.nombre, f.aDebito, f.aCredito, f.bDebito, f.bCredito, f.aDebito - f.bDebito, f.aCredito - f.bCredito].join(';'));
-  const blob = new Blob([cabecera + '\n' + lineas.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nombre;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export default function Comparativos() {
-  const [tab, setTab] = useState<Tab>('contabilidades');
-  const [mesA, setMesA] = useState('2026-01');
-  const [mesB, setMesB] = useState('2026-02');
-  const [exportado, setExportado] = useState<string | null>(null);
-
-  let filas: FilaComparativo[];
-  let columnaA: string;
-  let columnaB: string;
-
-  if (tab === 'contabilidades') {
-    filas = FEB_001;
-    columnaA = '001 — Febrero 2026';
-    columnaB = '002 — Febrero 2026';
-  } else if (tab === 'centros') {
-    filas = CENTROS_FEB;
-    columnaA = '001 — Febrero 2026';
-    columnaB = '002 — Febrero 2026';
-  } else {
-    const esFeb = mesA === '2026-02' && mesB === '2026-01';
-    filas = esFeb
-      ? FEB_001.map(f => ({ ...f, bDebito: ENE_001.find(e => e.clave === f.clave)?.aDebito ?? 0, bCredito: ENE_001.find(e => e.clave === f.clave)?.aCredito ?? 0 }))
-      : ENE_001.map(f => ({ ...f, bDebito: FEB_001.find(e => e.clave === f.clave)?.aDebito ?? 0, bCredito: FEB_001.find(e => e.clave === f.clave)?.aCredito ?? 0 }));
-    columnaA = mesA;
-    columnaB = mesB;
-  }
-
-  const diferencias = filas.filter(f => f.aDebito !== f.bDebito || f.aCredito !== f.bCredito);
-  const totalDifDeb = diferencias.reduce((s, f) => s + Math.abs(f.aDebito - f.bDebito), 0);
-  const totalDifCred = diferencias.reduce((s, f) => s + Math.abs(f.aCredito - f.bCredito), 0);
-
-  function exportar() {
-    exportarDiferencias(filas, `diferencias_${tab}_${new Date().toISOString().slice(0, 10)}.csv`);
-    setExportado(`${diferencias.length} filas con diferencia exportadas a CSV.`);
-  }
-
-  return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 text-xs text-gray-400">Consultas / Comparativos</div>
-          <h1 className="text-lg font-semibold text-gray-800">Comparativos</h1>
-          <p className="mt-1 text-xs text-gray-500">Comparativos entre dos contabilidades, dos centros o dos meses, con la diferencia resaltada.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
-          <button type="button" onClick={exportar} className={BUTTON_PRIMARY + ' text-xs! px-3! py-1.5!'}>
-            ↓ Exportar diferencias
-          </button>
-        </div>
-      </div>
-
-      <div className="flex border-b border-gray-200">
-        {(Object.keys(TAB_LABEL) as Tab[]).map(t => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-              tab === t ? 'border-petroleum-500 text-petroleum-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {TAB_LABEL[t]}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'meses' && (
-        <div className="bg-white rounded border border-gray-200 p-3">
-          <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-            <legend className="px-2 text-xs font-semibold text-petroleum-800">Meses a comparar (contabilidad 001)</legend>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-gray-600">Mes A</label>
-                <select value={mesA} onChange={e => setMesA(e.target.value)} className={SELECT}>
-                  <option value="2026-01">2026-01 Enero</option>
-                  <option value="2026-02">2026-02 Febrero</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-gray-600">Mes B</label>
-                <select value={mesB} onChange={e => setMesB(e.target.value)} className={SELECT}>
-                  <option value="2026-01">2026-01 Enero</option>
-                  <option value="2026-02">2026-02 Febrero</option>
-                </select>
-              </div>
-              {mesA === mesB && <p className="self-end text-xs text-red-600">Seleccione dos meses distintos.</p>}
-            </div>
-          </fieldset>
-        </div>
-      )}
-
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
-        <div className="table-fixed-header overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-3 py-2.5 text-left font-semibold text-gray-600" colSpan={2}>Cuenta / Centro</th>
-                <th className="px-3 py-2.5 text-center font-semibold text-gray-600 border-l border-gray-200" colSpan={2}>{columnaA}</th>
-                <th className="px-3 py-2.5 text-center font-semibold text-gray-600 border-l border-gray-200" colSpan={2}>{columnaB}</th>
-                <th className="px-3 py-2.5 text-center font-semibold text-red-700 border-l border-gray-200" colSpan={2}>Diferencia</th>
-              </tr>
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500">Código</th>
-                <th className="px-3 py-2 text-left font-semibold text-gray-500">Nombre</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-500 border-l border-gray-200">Débito</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-500">Crédito</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-500 border-l border-gray-200">Débito</th>
-                <th className="px-3 py-2 text-right font-semibold text-gray-500">Crédito</th>
-                <th className="px-3 py-2 text-right font-semibold text-red-600 border-l border-gray-200">Débito</th>
-                <th className="px-3 py-2 text-right font-semibold text-red-600">Crédito</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filas.map(f => {
-                const difDeb = f.aDebito - f.bDebito;
-                const difCred = f.aCredito - f.bCredito;
-                const conDiferencia = difDeb !== 0 || difCred !== 0;
-                return (
-                  <tr key={f.clave} className={`hoverable ${conDiferencia ? 'row-error' : ''}`}>
-                    <td className="px-3 py-2 font-mono text-gray-700">{f.clave}</td>
-                    <td className="px-3 py-2 text-gray-600 max-w-48 truncate">{f.nombre}</td>
-                    <td className="px-3 py-2 text-right font-mono text-gray-800 border-l border-gray-100">{f.aDebito > 0 ? fmtCOP(f.aDebito) : <span className="text-gray-200">—</span>}</td>
-                    <td className="px-3 py-2 text-right font-mono text-gray-500">{f.aCredito > 0 ? fmtCOP(f.aCredito) : <span className="text-gray-200">—</span>}</td>
-                    <td className="px-3 py-2 text-right font-mono text-gray-800 border-l border-gray-100">{f.bDebito > 0 ? fmtCOP(f.bDebito) : <span className="text-gray-200">—</span>}</td>
-                    <td className="px-3 py-2 text-right font-mono text-gray-500">{f.bCredito > 0 ? fmtCOP(f.bCredito) : <span className="text-gray-200">—</span>}</td>
-                    <td className="px-3 py-2 text-right font-mono font-medium text-red-600 border-l border-gray-100">{difDeb !== 0 ? fmtCOP(difDeb) : <span className="text-gray-200">—</span>}</td>
-                    <td className="px-3 py-2 text-right font-mono font-medium text-red-600">{difCred !== 0 ? fmtCOP(difCred) : <span className="text-gray-200">—</span>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot className="bg-gray-50 border-t border-gray-200">
-              <tr>
-                <td colSpan={6} className="px-3 py-2 text-xs font-semibold text-gray-700">DIFERENCIAS ABSOLUTAS ({diferencias.length} fila{diferencias.length !== 1 ? 's' : ''})</td>
-                <td className="px-3 py-2 text-right font-mono font-bold text-red-600 border-l border-gray-200">{totalDifDeb > 0 ? fmtCOP(totalDifDeb) : '—'}</td>
-                <td className="px-3 py-2 text-right font-mono font-bold text-red-600">{totalDifCred > 0 ? fmtCOP(totalDifCred) : '—'}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {tab === 'contabilidades' && (
-        <p className="text-xs text-gray-400">
-          Contabilidad 002 — Compañía Demo S.A.S. (consolidación): datos de ejemplo con diferencias frente a la 001. Las filas con diferencia se resaltan en rojo.
-        </p>
-      )}
-
-      {exportado && (
-        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">
-          ✓ {exportado}
-        </div>
-      )}
-    </div>
-  );
-}
+function Field({label,children}:{label:string;children:React.ReactNode}){return <div><label className="mb-1 block text-xs text-gray-600">{label}</label>{children}</div>}
+function Month({value,set}:{value:number;set:(v:number)=>void}){return <select value={value} onChange={e=>set(Number(e.target.value))} className={INPUT}>{MONTHS.map((m,i)=><option key={m} value={i+1}>{String(i+1).padStart(2,'0')} · {m}</option>)}</select>}
+function Money({v}:{v:number}){return <td className={`whitespace-nowrap px-3 py-2 text-right font-mono ${v<0?'text-red-700':'text-gray-700'}`}>{v?money(v):'—'}</td>}

@@ -35,7 +35,7 @@ export interface ResultadoImportacion {
   errores: ErrorVerificacionLote[];
 }
 
-async function responseOrError<T>(response: Response, fallback: string): Promise<T> {
+async function responseOrError<T extends object>(response: Response, fallback: string): Promise<T> {
   const body = await response.json().catch(() => null) as T | { detail?: string | unknown[] } | null;
   if (!response.ok) {
     const detail = body && 'detail' in body ? body.detail : null;

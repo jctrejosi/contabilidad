@@ -110,7 +110,7 @@ export interface ActualizacionLote {
   advertencias: string[];
 }
 
-async function responseOrError<T>(response: Response, fallback: string): Promise<T> {
+async function responseOrError<T extends object>(response: Response, fallback: string): Promise<T> {
   const body = await response.json().catch(() => null) as T | { detail?: string } | null;
   if (!response.ok) {
     throw new Error(body && 'detail' in body ? body.detail : fallback);
