@@ -49,10 +49,37 @@ coincidencias) para no inflar el contexto.
 | `buscar_cuenta` | Busca cuentas del plan por código (exacto o parcial) o nombre | `GET /api/cuentas` |
 | `consultar_periodo` | Período contable habilitado de la compañía | `GET /api/periodo-operacion` |
 | `buscar_tercero` | Busca terceros por NIT, nombre o ciudad | `GET /api/terceros` |
+| `consultar_movimiento_mensual` | Movimiento del mes con totales del período completo y filtros | `GET /api/movimiento-mensual` |
+| `consultar_documentos` | Cabeceras de documentos con total de documentos y valor total | `GET /api/documentos` |
+| `consultar_documento_detalle` | Partidas de un documento y verificación de cuadre | `GET /api/documentos/detalle` |
 
 `buscar_cuenta` cachea el catálogo resumido por compañía durante
 `IA_SERVICE_CATALOG_TTL` segundos (300 por defecto): el endpoint devuelve miles
 de filas y no conviene pedirlo en cada pregunta.
+
+### Decisiones de las consultas de datos
+
+- **`pageSize` fijo** (50), no lo elige el modelo: así ninguna respuesta trae un
+  volcado enorme y el contexto se mantiene corto. Para recorrer más filas, el
+  modelo avanza con `page`.
+- **Período autocompletado**: si el usuario no lo indica, se usa el período
+  habilitado (`GET /api/periodo-operacion`, cacheado 60 s) y el resultado marca
+  `periodoAsumido: true` para que el modelo lo diga.
+- **`consultar_documento_detalle` exige la clave completa** (documento,
+  comprobante, tipo documental y fecha): no adivina cabeceras.
+- **Totales del período, no de la página**: los entregan los repositorios
+  (`periodDebit/Credit/Saldo` y `totalDocumentos/totalValor`) en **ambos**
+  motores. Con Advantage se evita que el bot informe `$0` cuando sí hay saldo.
+- **Los totales de cuadre** de `consultar_documento_detalle` los calcula el
+  propio handler sobre los renglones devueltos, así que no dependen del motor.
+
+### Tablas en el widget (`payload`)
+
+Las tools de datos agregan bloques a `payload(ctx)["bloques"]` con la forma
+`{tipo: "tabla", titulo, subtitulo, columnas, filas, totales, nota}`. El frontend
+los muestra en un visor aparte (`BotPayloadViewer`) que se abre con el botón
+"Ver tabla" de cada respuesta. Varias tools pueden aportar tablas en un mismo
+turno: el usuario pide cada dato por separado y los revisa juntos.
 
 ## API
 
@@ -69,7 +96,8 @@ de filas y no conviene pedirlo en cada pregunta.
   }
   ```
 
-  Respuesta: `{ "reply": "...", "session_id": "uuid", "payload": {} }`.
+  Respuesta: `{ "reply": "...", "session_id": "uuid", "payload": { "bloques": [...] } }`.
+  El `payload` no se le envía al modelo: es lo que el widget renderiza en el visor.
 
 ## Agregar una herramienta (function calling)
 

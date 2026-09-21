@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CompaniaSesion } from '../types';
+import BotPayloadViewer from './BotPayloadViewer';
 import {
   enviarMensajeBot,
   obtenerOpcionesBot,
   type BotChatMessage,
+  type BotPayloadTabla,
   type BotQuickOption,
 } from '../api/bot';
 
@@ -24,6 +26,8 @@ function nuevoSessionId(): string {
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  /** Tablas que trajo esa respuesta, para abrirlas en el visor. */
+  bloques?: BotPayloadTabla[];
 }
 
 interface BotChatProps {
@@ -49,6 +53,12 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<BotQuickOption[]>([]);
+  // Visor de datos: guarda los bloques de la respuesta que se abrió, para poder
+  // renderizarlos mientras corre la animación de cierre.
+  const [visor, setVisor] = useState<{ open: boolean; bloques: BotPayloadTabla[] }>({
+    open: false,
+    bloques: [],
+  });
 
   const sessionRef = useRef<string>(nuevoSessionId());
   const historyRef = useRef<BotChatMessage[]>([]);
@@ -75,14 +85,23 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, loading, open]);
 
+  // Cierre único del panel: apaga también el visor, que vive por encima.
+  const cerrar = useCallback(() => {
+    setOpen(false);
+    setVisor(prev => ({ ...prev, open: false }));
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      // El visor tiene su propio cierre: no cerramos el chat debajo de él.
+      if (visor.open) return;
+      cerrar();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, visor.open, cerrar]);
 
   const enviar = useCallback(
     async (raw: string) => {
@@ -105,7 +124,17 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
           },
         });
         if (respuesta.session_id) sessionRef.current = respuesta.session_id;
-        setMessages(prev => [...prev, { role: 'assistant', content: respuesta.reply }]);
+        const bloques = (respuesta.payload?.bloques ?? []).filter(
+          bloque => bloque.filas.length > 0 || (bloque.totales?.length ?? 0) > 0,
+        );
+        setMessages(prev => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: respuesta.reply,
+            bloques: bloques.length > 0 ? bloques : undefined,
+          },
+        ]);
         historyRef.current.push({ role: 'assistant', content: respuesta.reply });
       } catch {
         setMessages(prev => [
@@ -128,6 +157,7 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
     sessionRef.current = nuevoSessionId();
     historyRef.current = [];
     setMessages([]);
+    setVisor({ open: false, bloques: [] });
     setInput('');
   }, []);
 
@@ -138,7 +168,7 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
       {/* Botón del encabezado, al lado del usuario */}
       <button
         type="button"
-        onClick={() => setOpen(value => !value)}
+        onClick={() => (open ? cerrar() : setOpen(true))}
         title="Asistente contable"
         aria-label="Abrir asistente contable"
         aria-expanded={open}
@@ -190,7 +220,7 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
               className={`fixed inset-0 z-60 bg-black/30 ${
                 open ? 'bot-backdrop-in' : 'bot-backdrop-out'
               }`}
-              onClick={() => setOpen(false)}
+              onClick={cerrar}
             />
 
             {/* Panel desplegado al lado derecho, a altura completa */}
@@ -231,7 +261,7 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={cerrar}
                   title="Cerrar"
                   aria-label="Cerrar asistente"
                   className="p-1.5 rounded transition-colors hover:bg-white/10"
@@ -271,8 +301,26 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
                     </div>
                   ) : (
                     <div key={i} className="flex justify-start" style={{ animation: 'botMessageIn 0.18s ease-out both' }}>
-                      <div className="max-w-[90%] bg-white border border-black/5 text-gray-800 text-sm px-3.5 py-2 rounded-2xl rounded-bl-md whitespace-pre-wrap shadow-sm">
-                        {mensaje.content}
+                      <div className="max-w-[90%] min-w-0">
+                        <div className="bg-white border border-black/5 text-gray-800 text-sm px-3.5 py-2 rounded-2xl rounded-bl-md whitespace-pre-wrap shadow-sm">
+                          {mensaje.content}
+                        </div>
+                        {mensaje.bloques && mensaje.bloques.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setVisor({ open: true, bloques: mensaje.bloques ?? [] })}
+                            title="Ver los datos de esta respuesta"
+                            className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-white border border-petroleum-200 text-petroleum-900 transition-colors hover:bg-petroleum-50"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <path d="M3 9h18M3 15h18M9 3v18" />
+                            </svg>
+                            {mensaje.bloques.length === 1
+                              ? 'Ver tabla'
+                              : `Ver ${mensaje.bloques.length} tablas`}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ),
@@ -335,6 +383,13 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
                 </form>
               </div>
             </aside>
+
+            {/* Visor de datos: modal propio, por encima del panel y del fondo */}
+            <BotPayloadViewer
+              open={visor.open}
+              bloques={visor.bloques}
+              onClose={() => setVisor(prev => ({ ...prev, open: false }))}
+            />
           </>,
           document.body,
         )}

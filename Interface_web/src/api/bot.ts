@@ -26,8 +26,38 @@ export interface BotContext {
 export interface BotChatResponse {
   reply: string;
   session_id: string;
-  /** Datos estructurados de las herramientas (vacío mientras no haya function calling). */
-  payload: Record<string, unknown>;
+  /** Tablas que las herramientas dejan para el visor (vacío si no hay datos). */
+  payload: BotPayload;
+}
+
+/** Tipos de dato que el visor usa para formatear y alinear cada celda. */
+export type BotColumnaTipo = 'texto' | 'fecha' | 'moneda' | 'entero' | 'estado';
+
+export interface BotPayloadColumna {
+  key: string;
+  label: string;
+  tipo?: BotColumnaTipo;
+}
+
+export interface BotPayloadTotal {
+  label: string;
+  valor: string | number;
+  tipo?: BotColumnaTipo;
+}
+
+/** Tabla del visor. Varias pueden venir en un mismo turno (una por consulta). */
+export interface BotPayloadTabla {
+  tipo: 'tabla';
+  titulo: string;
+  subtitulo?: string;
+  columnas: BotPayloadColumna[];
+  filas: Record<string, string | number | null>[];
+  totales?: BotPayloadTotal[];
+  nota?: string;
+}
+
+export interface BotPayload {
+  bloques?: BotPayloadTabla[];
 }
 
 const BOT_API_URL = '/bot-api';

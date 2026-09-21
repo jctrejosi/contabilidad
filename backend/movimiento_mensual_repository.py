@@ -116,6 +116,38 @@ def _where_clause(
     return " WHERE " + " AND ".join(conditions)
 
 
+def _movement_totals(connection: Any, where: str) -> tuple[float, float]:
+    """Debitos y creditos de TODO el periodo filtrado, no solo de la pagina.
+
+    MOV01 guarda el neto de cada renglon en ``TVALOR`` (positivo = debito); con
+    eso el total sale de un agregado sobre el mismo ``WHERE`` de la pagina. Es el
+    equivalente del agregado que arma el modelo nuevo en PostgreSQL, para que
+    ambas herramientas reporten las mismas cifras.
+    """
+    sql = (
+        "SELECT SUM(CASE WHEN TVALOR > 0 THEN TVALOR ELSE 0 END) AS TDEBITO, "
+        "SUM(CASE WHEN TVALOR < 0 THEN -TVALOR ELSE 0 END) AS TCREDITO "
+        "FROM MOV01" + where
+    )
+    recordset = _open_recordset(connection, sql)
+    try:
+        row = next(_rows(recordset), {})
+    finally:
+        recordset.Close()
+
+    debito = row.get("TDEBITO")
+    credito = row.get("TCREDITO")
+    if debito is None or credito is None:
+        # Algunos proveedores ADO no conservan el alias de una columna calculada;
+        # ``_rows`` mantiene el orden de la proyeccion, asi que se cae a el.
+        values = list(row.values())
+        if debito is None and values:
+            debito = values[0]
+        if credito is None and len(values) > 1:
+            credito = values[1]
+    return _number(debito), _number(credito)
+
+
 def list_monthly_movements(
     cia: str,
     year: int,
@@ -175,6 +207,7 @@ def list_monthly_movements(
             rows = list(_rows(recordset))
         finally:
             recordset.Close()
+        debito_total, credito_total = _movement_totals(connection, where)
 
     has_more = len(rows) > page_size
     items = [_movement_from_row(row) for row in rows[:page_size]]
@@ -185,4 +218,7 @@ def list_monthly_movements(
         "hasMore": has_more,
         "pageDebit": sum(item["debito"] for item in items),
         "pageCredit": sum(item["credito"] for item in items),
+        "periodDebit": debito_total,
+        "periodCredit": credito_total,
+        "periodSaldo": debito_total - credito_total,
     }

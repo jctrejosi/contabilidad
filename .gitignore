@@ -8,6 +8,9 @@ __pycache__/
 /logs/
 /db/migration/staging/
 
+# Respaldos de la base (datos reales del cliente: nunca se versionan).
+/db/backups/
+
 # Base de datos Advantage y binarios del servidor (~2.6 GB)
 /db_new/data/
 /db_new/logs/

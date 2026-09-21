@@ -895,7 +895,13 @@ function startBackend() {
     "--port",
     String(CONFIG.backendPort),
   ];
-  if (options.reload) args.push("--reload");
+  if (options.reload) {
+    // Sin `--reload-dir`, uvicorn vigila el directorio de trabajo completo: en
+    // esta raíz eso incluye node_modules, los .venv y db_new (varios GB), lo que
+    // satura al watcher y hace que deje de detectar cambios. Se limita a la
+    // carpeta del backend.
+    args.push("--reload", "--reload-dir", BACKEND_DIR);
+  }
 
   // El flag fija el motor de forma explícita en el proceso del backend (gana
   // sobre `backend/.env`), para que `--db-postgres` no dependa de lo que diga el
@@ -924,7 +930,7 @@ function startIaService() {
     "--port",
     String(CONFIG.iaServicePort),
   ];
-  if (options.reload) args.push("--reload");
+  if (options.reload) args.push("--reload", "--reload-dir", IA_DIR);
 
   return startService({
     name: SERVICES.iaService,

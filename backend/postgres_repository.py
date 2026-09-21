@@ -487,14 +487,36 @@ def list_monthly_movements(
         "LEFT JOIN centros_costos cc ON cc.id = l.centro_costo_id "
         "LEFT JOIN tipos_documento td ON td.id = l.tipo_documento_id "
         "WHERE " + " AND ".join(condiciones) + " "
-        "ORDER BY d.fecha, d.id, l.numero_linea LIMIT %s"
+        "ORDER BY d.fecha, d.id, l.numero_linea LIMIT %s OFFSET %s"
+    )
+    # Totales del período completo con los mismos filtros (no solo la página).
+    # Un renglón es débito cuando ``debito - credito`` es positivo, igual que en
+    # el contrato que arma ``_movement_from_row``.
+    totales_sql = (
+        "SELECT "
+        'COALESCE(SUM(GREATEST(l.debito - l.credito, 0)), 0) AS "TDEBITO", '
+        'COALESCE(SUM(GREATEST(l.credito - l.debito, 0)), 0) AS "TCREDITO" '
+        "FROM documento_lineas l "
+        "JOIN documentos d ON d.id = l.documento_id "
+        "JOIN companias co ON co.id = l.compania_id "
+        "JOIN cuentas cu ON cu.id = l.cuenta_id "
+        "LEFT JOIN terceros t ON t.id = l.tercero_id "
+        "LEFT JOIN comprobantes cb ON cb.id = d.comprobante_id "
+        "LEFT JOIN centros_costos cc ON cc.id = l.centro_costo_id "
+        "WHERE " + " AND ".join(condiciones)
     )
     with _connect() as connection, connection.cursor() as cursor:
-        cursor.execute(sql, [*parametros, page_size + 1])
+        # ``OFFSET`` replica el ``START AT`` del repositorio de Advantage; sin él
+        # todas las páginas devolvían las mismas filas.
+        cursor.execute(sql, [*parametros, page_size + 1, (page - 1) * page_size])
         filas = _filas(cursor)
+        cursor.execute(totales_sql, parametros)
+        totales = _filas(cursor)[0]
 
     has_more = len(filas) > page_size
     items = [_movement_from_row(fila) for fila in filas[:page_size]]
+    debito_total = float(totales["TDEBITO"] or 0)
+    credito_total = float(totales["TCREDITO"] or 0)
     return {
         "items": items,
         "page": page,
@@ -502,6 +524,9 @@ def list_monthly_movements(
         "hasMore": has_more,
         "pageDebit": sum(item["debito"] for item in items),
         "pageCredit": sum(item["credito"] for item in items),
+        "periodDebit": debito_total,
+        "periodCredit": credito_total,
+        "periodSaldo": debito_total - credito_total,
     }
 
 
@@ -617,11 +642,30 @@ def list_documents(
         "LEFT JOIN tipos_documento td ON td.id = d.tipo_documento_id "
         "LEFT JOIN terceros t ON t.id = d.tercero_id "
         "WHERE " + " AND ".join(condiciones) + " "
-        "ORDER BY d.fecha DESC, d.id DESC LIMIT %s"
+        "ORDER BY d.fecha DESC, d.id DESC LIMIT %s OFFSET %s"
+    )
+    # Totales de TODOS los documentos que cumplen los filtros (no solo la
+    # página). ``valor`` se recalcula igual que en la consulta paginada: suma de
+    # débitos de las partidas del documento, así que el total es la suma de esas
+    # mismas partidas. ``COUNT(DISTINCT)`` evita contar de más por el JOIN.
+    totales_sql = (
+        'SELECT COUNT(DISTINCT d.id) AS "TDOCS", '
+        'COALESCE(SUM(l.debito), 0) AS "TVALOR" '
+        "FROM documentos d "
+        "JOIN companias co ON co.id = d.compania_id "
+        "LEFT JOIN comprobantes cb ON cb.id = d.comprobante_id "
+        "LEFT JOIN tipos_documento td ON td.id = d.tipo_documento_id "
+        "LEFT JOIN terceros t ON t.id = d.tercero_id "
+        "LEFT JOIN documento_lineas l ON l.documento_id = d.id "
+        "WHERE " + " AND ".join(condiciones)
     )
     with _connect() as connection, connection.cursor() as cursor:
-        cursor.execute(sql, [*parametros, page_size + 1])
+        # ``OFFSET`` replica el ``START AT`` del repositorio de Advantage; sin él
+        # todas las páginas devolvían las mismas filas.
+        cursor.execute(sql, [*parametros, page_size + 1, (page - 1) * page_size])
         filas = _filas(cursor)
+        cursor.execute(totales_sql, parametros)
+        totales = _filas(cursor)[0]
 
     has_more = len(filas) > page_size
     items = []
@@ -640,7 +684,14 @@ def list_documents(
             "modulo": int(fila["DMODULO"] or 0),
             "documentoAfectado": _text(fila["DDOCUM2"]),
         })
-    return {"items": items, "page": page, "pageSize": page_size, "hasMore": has_more}
+    return {
+        "items": items,
+        "page": page,
+        "pageSize": page_size,
+        "hasMore": has_more,
+        "totalDocumentos": int(totales["TDOCS"] or 0),
+        "totalValor": float(totales["TVALOR"] or 0),
+    }
 
 
 def document_movements(

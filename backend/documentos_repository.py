@@ -98,6 +98,38 @@ def _third_party_names(connection: Any, nits: set[str]) -> dict[str, str]:
     return {_text(row.get("CCODIGO")): _text(row.get("CNOMBRE")) for row in rows}
 
 
+def _document_totals(
+    connection: Any,
+    conditions: list[str],
+    parameters: list[tuple[int, int, Any]],
+) -> tuple[int, float]:
+    """Cuenta y suma TODOS los documentos filtrados, no solo la pagina.
+
+    ``CONDOCUM`` guarda una cabecera por documento y conserva el importe en
+    ``DVALOR``, de modo que el total es un agregado directo sobre las mismas
+    condiciones de la pagina. Equivale al agregado del modelo nuevo en
+    PostgreSQL, para que ambas herramientas reporten las mismas cifras.
+    """
+    sql = (
+        "SELECT COUNT(*) AS TDOCS, SUM(DVALOR) AS TVALOR FROM CONDOCUM WHERE "
+        + " AND ".join(conditions)
+    )
+    rows = _query_rows(connection, sql, parameters)
+    row = rows[0] if rows else {}
+
+    documents = row.get("TDOCS")
+    value = row.get("TVALOR")
+    if documents is None or value is None:
+        # Algunos proveedores ADO no conservan el alias de una columna calculada;
+        # ``_query_rows`` mantiene el orden de la proyeccion, asi que se cae a el.
+        values = list(row.values())
+        if documents is None and values:
+            documents = values[0]
+        if value is None and len(values) > 1:
+            value = values[1]
+    return int(_number(documents)), _number(value)
+
+
 def list_documents(
     cia: str,
     *,
@@ -182,6 +214,7 @@ def list_documents(
             connection,
             {_text(row.get("DNIT")) for row in rows[:page_size]},
         )
+        total_documents, total_value = _document_totals(connection, conditions, parameters)
 
     has_more = len(rows) > page_size
     items = []
@@ -201,7 +234,14 @@ def list_documents(
             "modulo": int(_number(row.get("DMODULO"))),
             "documentoAfectado": _text(row.get("DDOCUM2")),
         })
-    return {"items": items, "page": page, "pageSize": page_size, "hasMore": has_more}
+    return {
+        "items": items,
+        "page": page,
+        "pageSize": page_size,
+        "hasMore": has_more,
+        "totalDocumentos": total_documents,
+        "totalValor": total_value,
+    }
 
 
 def document_movements(
