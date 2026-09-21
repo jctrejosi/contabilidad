@@ -35,14 +35,26 @@ referencias `B01–B15`, `P01–P30` y `T01–T18` corresponden a los documentos
 
 ## 3. Modelo destino
 
-- **Los 15 bloqueos B01–B15 siguen abiertos** y el dictamen es **NO-GO**. En
-  particular, antes de cargar: un lote puede producir varios documentos (B01),
-  la anulación deja saldos inconsistentes (B02), no hay regeneración de IVA ni
-  retención (B03), faltan dimensiones del movimiento (B04) y el aislamiento por
-  compañía/año es incompleto (B05).
-- **Homologación incompleta**: 2.663 campos, con 406 candidatos explícitos y
-  2.257 pendientes. «No existe todavía un contrato campo a campo completo y
-  aprobado; es una condición de entrada para ejecutar la migración».
+- **Los bloqueos B01–B14 no están todos abiertos, pero tampoco cerrados.** Lo que
+  el contrato del piloto permitió verificar **corregido y probado** en el
+  esquema: B01 (lote multidocumento), B02 (anulación), B03 (IVA/retención con
+  `regenerar_acumulados`), B04 (dimensiones del movimiento), B05 (FK compuestas
+  por compañía), B06 (funciones), B07 (`idempotency_key`), B08
+  (`numero_generacion`), B09 (plantillas con sus dos cuentas y
+  `parametros_nomina`), B10 (`11_ampliaciones.sql`) y B14 (`usuario_companias`).
+- **Sigue abierto B11** —que es exactamente lo que recoge
+  [`homologacion/PENDIENTES.md`](homologacion/PENDIENTES.md) `D-FADCLI-2` y
+  `P-6`—: `terceros` no tiene nombres/apellidos separados ni fecha de nacimiento
+  ni profesión, y no existen los catálogos `CIUDAD`/`ACTIVIDA`/`VISTDOC`.
+- **B12 sigue parcialmente abierto**: `formatos_exogenos` ya incluye la vigencia
+  en su unicidad, pero no hay valores por columna ni definiciones de informe
+  (`CONINF1`), y `medio_filas` no sustituye el detalle por documento de
+  `CONMAGIT`. No afecta al piloto (exógena no está en la copia).
+- **Contrato de campos cerrado, anclado al catálogo real y sin pendientes**: los
+  888 campos del diccionario tienen clase asignada. Del piloto (467 campos en 12
+  tablas, más `CONLOTES`), 165 se conservan en `procedencia` y 56 quedan fuera del
+  núcleo. Las 42 decisiones se cerraron con datos, con `docs/` o con
+  `Interface_web/`.
 - **No copiar 1:1 los nombres del legado.** Activos, amortizables y las
   selecciones temporales pueden compartir un modelo normalizado.
 - **Preservar la historia, no renumerarla**: separar `numero` nuevo, documento
@@ -80,8 +92,10 @@ referencias `B01–B15`, `P01–P30` y `T01–T18` corresponden a los documentos
 - **Un lote aplicado y su movimiento publicado no son dos asientos.** Evitar
   cargar el libro y luego recontabilizar el mismo `MC` (regla 6.1).
 - **Períodos del libro**: el legado usa períodos `00` y `13..18` además de
-  `01..12`; el destino solo modela 1..12 y hay que clasificar el resto sin
-  descartarlo (B13).
+  `01..12`. **B13 ya está corregido en el esquema**: `documentos`, `lotes`,
+  `saldos_cuenta` y `periodos_contables` los admiten (verificado contra
+  `pg_constraint`). Falta lo semántico: documentar qué significan `13..18`
+  (¿ajustes, cierre, NIIF?) antes de reconstruir acumulados — pendiente P-5.
 
 ## 6. Idempotencia, staging y conciliación
 

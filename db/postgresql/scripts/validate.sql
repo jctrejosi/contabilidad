@@ -5,6 +5,11 @@
 -- (T01 multidocumento, T02 descuadre por documento, T09 anulación,
 --  idempotencia sin falso positivo y conciliación libro vs saldos).
 -- Ejecutar después de cargar schema + funciones + seed.
+--
+-- OJO: es de UN SOLO USO por base. El paso 2 corrige los errores que el paso 1
+-- cuenta, así que una segunda corrida sobre la misma base falla con
+-- «se esperaban 2 errores, hay 0». Para repetirlo hay que recrear el volumen:
+--   docker compose down -v && docker compose up -d --wait
 -- =====================================================================
 
 \set ON_ERROR_STOP on

@@ -652,6 +652,7 @@ CREATE TABLE documentos (
   tercero_id            BIGINT,
   concepto              CLOB,
   estado                VARCHAR(30) NOT NULL DEFAULT 'Contabilizado',
+  origen                VARCHAR(30) NOT NULL DEFAULT 'Manual',   -- 'Manual' | 'Migracion' (historia del legado)
   lote_id               BIGINT,                           -- lote de origen (trazabilidad)
   usuario_id            BIGINT NOT NULL,                  -- usuario que contabilizó
   idempotency_key       CHAR(36) NOT NULL,                -- uuid de idempotencia (doble contabilización prevenida)
@@ -1496,10 +1497,15 @@ CREATE TABLE activo_distribuciones (
 -- traduce con su mecanismo nativo (ver 02_indices.md y 03_reglas_negocio.md):
 --
 -- 1. UK parcial de documentos (un documento solo Contabilizado una vez por
---    compañía/año): índice único parcial WHERE estado = 'Contabilizado'
---    (postgresql/: documentos_contabilizado_uk en 10_indices.sql). Motores
---    sin índices parciales: columna derivada o tabla auxiliar mantenida por
---    el servicio (mapeo_motores.md §3).
+--    compañía/año, excluida la historia migrada): índice único parcial
+--    WHERE estado = 'Contabilizado' AND origen <> 'Migracion'
+--    (postgresql/: documentos_contabilizado_uk en 10_indices.sql). La
+--    exclusión responde a que en el legado (CONDOCUM) la etiqueta DDOCUM no
+--    es única: sobre 735.976 cabeceras, (anio, documento) colisiona 73.236
+--    veces, y (comprobante + tipo documental + fecha + documento + valor)
+--    todavía colisiona 29.059 veces (db/migration/07_decisiones_del_libro.md).
+--    Motores sin índices parciales: columna derivada o tabla auxiliar
+--    mantenida por el servicio (mapeo_motores.md §3).
 --
 -- 2. Índices trigram de texto: búsqueda por nombre en cuentas y terceros
 --    (postgresql/: extensión pg_trgm + índices GIN). Motores sin trigramas:

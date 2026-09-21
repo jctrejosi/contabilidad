@@ -27,7 +27,8 @@
 --
 -- LIMITACIONES ADS que condicionan este archivo:
 --   1) No hay índices PARCIALES: la UK parcial "un documento solo una vez
---      Contabilizado" se emula con la columna derivada documento_estado
+--      Contabilizado" (excluida la historia migrada, origen = 'Migracion')
+--      se emula con la columna derivada documento_estado
 --      (declarada en 01_tablas.sql, tabla 23) mantenida por el servicio o
 --      trigger del diccionario. El índice parcial del filtro de clase
 --      IVA/Retencion se traduce a índice completo (clase, cuenta_id).
@@ -173,10 +174,21 @@ CREATE UNIQUE INDEX documentos_idempotencia_uk ON documentos (idempotency_key); 
 CREATE UNIQUE INDEX documentos_compania_id_uk ON documentos (compania_id, id);  -- UK aislamiento: la exige documento_lineas (FK documento_id)
 -- UK PARCIAL del modelo emulada con columna derivada documento_estado
 -- (= documento || '|' || estado, mantenida por servicio o trigger del
--- diccionario — ver 01_tablas.sql tabla 23): un mismo documento solo puede
--- existir UNA vez en estado Contabilizado. ADS no soporta índices parciales
--- (mapeo_motores §3). Alternativa si el despliegue rechaza la columna:
--- validación transaccional en el servicio (bloqueo + conteo previo).
+-- diccionario, ver 01_tablas.sql tabla 23): un mismo documento solo puede
+-- existir UNA vez en estado Contabilizado, excluyendo la historia del legado
+-- (origen = 'Migracion'). Esa exclusión responde a la evidencia medida en el
+-- legado CONDOCUM: sobre las 735.976 cabeceras, (anio, documento) colisiona
+-- 73.236 veces, y (comprobante + tipo documental + fecha + documento + valor)
+-- todavía colisiona 29.059 veces; hay etiquetas reutilizadas por 15
+-- documentos distintos con 14 NIT distintos, y el legado tampoco distinguía
+-- esos documentos por su etiqueta. Evidencia completa en
+-- db/migration/07_decisiones_del_libro.md.
+-- ADS no soporta índices parciales (mapeo_motores §3): la emulación tendría
+-- que derivar documento_estado también de `origen` (NULL para 'Migracion',
+-- que los exime igual que el WHERE parcial de PostgreSQL); el invariante
+-- queda declarado, no lo impone el motor. Alternativa si el despliegue
+-- rechaza la columna: validación transaccional en el servicio (bloqueo +
+-- conteo previo).
 CREATE UNIQUE INDEX documentos_contabilizado_uk ON documentos (compania_id, anio, documento_estado);
 CREATE INDEX documentos_periodo_idx ON documentos (compania_id, anio, periodo, fecha);  -- libro por período (ORDER BY fecha)
 CREATE INDEX documentos_estado_idx ON documentos (compania_id, anio, estado);  -- contabilizados del período / anulación
@@ -399,11 +411,13 @@ CREATE UNIQUE INDEX activo_distribuciones_uk ON activo_distribuciones (activo_id
 --    normal de cuentas.codigo.
 -- 2) Índices únicos con columnas anulables (usuarios.email, lotes.origen_
 --    referencia, presupuesto_rubros.centro_costo_id, medio_topes.
---    concepto_id, documentos.documento_estado con documento NULL): validar
+--    concepto_id, documentos.documento_estado con documento NULL o con
+--    origen = 'Migracion'): validar
 --    con Data Architect si el motor acepta varios NULL; de lo contrario el
 --    servicio debe usar '' (vacío) como valor centinela.
--- 3) La UK parcial "documento Contabilizado único" y el filtro de clase
---    fiscal se tradujeron según mapeo_motores §3 (columna derivada /
+-- 3) La UK parcial "documento Contabilizado único" (excluida la historia
+--    migrada, origen = 'Migracion') y el filtro de clase fiscal se tradujeron
+--    según mapeo_motores §3 (columna derivada /
 --    índice completo); las alternativas documentadas en los comentarios de
 --    las tablas 23 y 24 requieren que el servicio (o el trigger del
 --    diccionario) mantenga documento_estado y, si se adopta, clase_fiscal.

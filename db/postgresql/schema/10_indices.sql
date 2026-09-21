@@ -56,8 +56,21 @@ CREATE INDEX documentos_lote_idx ON documentos (lote_id);
 -- REGLA DE NEGOCIO COMO ÍNDICE PARCIAL ÚNICO:
 -- Un documento (ej. NOM-2026-02) sólo puede estar contabilizado UNA vez.
 -- La base lo garantiza sin depender de la lógica de la aplicación.
+--
+-- La regla vale para los documentos que produce este sistema, **no para la
+-- historia migrada**, y no por comodidad: la numeración del legado no es única.
+-- Medido sobre las 735.976 cabeceras de `CONDOCUM`:
+--   · `(anio, documento)` colisiona 73.236 veces;
+--   · `DDOCUM` tampoco se salva añadiendo comprobante, tipo documental, período
+--     ni NIT: la mejor combinación (`comprobante+tipo+fecha+documento+valor`)
+--     todavía colisiona 29.059 veces, y hay etiquetas reutilizadas por 15
+--     documentos distintos con 14 NIT distintos.
+-- El legado tampoco distinguía esos documentos por su etiqueta, así que la
+-- historia entra con `origen = 'Migracion'` y queda fuera del índice; los
+-- documentos propios quedan cubiertos igual que antes. Evidencia y decisión:
+-- `db/migration/07_decisiones_del_libro.md`.
 CREATE UNIQUE INDEX documentos_contabilizado_uk ON documentos (compania_id, anio, documento)
-  WHERE estado = 'Contabilizado';
+  WHERE estado = 'Contabilizado' AND origen <> 'Migracion';
 
 -- Líneas de documento por cuenta/tercero/centro (auxiliares, acumulados)
 CREATE INDEX documento_lineas_cuenta_idx ON documento_lineas (cuenta_id);

@@ -638,6 +638,11 @@ CREATE TABLE documentos (
   tercero_id            INTEGER,
   concepto              VARCHAR(500),
   estado                VARCHAR(30)   NOT NULL DEFAULT 'Contabilizado',
+  -- Procedencia del documento. El legado no lleva documentos propios de este
+  -- modelo: su historia entra marcada como 'Migracion' y eso la exime de la
+  -- UK parcial documentos_contabilizado_uk (ver 02_indices.sql), porque la
+  -- etiqueta DDOCUM del legado no es única por año.
+  origen                VARCHAR(30)   NOT NULL DEFAULT 'Manual',
   lote_id               INTEGER,                 -- trazabilidad
   usuario_id            INTEGER       NOT NULL,  -- FK en 08_seguridad
   -- uuid → CHARACTER(36) sin default de motor (servicio genera el UUID).
@@ -653,7 +658,9 @@ CREATE TABLE documentos (
   -- Columna DERIVADA solo-ADS (no existe en PostgreSQL): emula la UK parcial
   -- "un documento solo puede estar Contabilizado una vez" (mapeo_motores §3:
   -- ADS no soporta índices parciales). Valor: documento || '|' || estado;
-  -- la mantiene el trigger del diccionario o el servicio en cada INSERT/UPDATE.
+  -- debe ser NULL cuando origen = 'Migracion' (esa historia queda fuera de la
+  -- UK parcial en PostgreSQL). La mantiene el trigger del diccionario o el
+  -- servicio en cada INSERT/UPDATE.
   -- Si documento es NULL, documento_estado es NULL (verificar semántica de
   -- NULLs del índice único en Data Architect). Ver 02_indices.sql.
   documento_estado      VARCHAR(120)
@@ -667,7 +674,8 @@ CREATE TABLE documentos (
 --   (compania_id, lote_id) → lotes(compania_id, id);
 --   usuario_id → usuarios(id); documento_original_id → documentos(id)
 -- Regla de negocio (UK parcial, emulada con documento_estado): un mismo
---   documento solo existe UNA vez en estado Contabilizado.
+--   documento solo existe UNA vez en estado Contabilizado, salvo la historia
+--   migrada (origen = 'Migracion').
 -- UK aislamiento (compania_id, id): la exige la FK compuesta de
 --   documento_lineas (documento_id) (se crea en 02_indices.sql).
 -- Volumen alto: AUTOINC de 32 bits — vigilar cerca de ~2 100 M de filas.

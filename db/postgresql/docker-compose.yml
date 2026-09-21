@@ -30,6 +30,9 @@ services:
       - ./schema/09_presupuesto.sql:/docker-entrypoint-initdb.d/09_presupuesto.sql:ro
       - ./schema/10_indices.sql:/docker-entrypoint-initdb.d/10_indices.sql:ro
       - ./schema/11_ampliaciones.sql:/docker-entrypoint-initdb.d/11_ampliaciones.sql:ro
+      - ./schema/12_migracion.sql:/docker-entrypoint-initdb.d/12_migracion.sql:ro
+      - ./schema/13_campos_contrato.sql:/docker-entrypoint-initdb.d/13_campos_contrato.sql:ro
+      - ./schema/14_indices_libro.sql:/docker-entrypoint-initdb.d/14_indices_libro.sql:ro
       - ./funciones.sql:/docker-entrypoint-initdb.d/20_funciones.sql:ro
       - ./seed.sql:/docker-entrypoint-initdb.d/30_seed.sql:ro
     healthcheck:

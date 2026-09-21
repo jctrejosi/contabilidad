@@ -131,6 +131,11 @@ CREATE TABLE documentos (
   concepto              text,
   estado                text NOT NULL DEFAULT 'Contabilizado'
                           CHECK (estado IN ('Contabilizado', 'Anulado')),
+  -- Procedencia del documento. El legado no lleva documentos propios de este
+  -- modelo: su historia entra marcada como 'Migracion', y eso la exime de la
+  -- unicidad de `documentos_contabilizado_uk` (ver 10_indices.sql), porque la
+  -- numeración del legado no es única por año.
+  origen                text NOT NULL DEFAULT 'Manual',
   lote_id               bigint,
   usuario_id            bigint NOT NULL,                     -- FK en 08_seguridad
   idempotency_key       uuid NOT NULL DEFAULT gen_random_uuid(),

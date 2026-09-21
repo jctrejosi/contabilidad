@@ -9,13 +9,13 @@ redefinen aquí**: se concretan con lo que hay disponible en el repositorio.
 
 | Fase | Trabajo | Condición de salida | Aquí |
 |---|---|---|---|
-| 0. Cerrar alcance | Empresas/años, rutas, módulos que siguen en el legado, historia requerida, ventana, RPO/RTO | Inventario firmado y decisiones registradas | **Pendiente** |
-| 1. Perfilado solo lectura | Volúmenes, claves repetidas, huérfanos, borrados, fechas, signos, escalas | Informe por fuente y lista de excepciones | **Bloqueado** sin motor ADS |
-| 2. Homologación funcional | Completar campo→destino→transformación→prueba | Ningún dato funcional sin destino aprobado | Parcial (406/2.663) |
-| 3. Esquema y servicios | Corregir B01–B15, ampliar tablas, FK, índices, auditoría | Migraciones versionadas instalables en base vacía | **Pendiente** |
+| 0. Cerrar alcance | Empresas/años, rutas, módulos que siguen en el legado, historia requerida, ventana, RPO/RTO | Inventario firmado y decisiones registradas | **Resuelto con datos** (una contabilidad activa, P-1); falta la firma del inventario |
+| 1. Perfilado solo lectura | Volúmenes, claves repetidas, huérfanos, borrados, fechas, signos, escalas | Informe por fuente y lista de excepciones | **Hecho** por lectura directa de los `.adt`, sin motor ADS |
+| 2. Homologación funcional | Completar campo→destino→transformación→prueba | Ningún dato funcional sin destino aprobado | **Cerrado**: 888/888 campos con clase, 0 pendientes |
+| 3. Esquema y servicios | Corregir B01–B14, ampliar tablas, FK, índices, auditoría | Migraciones versionadas instalables en base vacía | **Instalable y verificado**; añadidas trazabilidad y `clasificacion_corriente` |
 | 4. Ensayo del motor | PostgreSQL aislado, pruebas de lógica e integridad | Pruebas críticas en verde | No iniciada |
-| 5. Extractor y staging | Instantánea consistente con lector Advantage + manifiesto | Extracción reproducible y sin modificar el origen | **Bloqueado** (§4 del README) |
-| 6. Carga piloto | Una compañía/año representativos | Carga idempotente, rechazados explicados, conciliaciones exactas | No iniciada |
+| 5. Extractor y staging | Instantánea consistente con lector Advantage + manifiesto | Extracción reproducible y sin modificar el origen | **Hecho**: 15 CSV (9.134.136 filas) con manifiesto, idempotente |
+| 6. Carga piloto | Una compañía/año representativos | Carga idempotente, rechazados explicados, conciliaciones exactas | **Hecho con la copia disponible**: catálogos y libro (735.762 documentos, 5.025.890 renglones, 3.355 de 3.355 pares con diferencia 0,00) |
 | 7. Validación de usuarios | Recorrer opciones y acciones con los mismos casos | Aceptación documentada por proceso | No iniciada |
 | 8. Ensayo general | Todas las empresas/años, tiempos y restauración | Ventana y restauración probadas | No iniciada |
 | 9. Corte productivo | Congelar, snapshot/delta, carga final, conciliación, habilitar | Acta GO firmada | No iniciada |
@@ -51,9 +51,13 @@ movimiento:
    (no volver a publicar lo ya aplicado).
 6. Aperturas, vínculo de reversiones/anulaciones y referencias cruzadas.
 7. Reconstrucción completa de saldos/acumulados + comparación con instantáneas
-   del origen.
+   del origen. **Hecho para el libro**: la conciliación exige
+   `instantánea = libro + rechazos declarados` sólo en cuentas hoja y períodos con
+   renglones, y aborta si la diferencia no es 0,00 (ver §6).
 8. Certificados, generaciones históricas, auditoría y archivos.
 9. Consecutivos y secuencias ajustados **sin alterar la numeración histórica**.
+   **Hecho**: `consecutivos_comprobantes` quedó con 79 filas, fijadas desde
+   `max(documentos.numero)`.
 10. Restricciones/índices restantes, estadísticas y pruebas.
 
 ## 4. Contrato mínimo del cargador
@@ -103,6 +107,27 @@ Las del §9 del plan. Como mínimo, diferencia cero en:
   `/api/informes/balance-comprobacion`, útil como referencia de contraste).
 - Consecutivos, anulaciones y documentos afectados sin colisiones ni huérfanos.
 
+Para el libro, la conciliación quedó reescrita y **exacta**. Compara la
+instantánea de `CONMAE` (`saldos_cuenta`) contra el libro **sólo en cuentas hoja y
+sólo en períodos con renglones cargados**, y con los renglones rechazados sumados:
+
+    instantánea = libro + rechazos declarados
+
+Resultado de la corrida: **3.355 de 3.355 pares cuadran**, con diferencia 0,00 en
+débito y en crédito; la entidad **aborta** si no cuadra. Se reportan aparte, como
+alcance declarado y no como error, 9.825 pares (cuenta hoja, período sin libro)
+porque faltan `MOV02`..`MOV18` (P-8) y 3.248 pares en cuentas con hijas (la
+instantánea acumula el árbol entero y no son comparables). El desbalance de
+**-0,12** entre débitos y créditos del libro es del propio origen (`MOV00` neto
+-0,12, `MOV01` neto 0,00), no del cargue.
+
+**Corrección de una afirmación anterior.** Este plan y la ficha del contrato daban
+por hecho que `CONDOCUM.DVALOR` era un control de cuadre que se recalcula sumando
+`MOVxx`. Es falso: la suma con signo de las partidas es cero por partida doble.
+`DVALOR` es el **total de débitos** y coincide con la suma de `TVALOR > 0` en
+121.216 de 123.678 claves de una sola cabecera (98,0%). Ver
+[`07_decisiones_del_libro.md`](07_decisiones_del_libro.md).
+
 ## 7. Corte y reversión
 
 Reglas 10.1–10.8 del plan. Para esta instalación, dos concretas:
@@ -115,9 +140,8 @@ Reglas 10.1–10.8 del plan. Para esta instalación, dos concretas:
 
 ## 8. GO / NO-GO
 
-**Hoy: NO-GO.** Por B01–B15 abiertos, homologación incompleta (2.257 campos
-pendientes), ausencia de pruebas en motor y datos, y porque la copia disponible
-no cubre el modelo.
+**Hoy: NO-GO.** Por B11 y B12 abiertos, ausencia de pruebas de carga y porque la
+copia disponible es un fragmento del modelo.
 
 Para autorizar producción se exige lo del §11 del plan: cero bloqueos críticos,
 cada campo/opción con destino o sustitución aprobada, perfilado y reglas de
@@ -129,9 +153,22 @@ del responsable contable y del técnico.
 
 Se puede adelantar **hoy** sin la copia completa ni el motor ADS:
 
-1. Corregir B01–B15 en el esquema y en las funciones (fase 3).
-2. Completar la homologación campo a campo de las entidades del piloto.
-3. Escribir el cargador contra el contrato del §4 y probarlo con el `seed.sql`
-   de `db/postgresql/` en un entorno aislado.
-4. Preparar el perfilado (consultas de conteo, claves repetidas, huérfanos,
-   rangos) para ejecutarlo en cuanto haya motor.
+1. ~~Corregir B01–B15 en el esquema y en las funciones (fase 3).~~ **Parcial y
+   verificado**: B01–B10 están corregidos y probados desde base vacía; de B13
+   quedó corregido lo de períodos (el presupuesto sigue en 00..13, sin 14..18).
+   Quedan **B11** (identidad de terceros y catálogos), **B12** (exógena e
+   informes) y la parte funcional de B13 (cierres y consolidaciones sin
+   algoritmos en `funciones.sql`): se deciden con
+   [`homologacion/PENDIENTES.md`](homologacion/PENDIENTES.md).
+2. ~~Completar la homologación campo a campo de las entidades del piloto.~~
+   **Hecho y sin pendientes**: 888/888 campos con clase en
+   [`homologacion/reglas.py`](homologacion/reglas.py); las 42 decisiones están
+   cerradas y documentadas en [`homologacion/PENDIENTES.md`](homologacion/PENDIENTES.md).
+3. ~~Escribir el cargador contra el contrato del §4 y probarlo en un entorno
+   aislado.~~ **Hecho**: el cargador cargó catálogos y libro sobre una base sin
+   el seed, con los conteos, las sumas y la conciliación verificados. Ver
+   [`cargador/README.md`](cargador/README.md) y
+   [`07_decisiones_del_libro.md`](07_decisiones_del_libro.md).
+4. ~~Preparar el perfilado (consultas de conteo, claves repetidas, huérfanos,
+   rangos) para ejecutarlo en cuanto haya motor.~~ **Hecho**: el perfilado se
+   obtuvo por lectura directa de los `.adt`.

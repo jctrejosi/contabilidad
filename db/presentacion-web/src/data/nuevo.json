@@ -643,6 +643,7 @@
         {"nombre": "tercero_id", "tipo": "id", "requerido": false, "nota": "FK compuesta → terceros(compania_id, id)"},
         {"nombre": "concepto", "tipo": "texto", "requerido": false, "nota": "Concepto general"},
         {"nombre": "estado", "tipo": "texto", "requerido": true, "nota": "Default 'Contabilizado'; catálogo Contabilizado/Anulado"},
+        {"nombre": "origen", "tipo": "texto", "requerido": true, "nota": "Default 'Manual'; 'Migracion' marca la historia del legado y la exime de la UK parcial documentos_contabilizado_uk (ver notas)"},
         {"nombre": "lote_id", "tipo": "id", "requerido": false, "nota": "FK compuesta → lotes(compania_id, id); trazabilidad"},
         {"nombre": "usuario_id", "tipo": "id", "requerido": true, "nota": "FK → usuarios(id) (añadida en 08_seguridad)"},
         {"nombre": "idempotency_key", "tipo": "uuid", "requerido": true, "nota": "Default gen_random_uuid(); previene doble contabilización"},
@@ -662,7 +663,7 @@
         {"columnas": ["usuario_id"], "destino": "usuarios(id)", "regla": "RESTRICT"}
       ],
       "checks": ["anio BETWEEN 1900 AND 2999", "periodo IN ('00'–'18')", "estado IN ('Contabilizado', 'Anulado')"],
-      "notas": ["UK parcial documentos_contabilizado_uk: UNIQUE (compania_id, anio, documento) WHERE estado = 'Contabilizado' — un mismo documento solo puede existir UNA vez en estado Contabilizado (los anulados no bloquean)", "UK (compania_id, id): soporta FK compuesta de lote/documento (B05)", "Libro inmutable por construcción: toda corrección es anulación + nuevo asiento"],
+      "notas": ["UK parcial documentos_contabilizado_uk: UNIQUE (compania_id, anio, documento) WHERE estado = 'Contabilizado' AND origen <> 'Migracion' - un mismo documento solo puede existir UNA vez en estado Contabilizado (los anulados no bloquean); la historia migrada queda fuera porque en el legado la etiqueta DDOCUM no es única (sobre 735.976 cabeceras, (anio, documento) colisiona 73.236 veces, y con comprobante + tipo documental + fecha + documento + valor todavía 29.059), evidencia en db/migration/07_decisiones_del_libro.md", "UK (compania_id, id): soporta FK compuesta de lote/documento (B05)", "Libro inmutable por construcción: toda corrección es anulación + nuevo asiento"],
       "incluye_auditoria": true
     },
     {

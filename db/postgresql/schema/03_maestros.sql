@@ -22,6 +22,7 @@ CREATE TABLE cuentas (
   ajuste          boolean NOT NULL DEFAULT false,
   clase_iva       text,                                       -- 'Generado' | 'Descontable' | null
   clase_retencion text,                                       -- 'Renta' | 'IVA' | 'ICA' | null
+  clasificacion_corriente text,                               -- CONMAE.CTCTABASE (NO es cuenta_base_id)
   distribucion    text NOT NULL DEFAULT 'Ninguna'
                     CHECK (distribucion IN ('Ninguna', 'Fija', 'Porcentaje')),
   porcentaje      porcentaje NOT NULL DEFAULT 0,

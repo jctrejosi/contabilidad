@@ -1,5 +1,11 @@
 # Montar la base Advantage local (`ADD_CONTAB`)
 
+> **Antes de nada:** esto hace falta **sólo para que el backend opere contra el
+> legado** (leer y escribir con SQL mientras dure el corte). **La extracción de
+> datos ya no lo necesita**: los `.adt` se decodifican directamente, ver
+> [`extractor/README.md`](extractor/README.md) §3. Si el objetivo es migrar, este
+> documento se puede saltar.
+
 Guía para dejar funcionando lo que ya existe: el backend contra el diccionario
 del legado. Complementa el bloqueo descrito en [`README.md`](README.md) §4.
 

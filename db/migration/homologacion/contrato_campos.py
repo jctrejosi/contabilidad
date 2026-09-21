@@ -1,19 +1,26 @@
-"""Construye el contrato campo a campo de las tablas del legado.
+"""Construye el contrato campo → destino **de la copia real**.
 
-El plan de migración exige, como **condición de entrada**, un contrato
-«campo → destino → transformación» completo y aprobado. Hoy está repartido en
-dos documentos de `old_db/`:
+Historia de este archivo, porque explica por qué está escrito así
+-----------------------------------------------------------------
 
-- `DICCIONARIO_DEPURADO_CONTABDSI.md` — el inventario **físico**: orden, tipo,
-  longitud y decimales de cada campo de cada tabla (con la ruta del `.ADT`).
-- `HOMOLOGACION_CAMPOS.md` — el **destino**: tabla/columna propuesta, estado
-  (`Candidato explícito`, `Pendiente…`, `Sin destino definido`) y la
-  transformación anotada.
+La primera versión tomaba la lista de campos de
+`old_db/DICCIONARIO_DEPURADO_CONTABDSI.md`. Ese inventario **no describe esta
+copia**: al leer el diccionario real (`PUBLIDATA.add`) resultó que 117 campos
+existen en la copia sin figurar en el inventario, y 94 del inventario ya no
+existen. Construir el cargador sobre esa lista habría descodificado mal el libro.
 
-Este script los cruza, se queda con las tablas que existen en `ADD_CONTAB/`
-(según `extractor/informe_cabeceras.json`) y escribe `contrato_campos.json` con
-el detalle por campo más un resumen de cobertura. Es la entrada del cargador y
-el insumo para cerrar los pendientes.
+Ahora la lista de campos sale de
+[`extractor/catalogo_publidata.json`](../extractor/catalogo_publidata.json), que
+se lee del `.add` y está **verificado contra el registro físico** de las 17
+tablas con datos (`extractor/leer_diccionario.py --validar`).
+
+La **decisión** de a dónde va cada campo sigue en [`reglas.py`](reglas.py). Aquí
+sólo se aplica y se audita:
+
+- si un campo del piloto queda sin regla, el script **falla**: un campo sin
+  decisión no puede llegar al cargador;
+- se anota, por campo, si el inventario viejo lo listaba o no, para poder
+  comparar y para no perder la trazabilidad de lo que se retiró.
 
 Uso:
     python db/migration/homologacion/contrato_campos.py [--json salida.json]
@@ -30,181 +37,150 @@ HERE = Path(__file__).resolve().parent
 MIGRATION_DIR = HERE.parent
 OLD_DB = MIGRATION_DIR.parent / "old_db"
 
-DICTIONARY_DOC = OLD_DB / "DICCIONARIO_DEPURADO_CONTABDSI.md"
-HOMOLOGATION_DOC = OLD_DB / "HOMOLOGACION_CAMPOS.md"
-HEADERS_JSON = MIGRATION_DIR / "extractor" / "informe_cabeceras.json"
+sys.path.insert(0, str(HERE))
+
+import reglas  # necesita el path insertado arriba
+
+CATALOGO = MIGRATION_DIR / "extractor" / "catalogo_publidata.json"
+INVENTARIO_DOC = OLD_DB / "DICCIONARIO_DEPURADO_CONTABDSI.md"
+TABLAS_ADT = MIGRATION_DIR.parents[1] / "ADD_CONTAB"
 
 # | 1 | CTCODCIA | SHORTINT | 2 | 0 |
 FIELD_ROW = re.compile(r"^\|\s*(\d+)\s*\|\s*(\w+)\s*\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|")
-# | MOVxx | TVALOR | … | … | … |   (el nombre de tabla puede traer minúsculas o
-# corchetes angulares: MC<lote>, MOVxx)
-HOMOLOGATION_ROW = re.compile(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|(.*?)\|(.*?)\|(.*?)\|\s*$")
-
-STATE_WITH_DESTINATION = "Candidato explícito"
-STATE_WITHOUT_DESTINATION = "Sin destino definido"
 
 
-def parse_dictionary(source: Path) -> dict[str, list[dict[str, object]]]:
-    """Tabla lógica → variantes físicas, cada una con sus campos en orden."""
-    tables: dict[str, list[dict[str, object]]] = {}
-    current_table: str | None = None
-    current_path: str | None = None
-    fields: list[dict[str, object]] = []
-
-    def flush() -> None:
-        if current_table and current_path:
-            tables.setdefault(current_table, []).append({"ruta": current_path, "campos": list(fields)})
-
-    for line in source.read_text(encoding="utf-8").splitlines():
+def inventario() -> dict[str, list[str]]:
+    """Campos que listaba el inventario viejo, por tabla. Sólo para trazabilidad."""
+    tablas: dict[str, list[str]] = {}
+    actual: str | None = None
+    for line in INVENTARIO_DOC.read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):
-            flush()
-            current_table, current_path, fields = line[3:].strip().upper(), None, []
+            actual = line[3:].strip().upper()
             continue
-        if line.startswith("### "):
-            flush()
-            current_path, fields = line[4:].strip(), []
+        if line.startswith("### ") or actual is None:
             continue
         match = FIELD_ROW.match(line)
-        if match and current_path:
-            order, name, kind, length, decimals = match.groups()
-            fields.append(
-                {
-                    "orden": int(order),
-                    "campo": name,
-                    "tipo": kind,
-                    "longitud": int(length),
-                    "decimales": int(decimals),
-                }
-            )
-    flush()
-    return tables
+        if match:
+            tablas.setdefault(actual, []).append(match.group(2).upper())
+    return tablas
 
 
-def parse_homologation(source: Path) -> dict[tuple[str, str], dict[str, str]]:
-    """(tabla, campo) → destino, estado y transformación anotada."""
-    entries: dict[tuple[str, str], dict[str, str]] = {}
-    for line in source.read_text(encoding="utf-8").splitlines():
-        match = HOMOLOGATION_ROW.match(line)
-        if not match:
-            continue
-        table, field, destination, state, transformation = (part.strip() for part in match.groups())
-        entries[(table.upper(), field.upper())] = {
-            "destino": destination,
-            "estado": state,
-            "transformacion": transformation,
-        }
-    return entries
+def catalogo() -> list[dict]:
+    """Tablas y campos reales, en el orden físico del registro."""
+    contenido = json.loads(CATALOGO.read_text(encoding="utf-8"))
+    return contenido["tablas"]
 
 
-def source_tables() -> list[str]:
-    """Tablas presentes en ADD_CONTAB/, según el informe de cabeceras."""
-    if not HEADERS_JSON.is_file():
-        return []
-    rows = json.loads(HEADERS_JSON.read_text(encoding="utf-8"))
-    return sorted({Path(row["archivo"]).stem.upper() for row in rows if row["tipo"] == "tabla"})
+def archivos_adt() -> dict[str, str]:
+    """Nombre de archivo real por tabla, para poder citar la ruta."""
+    return {ruta.stem.upper(): ruta.name for ruta in TABLAS_ADT.iterdir() if ruta.suffix.lower() == ".adt"}
 
 
 def build() -> dict[str, object]:
-    dictionary = parse_dictionary(DICTIONARY_DOC)
-    homologation = parse_homologation(HOMOLOGATION_DOC)
-    tables: list[dict[str, object]] = []
-    totals = {"campos": 0, "con_destino": 0, "pendientes": 0, "sin_destino": 0, "propuesta": 0}
+    viejo = inventario()
+    archivos = archivos_adt()
+    tablas: list[dict[str, object]] = []
+    por_clase: dict[str, int] = {clase: 0 for clase in reglas.CLASES}
+    totales = {"campos": 0, "sin_regla": 0, "nuevos_en_la_copia": 0, "retirados": 0}
 
-    for name in source_tables():
-        # El diccionario agrupa variantes bajo un nombre genérico (MOV00..MOV18 →
-        # «MOVxx»), así que si no hay coincidencia exacta se prueba la forma
-        # genérica sustituyendo los dígitos por X.
-        variants = dictionary.get(name) or dictionary.get(re.sub(r"\d", "X", name)) or []
-        # Se prefiere la variante de CONTAB cuando la tabla aparece en varias carpetas.
-        chosen = next((v for v in variants if "CONTAB" in str(v["ruta"]).upper()), variants[0] if variants else None)
-        if chosen is None:
-            tables.append({"tabla": name, "variantes_fisicas": 0, "campos": [], "sin_catalogo": True})
-            continue
+    for tabla in catalogo():
+        nombre = str(tabla["tabla"]).lstrip("_").upper()
+        anterior = set(viejo.get(nombre, []))
+        # El catálogo de `MOV00`..`MOV18` agrupa variantes bajo `MOVxx`.
+        anterior |= set(viejo.get(re.sub(r"\d", "X", nombre), []))
 
-        catalog_key = next(
-            (key for key in (name, re.sub(r"\d", "X", name)) if key in dictionary), name
-        )
-        fields: list[dict[str, object]] = []
-        for field in chosen["campos"]:  # type: ignore[union-attr]
-            field_name = str(field["campo"]).upper()
-            entry = (
-                homologation.get((name, field_name))
-                or homologation.get((catalog_key, field_name))
-                or {}
-            )
-            destination = entry.get("destino", "")
-            state = entry.get("estado", "")
-            record = {
-                **field,
-                "destino": destination,
-                "estado": state or "no figura en HOMOLOGACION_CAMPOS",
-                "transformacion": entry.get("transformacion", ""),
-                "propuesta": False,
+        campos: list[dict[str, object]] = []
+        for campo in tabla["campos"]:
+            nombre_campo = str(campo["campo"]).upper()
+            regla = reglas.resolver(nombre, nombre_campo)
+            nuevo = nombre_campo not in anterior
+            if nuevo:
+                totales["nuevos_en_la_copia"] += 1
+            registro = {
+                "orden": campo["orden"],
+                "campo": nombre_campo,
+                "tipo": campo["tipo"],
+                "longitud": campo["longitud"],
+                "decimales": campo["decimales"],
+                "clase": regla.clase if regla else "sin_regla",
+                "destino": regla.destino if regla else "",
+                "transformacion": regla.transformacion if regla else "",
+                "en_inventario": not nuevo,
             }
-            if state == STATE_WITHOUT_DESTINATION:
-                totals["sin_destino"] += 1
-            elif state.startswith(STATE_WITH_DESTINATION):
-                totals["con_destino"] += 1
-            elif state:
-                totals["pendientes"] += 1
+            if regla:
+                por_clase[regla.clase] += 1
             else:
-                totals["pendientes"] += 1
-            if "PROPUESTO" in destination.upper():
-                record["propuesta"] = True
-                totals["propuesta"] += 1
-            fields.append(record)
+                totales["sin_regla"] += 1
+            campos.append(registro)
 
-        totals["campos"] += len(fields)
-        tables.append(
+        totales["campos"] += len(campos)
+        retirados = sorted(anterior - {str(c["campo"]).upper() for c in tabla["campos"]})
+        totales["retirados"] += len(retirados)
+        tablas.append(
             {
-                "tabla": name,
-                "ruta": chosen["ruta"],
-                "clave_catalogo": catalog_key,
-                "variantes_fisicas": len(variants),
-                "campos": fields,
-                "largo_registro": sum(int(f["longitud"]) for f in fields),
+                "tabla": nombre,
+                "tabla_diccionario": tabla["tabla"],
+                "ruta": archivos.get(nombre, f"{nombre}.ADT"),
+                "variantes_fisicas": 1,
+                "campos": campos,
+                "largo_registro": sum(int(c["longitud"]) for c in campos),
+                "campos_inventario": len(anterior),
+                "campos_retirados_del_inventario": retirados,
             }
         )
 
-    return {"resumen": totals, "tablas": tables}
+    return {
+        "resumen": {**totales, "por_clase": por_clase},
+        "tablas": tablas,
+        "sin_diccionario": sorted({str(t["tabla"]) for t in catalogo() if str(t["tabla"]).startswith("__")}),
+        "fuente_campos": "extractor/catalogo_publidata.json (leído de PUBLIDATA.add)",
+    }
 
 
-def report(contract: dict[str, object]) -> None:
-    tables = contract["tablas"]
-    totals = contract["resumen"]
-    present = [t for t in tables if not t.get("sin_catalogo")]
-    missing = [t["tabla"] for t in tables if t.get("sin_catalogo")]
+def report(contract: dict[str, object]) -> int:
+    tablas = contract["tablas"]
+    totales = contract["resumen"]
+    con_campos = [t for t in tablas if t["campos"]]
 
-    print(f"Tablas en ADD_CONTAB/: {len(tables)} · con catálogo de campos: {len(present)}")
-    print(
-        f"Campos: {totals['campos']} · con candidato explícito: {totals['con_destino']} · "
-        f"pendientes: {totals['pendientes']} · sin destino: {totals['sin_destino']} "
-        f"· con columna PROPUESTA: {totals['propuesta']}"
-    )
+    print(f"Fuente de campos: {contract['fuente_campos']}")
+    print(f"Tablas: {len(tablas)} · con campos: {len(con_campos)} · campos: {totales['campos']}")
+    for clase in reglas.CLASES:
+        if totales["por_clase"][clase]:
+            print(f"  {clase:<12} {totales['por_clase'][clase]:>5}")
     print()
-    print(f"{'tabla':<14} {'campos':>6} {'bytes':>7} {'destino':>8} {'pend.':>6} {'sd':>4}  variantes")
-    print("-" * 66)
-    for table in present:
-        fields = table["campos"]
-        with_destination = sum(1 for f in fields if str(f["estado"]).startswith(STATE_WITH_DESTINATION))
-        no_destination = sum(1 for f in fields if f["estado"] == STATE_WITHOUT_DESTINATION)
-        pending = len(fields) - with_destination - no_destination
-        print(
-            f"{table['tabla']:<14} {len(fields):>6} {table['largo_registro']:>7} "
-            f"{with_destination:>8} {pending:>6} {no_destination:>4}  {table['variantes_fisicas']}"
-        )
-    if missing:
-        print(f"\nSin catálogo de campos en el diccionario (solo están en el .add): {', '.join(missing)}")
+    print(f"Contra el inventario viejo: {totales['nuevos_en_la_copia']} campos nuevos en la copia · "
+          f"{totales['retirados']} retirados")
+    print()
+    print(f"{'tabla':<11}{'campos':>7}{'nuevos':>7}{'retir.':>7}{'bytes':>7}  clases")
+    print("-" * 78)
+    for tabla in con_campos:
+        conteo: dict[str, int] = {}
+        for campo in tabla["campos"]:
+            conteo[str(campo["clase"])] = conteo.get(str(campo["clase"]), 0) + 1
+        nuevos = sum(1 for c in tabla["campos"] if not c["en_inventario"])
+        detalle = " ".join(f"{clase}:{n}" for clase, n in sorted(conteo.items()))
+        print(f"{tabla['tabla']:<11}{len(tabla['campos']):>7}{nuevos:>7}"
+              f"{len(tabla['campos_retirados_del_inventario']):>7}{tabla['largo_registro']:>7}  {detalle}")
+
+    if totales["sin_regla"]:
+        print(f"\nERROR: {totales['sin_regla']} campos sin regla en reglas.py")
+        for tabla in con_campos:
+            huerfanos = [str(c["campo"]) for c in tabla["campos"] if c["clase"] == "sin_regla"]
+            if huerfanos:
+                print(f"  {tabla['tabla']}: {', '.join(huerfanos)}")
+        return 1
+    print("\nTodos los campos de la copia tienen decisión.")
+    return 0
 
 
 def main(argv: list[str]) -> int:
-    contract = build()
-    report(contract)
+    contrato = build()
+    codigo = report(contrato)
     if "--json" in argv:
-        destination = Path(argv[argv.index("--json") + 1])
-        destination.write_text(json.dumps(contract, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"\nContrato escrito en {destination}")
-    return 0
+        destino = Path(argv[argv.index("--json") + 1])
+        destino.write_text(json.dumps(contrato, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"\nContrato escrito en {destino}")
+    return codigo
 
 
 if __name__ == "__main__":

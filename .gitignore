@@ -1,7 +1,9 @@
 /ADD_CONTAB
 backend/.env
 backend/.venv/
-backend/__pycache__/
 backend/.pytest_cache/
+__pycache__/
+*.pyc
 /tmp/dev/
 /logs/
+/db/migration/staging/
