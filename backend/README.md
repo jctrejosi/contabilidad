@@ -18,11 +18,31 @@ Variables disponibles:
 También se admite `ADS_CONNECTION_STRING` cuando se prefiere suministrar la
 cadena ADO completa desde el entorno.
 
+### Motor de datos (legado o modelo nuevo)
+
+La API puede atender contra Advantage o contra PostgreSQL sin cambiar los
+endpoints: cada operación resuelve su implementación en `backend/store.py`.
+
+- `CONTABDSI_STORE`: `ads` (por defecto) o `postgres`.
+- `DATABASE_URL`: conexión de PostgreSQL; por defecto
+  `postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi` (el que levanta
+  `db/postgresql/docker-compose.yml`).
+
+Requiere el driver `psycopg` (`backend/requirements.txt`). El avance de la
+transición por módulo está en `db/migration/04_transicion_del_backend.md`; hoy
+están migrados `/api/health` y `/api/companias`.
+
 Desde la carpeta `contabilidad`:
 
 ```powershell
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8001
 ```
+
+Para entrar a la interfaz sin Advantage, `backend/.env` puede definir
+`ADS_DEV_FALLBACK=1`: en ese caso `GET /api/companias` responde con compañías de
+demostración (marcadas con `source="DEMO"`) y la pantalla de selección deja
+pasar. El resto de rutas siguen necesitando ADS. El entorno del proceso tiene
+precedencia sobre el archivo.
 
 Rutas disponibles:
 

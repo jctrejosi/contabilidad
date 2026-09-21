@@ -13,6 +13,12 @@
  *   - entorno virtual de Python + backend/requirements.txt,
  *   - node_modules de Interface_web (pnpm si existe; si no, npm).
  *
+ * También verifica el **origen del legado**: el diccionario Advantage de
+ * `ADD_CONTAB/` (`PUBLIDATA.add` + tablas `.ADT`). Advantage es software
+ * propietario (sin imagen Docker): si su proveedor OLEDB no está instalado, el
+ * script lo informa con precisión y te dice cómo habilitarlo; no puede
+ * levantarlo por sí solo.
+ *
  * Todo ocurre en esta terminal: los servicios se lanzan desacoplados y su
  * salida se escribe SOLO en `logs/<servicio>.log`, nunca se canaliza a la
  * terminal ni hereda la consola (heredar o canalizar hace que Windows abra
@@ -26,6 +32,7 @@
  *   node dev.js --no-db          omite PostgreSQL
  *   node dev.js --no-install     no instala dependencias, solo verifica
  *   node dev.js --require-db     falla si la base de datos no puede iniciar
+ *   node dev.js --require-ads    falla si Advantage (origen del legado) no está disponible
  *   node dev.js --no-reload      arranca uvicorn sin recarga automática
  *   node dev.js --keep-db        no detiene PostgreSQL al hacer --stop
  *   node dev.js --no-docker-autostart
@@ -54,6 +61,8 @@ const ROOT = __dirname;
 const BACKEND_DIR = path.join(ROOT, "backend");
 const WEB_DIR = path.join(ROOT, "Interface_web");
 const DB_DIR = path.join(ROOT, "db", "postgresql");
+const ADD_CONTAB_DIR = path.join(ROOT, "ADD_CONTAB");
+const ADS_DICTIONARY = path.join(ADD_CONTAB_DIR, "PUBLIDATA.add");
 const LOGS_DIR = path.join(ROOT, "logs");
 const PIDS_FILE = path.join(LOGS_DIR, ".pids.json");
 
@@ -77,6 +86,14 @@ const BACKEND_IMPORTS = ["fastapi", "uvicorn", "openpyxl", "multipart", "reportl
 );
 
 const SERVICES = { backend: "backend", web: "web", db: "db" };
+
+// Proveedor OLEDB que usa el backend para hablar con Advantage. Sin él no se
+// pueden abrir las tablas .ADT del legado, aunque los datos estén en el repo.
+const ADS_PROVIDER_KEYS = [
+  "HKLM\\SOFTWARE\\Classes\\Advantage.OLEDB.1",
+  "HKLM\\SOFTWARE\\Classes\\Wow6432Node\\Advantage.OLEDB.1",
+];
+const ADS_CLIENT_DLLS = ["adsloc64.dll", "adsloc32.dll", "ace64.dll", "ace32.dll"];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Salida en terminal
@@ -443,6 +460,130 @@ function verifyFrontendEnvironment() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Base de datos · Advantage (origen del legado)
+// ─────────────────────────────────────────────────────────────────────────────
+
+let adsReady = false;
+let adsDictionary = null;
+
+/** Lee backend/.env (KEY=VALUE) sin tocar el entorno del proceso. */
+function readLocalEnv() {
+  const envPath = path.join(BACKEND_DIR, ".env");
+  const values = {};
+  if (!fs.existsSync(envPath)) return values;
+
+  const contenido = fs.readFileSync(envPath, "utf8").replace(/^\uFEFF/, "");
+  for (const rawLine of contenido.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || !line.includes("=")) continue;
+    const index = line.indexOf("=");
+    const key = line.slice(0, index).trim();
+    let value = line.slice(index + 1).trim();
+    const first = value[0];
+    if (value.length >= 2 && (first === '"' || first === "'") && first === value[value.length - 1]) {
+      value = value.slice(1, -1);
+    }
+    values[key] = value;
+  }
+  return values;
+}
+
+/** ¿Está registrado el proveedor OLEDB de Advantage (lo que exige el backend)? */
+function adsProviderRegistered() {
+  if (!IS_WIN) return false;
+  return ADS_PROVIDER_KEYS.some(
+    (key) => spawnSync("reg", ["query", key], { stdio: "ignore", windowsHide: true }).status === 0,
+  );
+}
+
+/** DLLs del cliente Advantage (ACE / Local Server) visibles en el PATH. */
+function adsClientDlls() {
+  if (!IS_WIN) return [];
+  return ADS_CLIENT_DLLS.filter(
+    (dll) => spawnSync("where", [dll], { stdio: "ignore", windowsHide: true }).status === 0,
+  );
+}
+
+/** Comprueba la conexión real reutilizando el repositorio del backend. */
+function probeAdvantage(pythonPath) {
+  const result = spawnSync(
+    pythonPath,
+    ["-c", "from backend.ads_repository import check_connection; check_connection()"],
+    { cwd: ROOT, encoding: "utf8", windowsHide: true, timeout: 90000 },
+  );
+  const output = `${result.stdout || ""}${result.stderr || ""}`.trim();
+  return { ok: result.status === 0, output };
+}
+
+/**
+ * Advantage es el motor de ORIGEN del legado: las tablas viven en `ADD_CONTAB/`.
+ * No es como PostgreSQL: no hay contenedor ni servicio que arrancar, y el motor
+ * es propietario. Aquí solo se puede verificar y orientar.
+ */
+function ensureAdvantage(options) {
+  step("Base de datos · Advantage (origen del legado)");
+
+  const env = readLocalEnv();
+  const configured = (env.ADS_DATA_SOURCE || "").trim();
+  adsDictionary = configured || (fs.existsSync(ADS_DICTIONARY) ? ADS_DICTIONARY : null);
+
+  if (fs.existsSync(ADS_DICTIONARY)) {
+    const files = fs.readdirSync(ADD_CONTAB_DIR).length;
+    info(`Diccionario del legado detectado: ${rel(ADS_DICTIONARY)} (${files} archivos en ${rel(ADD_CONTAB_DIR)}/).`);
+  }
+
+  if (!adsProviderRegistered()) {
+    warn("El motor/cliente de Advantage no está instalado en este equipo.");
+    warn("Sin el proveedor OLEDB `Advantage.OLEDB.1` nadie puede abrir las tablas .ADT,");
+    warn("aunque los datos del legado sí estén en el repo.");
+    if (adsDictionary) {
+      info(`Al instalarlo, configura en backend/.env:`);
+      info(`   ADS_DATA_SOURCE=${adsDictionary}`);
+      info("   ADS_SERVER_TYPE=ADS_LOCAL_SERVER  (lectura local del diccionario)");
+      info("   ADS_USER_ID=AdsSys  y  ADS_PASSWORD=Pubdata  (diccionario Publidata; visto en ecommerce)");
+    }
+    warn("Instala Advantage Database Server (incluye el proveedor OLEDB) o el cliente/ACE redistribuible.");
+    if (options.requireAds) throw new Error("Advantage no está disponible (--require-ads).");
+    return false;
+  }
+  ok("Proveedor OLEDB de Advantage registrado.");
+
+  const dlls = adsClientDlls();
+  if (dlls.length) ok(`Cliente Advantage en el PATH: ${dlls.join(", ")}`);
+
+  if (!adsDictionary || !fs.existsSync(adsDictionary)) {
+    warn("No se encontró el diccionario .add; define ADS_DATA_SOURCE en backend/.env.");
+    if (fs.existsSync(ADS_DICTIONARY)) info(`Ruta detectada: ${ADS_DICTIONARY}`);
+    if (options.requireAds) throw new Error("Falta ADS_DATA_SOURCE (--require-ads).");
+    return false;
+  }
+  ok(`Diccionario: ${adsDictionary}`);
+
+  const pythonPath = venvPython();
+  if (!fs.existsSync(pythonPath)) {
+    warn("No hay entorno virtual del backend, así que no se puede probar la conexión.");
+    return false;
+  }
+
+  info("Probando la conexión con Advantage…");
+  const probe = probeAdvantage(pythonPath);
+  if (!probe.ok) {
+    warn("No se pudo conectar con Advantage.");
+    if (probe.output) {
+      const detail = probe.output.split("\n").filter(Boolean).slice(-2).join(" / ");
+      info(detail);
+    }
+    info("Revisa ADS_DATA_SOURCE, ADS_SERVER_TYPE y las credenciales del diccionario.");
+    if (options.requireAds) throw new Error("Advantage no responde (--require-ads).");
+    return false;
+  }
+
+  adsReady = true;
+  ok("Advantage listo (origen del legado).");
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Base de datos · PostgreSQL de referencia
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -497,6 +638,36 @@ function compose(args, fd, timeout) {
     windowsHide: true,
     timeout,
   });
+}
+
+/**
+ * `docker info` responde por el motor de Windows aunque falte el de Linux, que
+ * es el que necesitan los contenedores de este proyecto. Cuando `compose` falla,
+ * se busca la causa en el propio log para no dejar al usuario adivinando.
+ */
+function diagnoseComposeFailure(logPath) {
+  const hints = [
+    {
+      pattern: /docker_engine_linux|dockerDesktopLinuxEngine/i,
+      hint: "El motor de Linux de Docker Desktop está detenido: reinicia Docker Desktop y vuelve a ejecutar.",
+    },
+    {
+      pattern: /cannot find the file specified|Is the docker daemon running/i,
+      hint: "El daemon de Docker no está disponible: inicia Docker Desktop.",
+    },
+    {
+      pattern: /port is already allocated/i,
+      hint: `El puerto ${CONFIG.dbPort} ya está ocupado por otro contenedor; libéralo o cambia DB_PORT.`,
+    },
+  ];
+
+  try {
+    const tail = fs.readFileSync(logPath, "utf8").split("\n").slice(-40).join("\n");
+    const found = hints.find(({ pattern }) => pattern.test(tail));
+    return found ? found.hint : null;
+  } catch {
+    return null;
+  }
 }
 
 async function ensureDatabase(options) {
@@ -562,6 +733,8 @@ async function ensureDatabase(options) {
 
   if (!healthy) {
     warn(`No se pudo levantar el contenedor de PostgreSQL (detalle en ${rel(logPath)}).`);
+    const hint = diagnoseComposeFailure(logPath);
+    if (hint) info(hint);
     if (options.requireDb) throw new Error("No se pudo levantar la base de datos (--require-db).");
     return false;
   }
@@ -701,6 +874,13 @@ function printUrls() {
   log(`   Interfaz web   ${c.cyan(web)}`);
   log(`   API backend    ${c.cyan(backend)} ${c.dim("(/docs para Swagger)")}`);
   log(`   PostgreSQL     ${dbStarted ? c.cyan(database) : c.yellow("no iniciado")}`);
+  log(
+    `   Advantage      ${
+      adsReady
+        ? c.cyan(`${rel(adsDictionary)} · origen del legado`)
+        : c.yellow("no disponible (motor ADS no instalado)")
+    }`,
+  );
   log("");
   log(`   Logs           ${rel(LOGS_DIR)}/ ${c.dim(`(${logNames})`)}`);
   log(c.dim("   Para detener todo: node dev.js --stop"));
@@ -788,7 +968,20 @@ async function runChecks() {
     pending.push("Docker daemon");
   }
 
+  if (!IS_WIN) {
+    log(`   Advantage      ${c.dim("solo Windows")}`);
+  } else if (adsProviderRegistered()) {
+    log(`   Advantage      ${c.green("proveedor OLEDB registrado")}`);
+  } else {
+    log(`   Advantage      ${c.yellow("motor no instalado")}`);
+    pending.push("Advantage (proveedor OLEDB)");
+  }
+  if (fs.existsSync(ADS_DICTIONARY)) {
+    log(`   Diccionario    ${rel(ADS_DICTIONARY)}`);
+  }
+
   log("");
+
   if (pending.length === 0) {
     ok("Todo listo para `node dev.js`.");
     process.exitCode = 0;
@@ -809,6 +1002,7 @@ function printHelp() {
   log("");
   log("   --no-db                      omite PostgreSQL");
   log("   --require-db                 falla si la base de datos no puede iniciar");
+  log("   --require-ads                falla si Advantage (origen) no está disponible");
   log("   --no-install                 no instala dependencias");
   log("   --no-reload                  uvicorn sin recarga automática");
   log("   --keep-db                    no detiene PostgreSQL al hacer --stop");
@@ -834,6 +1028,7 @@ function parseArgs(argv) {
     db: true,
     install: true,
     requireDb: false,
+    requireAds: false,
     reload: true,
     keepDb: false,
     dockerAutostart: true,
@@ -859,6 +1054,9 @@ function parseArgs(argv) {
         break;
       case "--require-db":
         parsed.requireDb = true;
+        break;
+      case "--require-ads":
+        parsed.requireAds = true;
         break;
       case "--no-reload":
         parsed.reload = false;
@@ -904,6 +1102,8 @@ async function main() {
     verifyBackendEnvironment();
     verifyFrontendEnvironment();
   }
+
+  ensureAdvantage(options);
 
   if (options.db) {
     await ensureDatabase(options);

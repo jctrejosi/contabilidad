@@ -1,0 +1,386 @@
+[
+  {
+    "archivo": "CATALOGO2.adi",
+    "bytes": 4608,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CATALOGO2.adm",
+    "bytes": 2304,
+    "tipo": "memo",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "00 00 00 40 00 00 00 40 00 00 02 00 00 00 00 00"
+  },
+  {
+    "archivo": "CATALOGO2.adt",
+    "bytes": 3800,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "COCENTRO.adi",
+    "bytes": 193411584,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "COCENTRO.ADT",
+    "bytes": 851449800,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONCECOS.adi",
+    "bytes": 12288,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONCECOS.ADT",
+    "bytes": 34724,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONCTR.ADT",
+    "bytes": 17227,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONDOCUM.adi",
+    "bytes": 39110656,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONDOCUM.ADT",
+    "bytes": 93471752,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONEMP.adi",
+    "bytes": 4608,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONEMP.ADT",
+    "bytes": 3717,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONLOTES.adi",
+    "bytes": 12288,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONLOTES.adt",
+    "bytes": 3800,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONMAE.adi",
+    "bytes": 174080,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONMAE.ADT",
+    "bytes": 2049761,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONMOVI.adi",
+    "bytes": 4608,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONMOVI.ADT",
+    "bytes": 3600,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONPUC.adi",
+    "bytes": 50176,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONPUC.ADT",
+    "bytes": 153714,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONTERCE.adi",
+    "bytes": 27894272,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONTERCE.adt",
+    "bytes": 211354704,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "CONTICOM.adi",
+    "bytes": 5632,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "CONTICOM.ADT",
+    "bytes": 3700,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "FADCLI.adi",
+    "bytes": 12958208,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "FADCLI.adm",
+    "bytes": 2304,
+    "tipo": "memo",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "00 00 00 10 00 00 01 00 00 00 02 00 00 00 00 00"
+  },
+  {
+    "archivo": "FADCLI.ADT",
+    "bytes": 168621442,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.ADD",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "MOV00.adi",
+    "bytes": 63905280,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "MOV00.ADT",
+    "bytes": 223757664,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "MOV01.adi",
+    "bytes": 375790592,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "mov01.ADT",
+    "bytes": 1245496203,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "MOVICON.prg",
+    "bytes": 307768,
+    "tipo": "fuente",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "23 49 4e 43 4c 55 44 45 20 22 46 49 56 45 57 49"
+  },
+  {
+    "archivo": "MOVICONN.prg",
+    "bytes": 159065,
+    "tipo": "fuente",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "23 49 4e 43 4c 55 44 45 20 22 46 49 56 45 57 49"
+  },
+  {
+    "archivo": "P_A_100_50.adi",
+    "bytes": 4608,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "P_A_100_50.adm",
+    "bytes": 2304,
+    "tipo": "memo",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "00 00 00 40 00 00 00 40 00 00 02 00 00 00 00 00"
+  },
+  {
+    "archivo": "P_A_100_50.adt",
+    "bytes": 3800,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "P_A_102_50.adi",
+    "bytes": 4608,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "P_A_102_50.adm",
+    "bytes": 2304,
+    "tipo": "memo",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "00 00 00 40 00 00 00 40 00 00 02 00 00 00 00 00"
+  },
+  {
+    "archivo": "P_A_102_50.adt",
+    "bytes": 3800,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "PUBLIDATA.add",
+    "bytes": 1026096,
+    "tipo": "diccionario",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "41 44 53 20 44 61 74 61 20 44 69 63 74 69 6f 6e"
+  },
+  {
+    "archivo": "PUBLIDATA.ai",
+    "bytes": 186368,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "01 00 00 00 00 00 00 00 02 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "PUBLIDATA.am",
+    "bytes": 12076,
+    "tipo": "memo",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "00 00 04 08 00 00 00 08 02 00 01 00 00 00 00 00"
+  },
+  {
+    "archivo": "TIDEAN.adi",
+    "bytes": 7680,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "TIDEAN.ADT",
+    "bytes": 2104,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "TIDSAL.adi",
+    "bytes": 4440576,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "TIDSAL.adt",
+    "bytes": 43074145,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.add",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  },
+  {
+    "archivo": "VISDOCUM.adi",
+    "bytes": 4608,
+    "tipo": "indice",
+    "firma_ok": false,
+    "diccionario": null,
+    "cabecera": "02 00 00 00 00 00 00 00 01 00 00 00 80 00 60 20"
+  },
+  {
+    "archivo": "VISDOCUM.ADT",
+    "bytes": 102909,
+    "tipo": "tabla",
+    "firma_ok": true,
+    "diccionario": "PUBLIDATA.ADD",
+    "cabecera": "41 64 76 61 6e 74 61 67 65 20 54 61 62 6c 65 00"
+  }
+]

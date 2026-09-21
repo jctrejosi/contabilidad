@@ -89,6 +89,15 @@ def _read_env_file(path: Path) -> dict[str, str]:
     return values
 
 
+def read_local_env() -> dict[str, str]:
+    """Expone los valores de ``backend/.env`` sin tocar ``os.environ``.
+
+    Permite a la capa HTTP consultar banderas locales con la misma precedencia
+    que ADS (el entorno del proceso manda sobre el archivo).
+    """
+    return _read_env_file(DEFAULT_ENV_FILE)
+
+
 def load_connection_string(
     env_path: Path | None = None,
     environ: dict[str, str] | None = None,

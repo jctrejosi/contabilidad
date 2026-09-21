@@ -32,6 +32,14 @@ db/
     01_tablas.sql           #   las 60 tablas en DDL de diccionario ADS
     02_indices.sql          #   índices del diccionario (PK, UK, consulta)
   old_db/                   # Plan de migración desde el legado (fuente de hallazgos B01–B15)
+  migration/                # Plan de migración DE DATOS (evaluación de la fuente y ejecución)
+     README.md              #   veredicto, índice y bloqueo del motor Advantage
+     01_inventario_fuente.md       #   qué trae y qué no trae ADD_CONTAB
+     02_consideraciones_previas.md #   qué resolver antes de cargar un solo registro
+     03_plan_de_carga.md           #   fases, orden, contrato del cargador, corte
+     04_transicion_del_backend.md  #   de Advantage a PostgreSQL en los servicios
+     05_montar_advantage_local.md  #   qué instalar y cómo abrir el diccionario en local
+     extractor/                    #   inspector de cabeceras y contrato del extractor
 ```
 
 > ⚠️ **`old_db/` es contexto congelado del legado**: no se edita. Sus referencias
@@ -39,6 +47,10 @@ db/
 > original (antes de la reorganización); hoy esos archivos viven en
 > `db/postgresql/`. Si un documento necesita la ruta actual, se anota aquí, no
 > se modifica el documento fuente.
+>
+> **`migration/` es el plan operativo de datos**: traduce `old_db/` al trabajo de
+> carga y evalúa la fuente realmente disponible (`ADD_CONTAB/`). Las
+> correcciones y ampliaciones se escriben allí, no en `old_db/`.
 
 ## Flujo de diseño (cómo se usa esto)
 

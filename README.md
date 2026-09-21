@@ -9,7 +9,8 @@ moverse al esquema PostgreSQL definido en `db`.
 
 - `Interface_web`: aplicación React generada inicialmente en Figma Make.
 - `backend`: API Python/FastAPI y acceso ADO a Advantage Data Server.
-- `db`: diseño del futuro esquema PostgreSQL.
+- `db`: diseño del futuro esquema PostgreSQL, el diccionario de origen
+  Advantage y el plan de migración de datos (`db/migration`).
 - `docs`: documentación funcional y técnica de cada función migrada.
 
 ## Función implementada: Plan de cuentas

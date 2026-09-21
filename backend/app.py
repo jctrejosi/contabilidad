@@ -15,17 +15,17 @@ from typing import Literal
 from fastapi import FastAPI, File, HTTPException, Path, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from . import store
 from .ads_repository import (
     AccountAlreadyExists,
     AccountNotFound,
     AdsConfigurationError,
     CompanyNotFound,
-    check_connection,
     create_account,
-    list_companies,
     list_accounts,
     update_account,
 )
+from .postgres_repository import PostgresConfigurationError
 from .terceros_repository import (
     ThirdPartyAlreadyExists,
     ThirdPartyValidationError,
@@ -275,32 +275,69 @@ def _service_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, AdsConfigurationError):
         logger.error("Configuracion ADS no disponible: %s", exc)
+        detail = "No fue posible comunicarse con Advantage Data Server."
+    elif isinstance(exc, PostgresConfigurationError):
+        logger.error("Configuracion PostgreSQL no disponible: %s", exc)
+        detail = "No fue posible comunicarse con PostgreSQL."
     else:
-        logger.exception("Fallo al operar con Advantage Data Server")
+        logger.exception("Fallo al operar con el motor de datos")
+        detail = "No fue posible comunicarse con Advantage Data Server."
     return HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="No fue posible comunicarse con Advantage Data Server.",
+        detail=detail,
     )
 
 
-@app.get("/api/health", summary="Validar conexión con Advantage")
+@app.get("/api/health", summary="Validar la conexión con el motor de datos")
 def health() -> dict[str, str]:
-    """Comprueba que ADO puede abrir ADS y leer la tabla CONMAE."""
+    """Comprueba el motor activo: Advantage (CONMAE) o PostgreSQL (companias)."""
     try:
-        check_connection()
+        store.check_connection()
     except Exception as exc:
         raise _service_error(exc) from exc
-    return {"status": "ok", "database": "Advantage Data Server", "table": "CONMAE"}
+    return {
+        "status": "ok",
+        "store": store.current_store(),
+        "database": store.store_label(),
+        "table": "companias" if store.is_postgres() else "CONMAE",
+    }
+
+
+# Compañías de ejemplo para poder entrar a la interfaz cuando Advantage no está
+# configurado (ver ADS_DEV_FALLBACK). No sustituyen a CONEMP de forma silenciosa:
+# la respuesta se marca con source="DEMO" y queda un aviso en el log.
+DEMO_COMPANIES: tuple[dict[str, object], ...] = (
+    {"codigo": "001", "nombre": "Compañía Demo S.A.S.", "nit": "900.123.456-7", "habilitada": True},
+    {"codigo": "002", "nombre": "Inversiones Beta Ltda.", "nit": "800.200.300-1", "habilitada": False},
+    {"codigo": "003", "nombre": "Comercial Gamma S.A.", "nit": "830.400.500-2", "habilitada": True},
+    {"codigo": "004", "nombre": "Servicios Delta S.A.S.", "nit": "901.600.700-3", "habilitada": False},
+)
+
+
+def _dev_fallback_enabled() -> bool:
+    """Bandera explícita (entorno o backend/.env) para trabajar sin Advantage."""
+    values = store.configuration()
+    return values.get("ADS_DEV_FALLBACK", "").strip().lower() in {"1", "true", "yes", "si", "sí"}
 
 
 @app.get("/api/companias", summary="Listar compañías disponibles")
 def companies() -> dict[str, object]:
-    """Devuelve CONEMP para que el usuario elija la compañía de la sesión."""
+    """Compañías del motor activo para elegir la de la sesión.
+
+    Con ``CONTABDSI_STORE=postgres`` salen de ``companias``; con Advantage, de
+    ``CONEMP``. El respaldo ``ADS_DEV_FALLBACK`` solo aplica al motor heredado.
+    """
     try:
-        items = list_companies()
+        items = store.list_companies()
     except Exception as exc:
+        if not store.is_postgres() and _dev_fallback_enabled():
+            logger.warning(
+                "ADS no disponible; /api/companias responde con companias de demostracion "
+                "(ADS_DEV_FALLBACK activo)."
+            )
+            return {"items": list(DEMO_COMPANIES), "count": len(DEMO_COMPANIES), "source": "DEMO"}
         raise _service_error(exc) from exc
-    return {"items": items, "count": len(items), "source": "CONEMP"}
+    return {"items": items, "count": len(items), "source": store.source_label()}
 
 
 @app.get("/api/terceros", summary="Consultar el directorio global de terceros")

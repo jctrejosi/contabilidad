@@ -3,7 +3,8 @@ import type { CompaniaSesion } from '../types';
 interface CompaniesResponse {
   items: CompaniaSesion[];
   count: number;
-  source: 'CONEMP';
+  /** Origen informado por el backend: CONEMP (Advantage), companias (PostgreSQL) o DEMO. */
+  source: 'CONEMP' | 'companias' | 'DEMO';
 }
 
 let requestInProgress: Promise<CompaniaSesion[]> | null = null;
