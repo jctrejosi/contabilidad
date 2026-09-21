@@ -264,6 +264,9 @@ BEGIN
     END IF;
 
     -- Crear documento del grupo
+    -- `documentos.fecha` es la fecha DEL DOCUMENTO (por ella filtran /api/documentos
+    -- y la migración la tomó de CONDOCUM.DFECHA); el `lotes.fecha` es la de captura
+    -- y no debe imponerse al libro recién creado.
     INSERT INTO documentos
       (compania_id, anio, comprobante_id, numero, documento, tipo_documento_id,
        fecha, fecha_documento, periodo, tercero_id, concepto, estado, lote_id, usuario_id)
@@ -273,7 +276,7 @@ BEGIN
        (SELECT tipo_documento_id FROM lote_lineas WHERE lote_id = p_lote_id
          AND documento = v_grupo.documento AND fecha = v_grupo.fecha
          AND tipo_documento_id IS NOT NULL LIMIT 1),
-       v_lote.fecha, v_grupo.fecha, v_lote.periodo,
+       v_grupo.fecha, v_grupo.fecha, v_lote.periodo,
        (SELECT tercero_id FROM lote_lineas WHERE lote_id = p_lote_id AND tercero_id IS NOT NULL LIMIT 1),
        v_lote.nombre, 'Contabilizado', p_lote_id, p_usuario_id)
     RETURNING id INTO v_documento_id;

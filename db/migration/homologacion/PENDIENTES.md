@@ -72,14 +72,14 @@ clasificado mal por el nombre del campo:
 | **D-CONDOCUM-1/2** | `DDOCUMI`, `DDOCUM2` | pendientes | Conservados: no aparecen en `docs/` ni en la interfaz | Búsqueda en la interfaz sin coincidencias |
 | **D-CONEMP-1** | `REASIGNA` | pendiente | Conservado: la interfaz no expone ninguna reasignación | `src/data/configCompanias.ts` |
 | **D-CONPUC-1** | `MFLAG` | pendiente | Conservado: sin semántica documentada | `docs/PLAN_CUENTAS_ADS.md` |
-| **D-CONCTR-3** | `CTCOMNOM1..3` / `CTDOCNOM1..3` | pendiente (orden) | Se cargan en `parametros_nomina`; el orden queda por confirmar **cuando exista la pantalla de nómina** | `interface: Nomina.tsx` (sin conexión aún) |
+| **D-CONCTR-5** | `CTCOMNOM1..3` / `CTDOCNOM1..3` | pendiente (orden) | Se cargan en `parametros_nomina`; el orden queda por confirmar **cuando exista la pantalla de nómina** | `interface: Nomina.tsx` (sin conexión aún) |
 
 ### Cerradas por los datos
 
 | ID | Campo(s) | Cómo se cerró | Evidencia |
 |---|---|---|---|
 | **D-MOV-1** | `TESTADO`, `TCV`, `TABMNIT`, `TINCON`, `TSUBCTA` | **Vacíos en las 5.048.937 filas** → descartados | Conteo sobre los CSV de staging |
-| **D-MOV-1** | `TSALDO` | Tiene valor en **todas** las filas → no se carga, **se recalcula y se concilia** | ídem |
+| **D-MOV-1** | `TSALDO` | Tiene valor en **todas** las filas → no se carga como columna; el valor crudo se conserva en `legado`. **No reconciliable** con esta copia | Medido: acumular `TVALOR` no lo reproduce (0,1 % en orden físico, 1,1 % por fecha) y la definición del legado no está en el material disponible. [`../09_conciliacion_tsaldo.md`](../09_conciliacion_tsaldo.md) |
 | **D-CONMAE-6** | bloque NIIF (39 campos) | **No existe en la copia** → `CONMAE` tiene 74 campos, no 127 | Diccionario real |
 | **D-CONMAE-8** | `MSALDO` vs `MACMDEB00` | Cargar el período `00`; `MSALDO` sólo si `00` viene vacío | `CONMAE` sólo declara meses `01..12` |
 | **D-CONLOTES-1** | `TINCON` | Se cae con D-MOV-1 (y la tabla está vacía) | Volumetría |
@@ -130,5 +130,6 @@ Nada del contrato de campos. Lo que queda es **alcance**, no decisión:
 | Tema | Estado |
 |---|---|
 | `MOV02`..`MOV18` (P-8) | La copia es un fragmento; los meses 05..08 de 2025 no están. Se carga lo que hay y se declara |
-| Orden de `CTCOMNOMn` (D-CONCTR-3) | Se confirmará cuando la pantalla de Nómina tenga backend |
+| Renglones sin comprobante en el origen (304) | Su `TCOMPR` viene vacío: sus **61.162.669,56** de débito y crédito no se cargan porque `documentos.comprobante_id` es obligatorio y el comprobante **no existe en la copia**. No se inventa; hay que decidir qué comprobante asignarles o recuperarlos del cliente. [`../09_conciliacion_tsaldo.md`](../09_conciliacion_tsaldo.md) §3 |
+| Orden de `CTCOMNOMn` (D-CONCTR-5) | Se confirmará cuando la pantalla de Nómina tenga backend |
 | Conciliación contra el motor | Opcional: `export_ads_to_csv.ps1` en un equipo con el driver |

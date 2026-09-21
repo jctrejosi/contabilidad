@@ -132,6 +132,29 @@ def build_trial_balance(
         finally:
             account_rs.Close()
 
+    return _assemble_report(
+        company, companies[0], year, month_from, month_to, level, include_zero, source_rows,
+    )
+
+
+def _assemble_report(
+    company: int,
+    company_row: dict[str, Any],
+    year: int,
+    month_from: int,
+    month_to: int,
+    level: int,
+    include_zero: bool,
+    source_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Arma el JSON del balance a partir de las filas de acumulados.
+
+    **Es el punto compartido por los dos motores.** Tanto Advantage (que lee
+    ``CONMAE``) como PostgreSQL (que lee ``saldos_cuenta``, el mismo origen
+    volcado al modelo nuevo) entregan filas con los nombres físicos del legado
+    ``MSALDO``/``MACMDEBxx``/``MACMCREyy``; aquí se aplican las reglas del
+    informe Harbour una sola vez, de modo que el contrato no pueda divergir.
+    """
     items: list[dict[str, Any]] = []
     class_totals: list[tuple[float, float, float, float]] = []
     for row in source_rows:
@@ -163,7 +186,6 @@ def build_trial_balance(
     total_debit = round(sum(values[1] for values in class_totals), 2)
     total_credit = round(sum(values[2] for values in class_totals), 2)
     total_balance = round(sum(values[3] for values in class_totals), 2)
-    company_row = companies[0]
     return {
         "compania": {
             "codigo": f"{company:03d}",

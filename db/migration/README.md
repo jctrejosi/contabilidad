@@ -39,6 +39,11 @@ anteriores, impuestos, seguridad, activos, exógena, reembolsos, presupuesto…
 | [`05_montar_advantage_local.md`](05_montar_advantage_local.md) | Qué instalar (proveedor 11.1 de 64 bits) y cómo abrir `ADD_CONTAB` en local |
 | [`06_referencia_campos.md`](06_referencia_campos.md) | **Referencia campo a campo Advantage → PostgreSQL**, generada desde el contrato |
 | [`07_decisiones_del_libro.md`](07_decisiones_del_libro.md) | **Registro de las decisiones del libro** (`CONDOCUM` + `MOVxx`): evidencia medida, alternativas descartadas y correcciones a lo que suponía el plan |
+| [`08_plan_para_culminar.md`](08_plan_para_culminar.md) | **Plan para culminar** (etapas A–G), con criterio de salida y estado de cada una |
+| [`09_conciliacion_tsaldo.md`](09_conciliacion_tsaldo.md) | Conciliación por renglón con `TSALDO` y la cabecera sintética (etapa B) |
+| [`10_balance_comprobacion.md`](10_balance_comprobacion.md) | Balance de comprobación contra PostgreSQL: fuente y ensamblado compartido (etapa C5) |
+| [`11_lotes_y_importaciones.md`](11_lotes_y_importaciones.md) | Lectura de lotes e importaciones y el mapeo `CONMOVI`/`CONLOTES` (etapa C6) |
+| [`12_escrituras.md`](12_escrituras.md) | **Escrituras contra PostgreSQL** y sus decisiones (etapa D) |
 | [`cargador/`](cargador/README.md) | **Cargador del staging a PostgreSQL**: orden de entidades, decisiones de carga y estado de la corrida |
 | [`extractor/`](extractor/README.md) | Formato `.adt` entendido, catálogo real del `.add`, y el contrato del extractor |
 | [`extractor/leer_diccionario.py`](extractor/leer_diccionario.py) | **Parser de `PUBLIDATA.add`**: los campos reales de la copia, verificados contra los `.adt` |
@@ -111,7 +116,8 @@ Guía para instalarlo (sólo si se quiere operar contra Advantage)
 | 4. Ensayo del motor | No iniciada |
 | 5. Extractor y staging | **Hecho**: 15 CSV (9.134.136 filas, 1,7 GB) con manifiesto, idempotente y verificado |
 | 6. Carga piloto | **Hecho para la copia disponible**: catálogos y libro cargados y conciliados (735.762 documentos, 5.025.890 renglones, 3.355 de 3.355 pares con diferencia 0,00). Ver [`cargador/README.md`](cargador/README.md) y [`07_decisiones_del_libro.md`](07_decisiones_del_libro.md) |
-| 7-10 | No iniciadas |
+| 7-10 | No iniciadas (validación con usuarios, ensayo general, corte y estabilización) |
+| **Transición del backend** (fuera de la numeración del plan maestro) | **Lectura y escritura migradas**: todas las consultas y las operaciones de terceros, parámetros, lotes, anulación, captura directa y reproceso funcionan con `CONTABDSI_STORE=postgres`, verificado por HTTP. Ver [`04_transicion_del_backend.md`](04_transicion_del_backend.md), [`10`](10_balance_comprobacion.md), [`11`](11_lotes_y_importaciones.md) y [`12`](12_escrituras.md) |
 
 ### 5.1 Qué se cerró (pasos 1 y 2)
 

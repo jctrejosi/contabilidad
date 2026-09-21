@@ -39,9 +39,9 @@ El contrato cubre todos los campos del catálogo real. Los del piloto, en detall
 |---|---:|
 | `directo` | 79 |
 | `despivot` | 63 |
-| `derivado` | 96 |
+| `derivado` | 95 |
 | `catalogo` | 10 |
-| `procedencia` | 165 |
+| `procedencia` | 166 |
 | `fuera_nucleo` | 56 |
 | `descartado` | 15 |
 | **Total** | **484** |
@@ -137,7 +137,7 @@ dentro del registro.
 
 - Archivo del legado: `ADD_CONTAB/CONCECOS.ADT`
 - 14 campos · 137 bytes de registro · 12 en el inventario viejo
-- Clases: `catalogo` 2 · `derivado` 3 · `directo` 8 · `procedencia` 1
+- Clases: `catalogo` 2 · `derivado` 2 · `directo` 8 · `procedencia` 2
 
 | # | Campo | Tipo | Clase | Destino PostgreSQL | Transformación |
 |---:|---|---|---|---|---|
@@ -153,7 +153,7 @@ dentro del registro.
 | 10 | `CONCEPTO` | CHARACTER(30,0) | `directo` | centros_costos.concepto | `CentroJerarquico.concepto`. |
 | 11 | `CARPETA` | CHARACTER(20,0) | `directo` | centros_costos.carpeta | — |
 | 12 | `TIPO` | SHORTINT(2,0) | `directo` | centros_costos.tipo | — |
-| 13 | `HABILITA` | LOGICAL(1,0) | `derivado` | centros_costos.eliminado_en | 'F' -> eliminado_en con fecha de corte; 'T' -> NULL. El destino no tiene columna de estado propia para centros. |
+| 13 | `HABILITA` | LOGICAL(1,0) | `procedencia` | centros_costos.legado | El destino no tiene columna de estado para centros, y `eliminado_en` **no** es el mismo concepto (borrado ≠ deshabilitado): se conserva el valor crudo para poder reproducir `habilita` en la API. Contado en la copia: 213 'F' y 9 'T'. |
 | 14 | `ID` | ?15(4,0) | `procedencia` | migracion_filas.localizador | Autoincremental del legado. No es un dato de negocio: es el mejor localizador de la fila en la instantánea. |
 
 ### `CONCTR` → companias, parametros_nomina, parametros_operacion
@@ -454,7 +454,7 @@ dentro del registro.
 | 1 | `CIA` | CHARACTER(3,0) | `derivado` | companias.codigo → compania_id, compania_anios.anio | Código de contabilidad del registro. En esta copia es constante '27'. Es la dimensión que el destino no tenía (P-1). |
 | 2 | `CODIGO` | CHARACTER(2,0) | `catalogo` | comprobantes.codigo | — |
 | 3 | `NOMBRE` | CHARACTER(30,0) | `catalogo` | comprobantes.nombre | — |
-| 4 | `HIST` | CHARACTER(1,0) | `procedencia` | comprobantes.legado | Marca histórica del comprobante. |
+| 4 | `HIST` | CHARACTER(1,0) | `procedencia` | comprobantes.legado | Marca histórica del comprobante. `comprobantes.activo` guarda su **negación** derivada, pero no el valor crudo: se conserva aquí para reproducir `hist` en la API. |
 | 5 | `CTABDES` | CHARACTER(30,0) | `directo` | comprobantes.descripcion_auxiliar | La interfaz lo expone como `descripcionAuxiliar` (src/api/comprobantes.ts). |
 | 6 | `ID` | ?15(4,0) | `procedencia` | migracion_filas.localizador | Autoincremental del legado. No es un dato de negocio: es el mejor localizador de la fila en la instantánea. |
 
@@ -613,7 +613,7 @@ dentro del registro.
 | 27 | `TUSUA` | CHARACTER(4,0) | `derivado` | documento_lineas.legado | Usuario (y fecha y hora) de captura del legado. Medido: `TUSUA` trae valor en 4.962.576 renglones; `TDATE` y `TTIME` están vacías. No puede ir a `documentos.creado_por`: esa columna es un id entero y por documento, y el legado guarda iniciales de texto por renglón. Se conserva crudo con su nombre físico. |
 | 28 | `NITN` | CHARACTER(15,0) | `directo` | documento_lineas.nit_alterno | Se conserva crudo, incluido el caso de 15 espacios, para no perder el original. |
 | 29 | `BORRAR` | CHARACTER(1,0) | `procedencia` | documento_lineas.legado | Renglón borrado en el legado: no se carga como movimiento y se conserva el original con su marca. |
-| 30 | `TSALDO` | DOUBLE(8,2) | `derivado` | documento_lineas.legado | Saldo corrido por renglón. Tiene valor en las 5.048.937 filas de `MOV00`+`MOV01`, y distinto de cero en 545.554 (contado, no supuesto). No se carga como columna: se recalcula y se concilia contra el original (etapa B de db/migration/08_plan_para_culminar.md) y el valor crudo se conserva en `legado`. |
+| 30 | `TSALDO` | DOUBLE(8,2) | `derivado` | documento_lineas.legado | Saldo corrido por renglón. Tiene valor en las 5.048.937 filas de `MOV00`+`MOV01`, y distinto de cero en 545.554 (contado, no supuesto). No se carga como columna y el valor crudo se conserva en `legado`. **No reconciliable** con esta copia: acumular `TVALOR` en orden físico por cuenta lo reproduce en el 0,1 % de las filas (1,1 % por fecha), y la definición del legado no está en el material disponible; db/migration/09_conciliacion_tsaldo.md lo deja medido y documentado. |
 | 31 | `ID` | ?15(4,0) | `procedencia` | migracion_filas.localizador | Autoincremental del legado. No es un dato de negocio: es el mejor localizador de la fila en la instantánea. |
 
 ### `VISDOCUM` → conceptos_retencion, migracion_filas, plantilla_lineas, tarifas_iva, tipos_documento
@@ -748,6 +748,7 @@ queda en `migracion_filas.valores_originales` (jsonb), con el motivo escrito.
 | Tabla | Campo | Destino | Motivo |
 |---|---|---|---|
 | `COCENTRO` | `ID` | migracion_filas.localizador | Autoincremental del legado. No es un dato de negocio: es el mejor localizador de la fila en la instantánea. |
+| `CONCECOS` | `HABILITA` | centros_costos.legado | El destino no tiene columna de estado para centros, y `eliminado_en` **no** es el mismo concepto (borrado ≠ deshabilitado): se conserva el valor crudo para poder reproducir `habilita` en la API. Contado en la copia: 213 'F' y 9 'T'. |
 | `CONCECOS` | `ID` | migracion_filas.localizador | Autoincremental del legado. No es un dato de negocio: es el mejor localizador de la fila en la instantánea. |
 | `CONCTR` | `CTFCINIP` | parametros_operacion.legado | Parámetros de operación que **ninguna funcionalidad implementada consume**: los documentos de `docs/` sólo citan `CTANO` y los períodos `CT00..CT12`, y la interfaz sólo lee 13 campos de `CONCTR`. Se conservan **completos** en una columna `jsonb` del destino en vez de descartarlos o inventar 30 columnas que nadie lee. |
 | `CONCTR` | `CTFCFINP` | parametros_operacion.legado | Parámetros de operación que **ninguna funcionalidad implementada consume**: los documentos de `docs/` sólo citan `CTANO` y los períodos `CT00..CT12`, y la interfaz sólo lee 13 campos de `CONCTR`. Se conservan **completos** en una columna `jsonb` del destino en vez de descartarlos o inventar 30 columnas que nadie lee. |
@@ -841,7 +842,7 @@ queda en `migracion_filas.valores_originales` (jsonb), con el motivo escrito.
 | `CONMOVI` | `ID` | migracion_filas.localizador | Autoincremental del legado. No es un dato de negocio: es el mejor localizador de la fila en la instantánea. |
 | `CONPUC` | `MFLAG` | cuentas.legado | Bandera de 1 carácter sin semántica documentada y sin uso en la interfaz: se conserva en vez de inventarle un significado. |
 | `CONTERCE` | `ID` | migracion_filas.localizador | Autoincremental del legado. No es un dato de negocio: es el mejor localizador de la fila en la instantánea. |
-| `CONTICOM` | `HIST` | comprobantes.legado | Marca histórica del comprobante. |
+| `CONTICOM` | `HIST` | comprobantes.legado | Marca histórica del comprobante. `comprobantes.activo` guarda su **negación** derivada, pero no el valor crudo: se conserva aquí para reproducir `hist` en la API. |
 | `CONTICOM` | `ID` | migracion_filas.localizador | Autoincremental del legado. No es un dato de negocio: es el mejor localizador de la fila en la instantánea. |
 | `FADCLI` | `CVENDED` | terceros.legado | Datos personales, de contacto alterno y de crédito que **ninguna funcionalidadimplementada consume**: los documentos de `docs/` sólo citan de FADCLI el código,NIT, nombre, dirección, teléfono, ciudad, estado, motivo, saldo, cupo y fecha, y lainterfaz pide además los nombres/apellidos. Se conservan completos en `jsonb` paraque la base quede lo más completa posible sin inventar columnas que nadie lee. |
 | `FADCLI` | `CPLAZO` | terceros.legado | Datos personales, de contacto alterno y de crédito que **ninguna funcionalidadimplementada consume**: los documentos de `docs/` sólo citan de FADCLI el código,NIT, nombre, dirección, teléfono, ciudad, estado, motivo, saldo, cupo y fecha, y lainterfaz pide además los nombres/apellidos. Se conservan completos en `jsonb` paraque la base quede lo más completa posible sin inventar columnas que nadie lee. |

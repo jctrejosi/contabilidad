@@ -26,7 +26,7 @@ Verificado con corridas reales, no declarado:
 | Idempotencia | segunda corrida deja 0 filas nuevas, mismos conteos y mismas sumas |
 | Conciliación | 3.352 de 3.352 pares (cuenta hoja, período con libro) cuadran; diferencia 0,00 |
 | `scripts/validate.sql` | las 11 validaciones en verde |
-| Backend contra PostgreSQL | **81 líneas y 2 de 34 rutas** |
+| Backend contra PostgreSQL | **lectura completa** (maestros, movimiento, documentos, balance, lotes) **y escritura** (terceros, parámetros, lotes, anulación, captura directa, reproceso) |
 
 La migración **de los datos de esta copia** está cerrada salvo los campos sin
 destino (etapa A). Lo que falta para culminar se reparte en trabajo de datos,
@@ -83,10 +83,12 @@ contrato ya mandaba a `terceros.legado` (los atributos comerciales, de crédito 
 de contacto de `FADCLI`) y 10.011.513 de clase `derivado` en `MOVxx` (`TUSUA` con
 dato en 4.962.576 renglones y `TSALDO` en los 5.048.937).
 
-**Pendiente menor.** `centros_costos.legado` queda siempre nulo: `CONCECOS` no
-tiene ningún campo con destino `.legado` (su único campo sin columna, `ID`, va a
-`migracion_filas.localizador`). La auditoría lo informa; falta decidir si se quita
-la columna o se deja a la espera de que cambien las reglas de esa tabla.
+**Resuelto.** `centros_costos.legado` ya no queda nulo: `HABILITA` (213 'F' y 9 'T'
+en la copia) pasa a conservarse ahí —el destino no tiene columna de estado para
+centros y `eliminado_en` **no** es el mismo concepto—, así que `/api/centros`
+reproduce `habilita` fielmente. Por el mismo motivo, `CONTICOM.HIST` se conserva
+en `comprobantes.legado` para reproducir `hist` (su negación derivada está en
+`comprobantes.activo`).
 
 ---
 
@@ -106,6 +108,19 @@ informe de diferencias explicadas.
 
 **Esfuerzo.** 0,5 sesión.
 
+**Hecho y verificado.** El modelo de este plan **no se sostiene**: acumular
+`TVALOR` en orden físico por cuenta reproduce `TSALDO` en el **0,1 %** de las
+filas (1,1 % por fecha), y el saldo del origen no se reconstruye desde los
+movimientos —la cuenta `240801005` suma 0,00 y su `TSALDO` va de −105,7 M a
++96,5 M—. `TSALDO` sólo se mantiene en **243 de 2.362** cuentas y su definición no
+está en el material disponible. Al comprobarlo apareció además que **la carga no
+cuadraba cuenta por cuenta**: los 23.047 renglones rechazados dejaban 95 cuentas
+descuadradas en 85,8 mil millones. Se cerró con la opción `--cabecera-sintetica`
+del cargador (cabecera marcada como sintética para el renglón sin cabecera en
+`CONDOCUM`) y quedó en **61,2 millones**, enteramente explicados por 304 renglones
+con `TCOMPR` vacío que no se inventan. Mediciones y decisiones en
+[`09_conciliacion_tsaldo.md`](09_conciliacion_tsaldo.md).
+
 ---
 
 ## Etapa C · Backend PostgreSQL: lectura
@@ -124,6 +139,20 @@ repositorios de Advantage. `backend/postgres_repository.py` tiene 81 líneas.
 | C4 | `documentos` y `documentos/detalle` | Alto: la clave del documento es de seis campos y hay etiquetas repetidas (ver `07`, §1) |
 | C5 | `balance-comprobacion` | Medio: depende de las funciones de acumulados |
 | C6 | `lotes`, `lotes/detalle`, `importaciones/leer` | Alto: el flujo más enredado; `lotes` está vacía en la copia |
+
+**Hecho y verificado C3·C4·C5.** El despacho de `store.py` cubre ya
+`movimiento-mensual` (C3), `documentos` y `documentos/detalle` (C4) y
+`balance-comprobacion` (C5). El balance se construye desde **`saldos_cuenta`** —que
+*es* `CONMAE` volcado— y reutiliza el **mismo ensamblado** que el motor de
+Advantage (`_assemble_report`), verificado contra SQL independiente al centavo
+([`10_balance_comprobacion.md`](10_balance_comprobacion.md)).
+
+**Hecho y verificado C6 (lectura).** `/api/lotes` y `/api/lotes/detalle` ya salen de
+`lotes`/`lote_lineas`; `importaciones/leer` no toca la base y no requiere cambio.
+Las tablas están vacías en la copia, así que la implementación queda verificada en
+estructura y en el manejo de errores, no en datos
+([`11_lotes_y_importaciones.md`](11_lotes_y_importaciones.md)). Las **escrituras**
+de lotes son la etapa D.
 
 **Criterio de salida por endpoint.** Mismo JSON que el origen para los mismos
 filtros, contrastado por SQL independiente, incluidos los casos límite ya
@@ -150,6 +179,18 @@ acumulados, y dependen de las funciones del esquema (B03/B06).
 través de la API, con los saldos cuadrando después de cada operación.
 
 **Esfuerzo.** 4 a 6 sesiones.
+
+**Hecho y verificado.** Las escrituras se apoyan en las funciones del esquema
+(`validar_lote`, `contabilizar_lote`, `anular_documento`, `regenerar_acumulados`),
+que son las que conservan las reglas; `backend/postgres_writes.py` sólo traduce el
+contrato. `accounting_lock.py` se sustituye por transacción + `FOR UPDATE`. El
+criterio de salida se cumple con un guion E2E por HTTP que recorre el flujo
+completo (terceros, parámetros, lotes, anulación, captura directa, reproceso) y
+con el libro y los saldos cuadrando por cuenta al final
+([`12_escrituras.md`](12_escrituras.md)). **Una excepción declarada:** la
+*ejecución* del reproceso mensual queda condicionada a la etapa F —ver §3.8 del
+documento—, porque reescribir `saldos_cuenta` desde el libro parcial destruiría
+la instantánea fiel de `CONMAE`.
 
 ---
 
@@ -219,7 +260,10 @@ desde aquí.
 
 - **Commit por bloques.** Hay 31 archivos sin commitear: esquema y espejos,
   cargador, contrato y documentación.
-- `homologacion/PENDIENTES.md`: recuentos al día (dice 42 decisiones; ya son más).
+- `homologacion/PENDIENTES.md`: **hecho**. El recuento 42 (9 transversales + 33 de
+  tabla) era correcto; se reformuló la fila de `TSALDO` como no reconciliable
+  (etapa B, `09_conciliacion_tsaldo.md`), se renombró el `D-CONCTR-3` duplicado a
+  `D-CONCTR-5` y los 304 renglones sin comprobante entraron en §7.
 - `.pyc` versionados en `backend/tests/__pycache__/`: `git rm --cached`.
 - Fases organizativas del plan (`03_plan_de_carga.md` §1): 0 (firma del
   inventario), 7 (validación con usuarios), 8 (ensayo general), 9 (corte

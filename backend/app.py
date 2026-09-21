@@ -21,61 +21,34 @@ from .ads_repository import (
     AccountNotFound,
     AdsConfigurationError,
     CompanyNotFound,
-    create_account,
-    list_accounts,
-    update_account,
 )
 from .postgres_repository import PostgresConfigurationError
 from .terceros_repository import (
     ThirdPartyAlreadyExists,
     ThirdPartyValidationError,
-    create_third_party,
-    list_third_parties,
 )
-from .centros_repository import list_cost_centers
-from .tipos_documento_repository import list_document_types
-from .comprobantes_repository import list_vouchers
-from .movimiento_mensual_repository import list_monthly_movements
-from .documentos_repository import document_movements, list_documents
 from .anulacion_repository import (
     AnnulmentConflict,
     AnnulmentValidationError,
-    annul_document,
 )
 from .lotes_repository import (
     LotConflict,
     LotValidationError,
-    create_lot,
-    delete_lot,
-    delete_lot_line,
-    import_lot,
-    list_lot_lines,
-    list_lots,
-    post_lot,
-    save_lot_line,
-    update_lot,
-    verify_lot,
 )
 from .importaciones_repository import read_import_file
 from .contabilizacion_repository import (
     PostingConflict,
     PostingValidationError,
-    get_accounting_period,
-    post_direct_movement,
 )
 from .balance_comprobacion_repository import (
-    build_trial_balance,
     export_trial_balance_pdf,
     export_trial_balance_xlsx,
 )
 from .reproceso_mensual_repository import (
-    execute_monthly_reprocess,
-    simulate_monthly_reprocess,
+    MonthlyReprocessValidationError,
 )
 from .parametros_operacion_repository import (
     OperationParametersValidationError,
-    get_operation_parameters,
-    update_operation_parameters,
 )
 
 
@@ -271,7 +244,7 @@ def _service_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     if isinstance(exc, (AccountNotFound, CompanyNotFound)):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    if isinstance(exc, (ValueError, PostingValidationError, LotValidationError, OperationParametersValidationError, ThirdPartyValidationError, AnnulmentValidationError)):
+    if isinstance(exc, (ValueError, PostingValidationError, LotValidationError, OperationParametersValidationError, ThirdPartyValidationError, AnnulmentValidationError, MonthlyReprocessValidationError)):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(exc, AdsConfigurationError):
         logger.error("Configuracion ADS no disponible: %s", exc)
@@ -349,17 +322,20 @@ def third_parties(
 ) -> dict[str, object]:
     """Pagina FADCLI en Advantage; el maestro es común a todas las compañías."""
     try:
-        result = list_third_parties(page=page, page_size=page_size, search=q, state=estado)
+        result = store.list_third_parties(page=page, page_size=page_size, search=q, state=estado)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "FADCLI", "sharedAcrossCompanies": True}
 
 
 @app.post("/api/terceros", status_code=status.HTTP_201_CREATED, summary="Crear tercero")
-def create_third(payload: ThirdPartyCreate) -> dict[str, object]:
+def create_third(
+    payload: ThirdPartyCreate,
+    cia: str = Query("", description="Compañía activa (requerida en PostgreSQL).", pattern=r"^[0-9]{0,3}$"),
+) -> dict[str, object]:
     """Crea un tercero activo para usarlo inmediatamente en movimientos."""
     try:
-        item = create_third_party(payload.model_dump())
+        item = store.create_third_party(payload.model_dump(), cia=cia)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "FADCLI", "sharedAcrossCompanies": True}
@@ -371,7 +347,7 @@ def cost_centers(
 ) -> dict[str, object]:
     """Lee CONCECOS usando siempre la compañía activa como parte de la clave."""
     try:
-        items = list_cost_centers(cia)
+        items = store.list_cost_centers(cia)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {
@@ -386,7 +362,7 @@ def cost_centers(
 def document_types() -> dict[str, object]:
     """Lee VISDOCUM sin CIA porque el catálogo se comparte entre compañías."""
     try:
-        items = list_document_types()
+        items = store.list_document_types()
     except Exception as exc:
         raise _service_error(exc) from exc
     return {
@@ -403,7 +379,7 @@ def vouchers(
 ) -> dict[str, object]:
     """Lee CONTICOM usando siempre la compañía activa como parte de la clave."""
     try:
-        items = list_vouchers(cia)
+        items = store.list_vouchers(cia)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {
@@ -420,7 +396,7 @@ def accounting_period(
 ) -> dict[str, object]:
     """Lee CONCTR para inicializar fecha y período de Captura directa."""
     try:
-        item = get_accounting_period(cia)
+        item = store.get_accounting_period(cia)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONCTR"}
@@ -432,7 +408,7 @@ def operation_parameters(
 ) -> dict[str, object]:
     """Lee el registro real de CONCTR según PARAMS de DSITAB.PRG."""
     try:
-        item = get_operation_parameters(cia)
+        item = store.get_operation_parameters(cia)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONCTR"}
@@ -445,7 +421,7 @@ def save_operation_parameters(
 ) -> dict[str, object]:
     """Graba en CONCTR los mismos controles persistidos por DSIGRABA6."""
     try:
-        item = update_operation_parameters(cia, payload.model_dump())
+        item = store.update_operation_parameters(cia, payload.model_dump())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONCTR"}
@@ -467,7 +443,7 @@ def monthly_movements(
 ) -> dict[str, object]:
     """Lee MOV01 solamente después de recibir compañía, período y filtros."""
     try:
-        result = list_monthly_movements(
+        result = store.list_monthly_movements(
             cia,
             anio,
             mes,
@@ -500,7 +476,7 @@ def documents(
 ) -> dict[str, object]:
     """Lee CONDOCUM únicamente al recibir filtros confirmados por el usuario."""
     try:
-        result = list_documents(
+        result = store.list_documents(
             cia,
             page=page,
             page_size=page_size,
@@ -527,7 +503,7 @@ def document_detail(
 ) -> dict[str, object]:
     """Relaciona la cabecera seleccionada con sus renglones almacenados en MOV01."""
     try:
-        items = document_movements(
+        items = store.document_movements(
             cia,
             document=documento,
             voucher=comprobante,
@@ -551,7 +527,7 @@ def annul_document_endpoint(
 ) -> dict[str, object]:
     """Retira cabecera y partidas, y reconstruye los acumulados afectados."""
     try:
-        result = annul_document(
+        result = store.annul_document(
             request.cia,
             header_id=request.id,
             document=request.documento,
@@ -575,7 +551,7 @@ def lots(
 ) -> dict[str, object]:
     """Lista CONMOVI usando CIA como condición obligatoria."""
     try:
-        result = list_lots(cia, page=page, page_size=page_size)
+        result = store.list_lots(cia, page=page, page_size=page_size)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "CONMOVI", "sharedAcrossCompanies": False}
@@ -605,7 +581,7 @@ def import_lot_endpoint(
 ) -> dict[str, object]:
     """Usa rollback al validar y conserva un Borrador únicamente al confirmar."""
     try:
-        result = import_lot(cia, request.model_dump(), dry_run=dry_run)
+        result = store.import_lot(cia, request.model_dump(), dry_run=dry_run)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result, "dryRun": dry_run}
@@ -620,7 +596,7 @@ def lot_detail(
 ) -> dict[str, object]:
     """Lee CONLOTES relacionando simultáneamente CIA y LOTE."""
     try:
-        result = list_lot_lines(cia, lote, page=page, page_size=page_size)
+        result = store.list_lot_lines(cia, lote, page=page, page_size=page_size)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "CONLOTES", "sharedAcrossCompanies": False}
@@ -633,7 +609,7 @@ def create_lot_endpoint(
 ) -> dict[str, object]:
     """Crea en CONMOVI un lote vacío listo para capturar partidas."""
     try:
-        item = create_lot(cia, payload.model_dump())
+        item = store.create_lot(cia, payload.model_dump())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONMOVI"}
@@ -646,7 +622,7 @@ def update_lot_endpoint(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
     try:
-        item = update_lot(cia, lote, payload.model_dump())
+        item = store.update_lot(cia, lote, payload.model_dump())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONMOVI"}
@@ -659,7 +635,7 @@ def delete_lot_endpoint(
     force: bool = Query(False, description="Segunda confirmación para lotes protegidos."),
 ) -> dict[str, object]:
     try:
-        result = delete_lot(cia, lote, force=force)
+        result = store.delete_lot(cia, lote, force=force)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result}
@@ -671,7 +647,7 @@ def verify_lot_endpoint(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
     try:
-        result = verify_lot(cia, lote)
+        result = store.verify_lot(cia, lote)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result}
@@ -685,7 +661,7 @@ def post_lot_endpoint(
     dry_run: bool = Query(False, alias="dryRun"),
 ) -> dict[str, object]:
     try:
-        result = post_lot(cia, lote, user=payload.usuario, dry_run=dry_run)
+        result = store.post_lot(cia, lote, user=payload.usuario, dry_run=dry_run)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result}
@@ -702,7 +678,7 @@ def create_lot_line_endpoint(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
     try:
-        item = save_lot_line(cia, lote, payload.model_dump())
+        item = store.save_lot_line(cia, lote, payload.model_dump())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONLOTES"}
@@ -716,7 +692,7 @@ def update_lot_line_endpoint(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
     try:
-        item = save_lot_line(cia, lote, payload.model_dump(), line_id=line_id)
+        item = store.save_lot_line(cia, lote, payload.model_dump(), line_id=line_id)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONLOTES"}
@@ -729,7 +705,7 @@ def delete_lot_line_endpoint(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
 ) -> Response:
     try:
-        delete_lot_line(cia, lote, line_id)
+        store.delete_lot_line(cia, lote, line_id)
     except Exception as exc:
         raise _service_error(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -746,7 +722,7 @@ def post_movement(
 ) -> dict[str, object]:
     """Graba VISDOCUM, MOV01, CONMAE, CONTERCE, COCENTRO y CONDOCUM atómicamente."""
     try:
-        result = post_direct_movement(movement.model_dump(), dry_run=dry_run)
+        result = store.post_direct_movement(movement.model_dump(), dry_run=dry_run)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result, "source": "Advantage Data Server"}
@@ -756,7 +732,7 @@ def post_movement(
 def simulate_monthly_reprocess_endpoint(request: MonthlyReprocessRequest) -> dict[str, object]:
     """Compara MOV01 contra CONMAE/CONTERCE sin efectuar escrituras."""
     try:
-        result = simulate_monthly_reprocess(
+        result = store.simulate_monthly_reprocess(
             request.cia, request.anio, request.mesDesde, request.mesHasta
         )
     except Exception as exc:
@@ -771,7 +747,7 @@ def execute_monthly_reprocess_endpoint(
 ) -> dict[str, object]:
     """Reemplaza acumulados mensuales en CONMAE y CONTERCE atómicamente."""
     try:
-        result = execute_monthly_reprocess(
+        result = store.execute_monthly_reprocess(
             request.cia,
             request.anio,
             request.mesDesde,
@@ -796,7 +772,7 @@ def trial_balance(
 ) -> dict[str, object]:
     """Lee los acumulados de CONMAE aplicando la lógica del informe Harbour."""
     try:
-        return build_trial_balance(
+        return store.build_trial_balance(
             cia, anio, mes_desde, mes_hasta, level=nivel, include_zero=incluir_ceros,
         )
     except Exception as exc:
@@ -815,7 +791,7 @@ def export_trial_balance(
 ) -> Response:
     """Descarga el mismo resultado presentado en pantalla como XLSX o PDF."""
     try:
-        report = build_trial_balance(
+        report = store.build_trial_balance(
             cia, anio, mes_desde, mes_hasta, level=nivel, include_zero=incluir_ceros,
         )
         if formato == "xlsx":
@@ -840,7 +816,7 @@ def accounts(
 ) -> dict[str, object]:
     """Devuelve el catálogo, saldos y acumulados exclusivos de la CIA."""
     try:
-        items = list_accounts(cia)
+        items = store.list_accounts(cia)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"items": items, "count": len(items), "source": "CONMAE"}
@@ -857,7 +833,7 @@ def add_account(
 ) -> dict[str, object]:
     """Registra una fila CONMAE con NIT maestro, saldo inicial cero y controles."""
     try:
-        item = create_account(cia, account.model_dump())
+        item = store.create_account(cia, account.model_dump())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item}
@@ -871,7 +847,7 @@ def edit_account(
 ) -> dict[str, object]:
     """Actualiza nombre y controles; el código y los saldos permanecen intactos."""
     try:
-        item = update_account(cia, codigo, account.model_dump())
+        item = store.update_account(cia, codigo, account.model_dump())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item}

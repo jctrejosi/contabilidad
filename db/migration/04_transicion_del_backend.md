@@ -108,9 +108,10 @@ módulo migrado:
 | Pieza | Dónde |
 |---|---|
 | Selector de motor | `backend/store.py` (`CONTABDSI_STORE` = `ads` \| `postgres`) |
-| Repositorio PostgreSQL | `backend/postgres_repository.py` (driver `psycopg`) |
+| Repositorio PostgreSQL | `backend/postgres_repository.py` (lectura) y `backend/postgres_writes.py` (escritura), driver `psycopg` |
 | Driver declarado | `psycopg[binary]` en `backend/requirements.txt` |
-| Endpoints migrados | `/api/health` y `/api/companias` |
+| Endpoints migrados (lectura) | Etapa C2 (maestros): `/api/health`, `/api/companias`, `/api/centros`, `/api/comprobantes`, `/api/tipos-documento`, `/api/terceros`, `/api/parametros-operacion`, `/api/periodo-operacion`; además `/api/cuentas` (plan de cuentas, sobre `cuentas` + `saldos_cuenta`); C3: `/api/movimiento-mensual`; C4: `/api/documentos`, `/api/documentos/detalle`; C5: `/api/informes/balance-comprobacion` y su exportación XLSX/PDF; C6: `/api/lotes`, `/api/lotes/detalle` |
+| Endpoints migrados (escritura) | Etapa D: `POST /api/terceros`, `POST/PUT /api/cuentas`, `PUT /api/parametros-operacion`, `POST /api/documentos/anular`, el CRUD de `/api/lotes…` (crear, modificar, eliminar, partidas, verificar, contabilizar, importar), `POST /api/movimientos/contabilizar` y `POST /api/reprocesos/mensual/{simular,ejecutar}` (ver [`12_escrituras.md`](12_escrituras.md)) |
 
 Verificado con los dos motores:
 
@@ -126,6 +127,17 @@ en caliente es `set CONTABDSI_STORE=ads` (o `postgres`) antes de arrancar.
 dispatcher y su implementación en `postgres_repository.py`, sin tocar el
 contrato JSON ni React. El orden recomendado es el de la tabla de §3.
 
-Lo que **no** cambia con esto: la migración de datos sigue bloqueada (leer
-`ADD_CONTAB` exige el motor Advantage), y los módulos de escritura dependen de
-corregir antes B01–B15, porque son los que cambian saldos y numeración.
+Los ocho endpoints de maestros prueban el patrón completo: la implementación de
+PostgreSQL consulta los **mismos nombres físicos** del legado y reutiliza los
+mapeadores de los repositorios de Advantage (`_cost_centers_from_rows`,
+`_voucher_from_row`, `_document_type_from_row`, `_map_row`,
+`_third_party_from_row`), así que el JSON no puede divergir entre motores. En C5
+el patrón se llevó un paso más allá: no sólo el mapeo, sino el **ensamblado del
+informe** es compartido (`_assemble_report`), ver
+[`10_balance_comprobacion.md`](10_balance_comprobacion.md).
+
+Lo que **no** cambia con esto: la migración de datos **no** necesita el motor
+(leer `ADD_CONTAB` no exige Advantage: los `.adt` se decodifican, ver el §4 del
+[`README.md`](README.md)), y los módulos de escritura dependen de corregir antes
+B01–B15, porque son los que cambian saldos y numeración. El motor sí lo necesita
+el backend viejo **mientras siga escribiendo en el legado**, hasta el corte.

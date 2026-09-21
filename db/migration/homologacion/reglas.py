@@ -246,9 +246,10 @@ _r("CONMAE", "^CTCTABASE$", DIRECTO, "cuentas.clasificacion_corriente",
 REGLAS += [
     _r("CONCECOS", "^CODIGO$", CATALOGO, "centros_costos.codigo"),
     _r("CONCECOS", "^NOMBRE$", CATALOGO, "centros_costos.nombre"),
-    _r("CONCECOS", "^HABILITA$", DERIVADO, "centros_costos.eliminado_en",
-       "'F' -> eliminado_en con fecha de corte; 'T' -> NULL. El destino no tiene columna "
-       "de estado propia para centros."),
+    _r("CONCECOS", "^HABILITA$", PROCEDENCIA, "centros_costos.legado",
+       "El destino no tiene columna de estado para centros, y `eliminado_en` **no** es el "
+       "mismo concepto (borrado ≠ deshabilitado): se conserva el valor crudo para poder "
+       "reproducir `habilita` en la API. Contado en la copia: 213 'F' y 9 'T'."),
     _r("CONCECOS", "^HIST$", DIRECTO, "centros_costos.hist"),
     _r("CONCECOS", "^TIPO$", DIRECTO, "centros_costos.tipo"),
     _r("CONCECOS", "^CARPETA$", DIRECTO, "centros_costos.carpeta"),
@@ -270,7 +271,9 @@ REGLAS += [
 REGLAS += [
     _r("CONTICOM", "^CODIGO$", CATALOGO, "comprobantes.codigo"),
     _r("CONTICOM", "^NOMBRE$", CATALOGO, "comprobantes.nombre"),
-    _r("CONTICOM", "^HIST$", PROCEDENCIA, "migracion_filas", "Marca histórica del comprobante."),
+    _r("CONTICOM", "^HIST$", PROCEDENCIA, "comprobantes.legado",
+       "Marca histórica del comprobante. `comprobantes.activo` guarda su **negación** "
+       "derivada, pero no el valor crudo: se conserva aquí para reproducir `hist` en la API."),
     _r("CONTICOM", "^CTABDES$", DIRECTO, "comprobantes.descripcion_auxiliar",
        "La interfaz lo expone como `descripcionAuxiliar` (src/api/comprobantes.ts)."),
 ]
@@ -386,9 +389,11 @@ REGLAS += [
        "original con su marca."),
     _r("MOVxx", "^TSALDO$", DERIVADO, "documento_lineas.legado",
        "Saldo corrido por renglón. Tiene valor en las 5.048.937 filas de `MOV00`+`MOV01`, "
-       "y distinto de cero en 545.554 (contado, no supuesto). No se carga como columna: "
-       "se recalcula y se concilia contra el original (etapa B de "
-       "db/migration/08_plan_para_culminar.md) y el valor crudo se conserva en `legado`."),
+       "y distinto de cero en 545.554 (contado, no supuesto). No se carga como columna y el "
+       "valor crudo se conserva en `legado`. **No reconciliable** con esta copia: acumular "
+       "`TVALOR` en orden físico por cuenta lo reproduce en el 0,1 % de las filas (1,1 % por "
+       "fecha), y la definición del legado no está en el material disponible; "
+       "db/migration/09_conciliacion_tsaldo.md lo deja medido y documentado."),
     _r("MOVxx", "^(TINCON|TCV|TABMNIT|TESTADO|TSUBCTA)$", DESCARTADO, "—",
        "Contado en los datos: **vacíos en las 5.048.937 filas** de `MOV00`+`MOV01`. Son "
        "restos del físico sin uso en esta copia; no hay nada que migrar. Cierra D-MOV-1."),
