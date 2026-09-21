@@ -12,8 +12,7 @@ from datetime import date
 import re
 from typing import Any, Iterable
 
-import win32com.client
-
+from ._win32com import win32com
 from .ads_repository import (
     ADO_COMMAND_TEXT,
     ADO_PARAMETER_INPUT,

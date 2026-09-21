@@ -9,6 +9,8 @@ moverse al esquema PostgreSQL definido en `db`.
 
 - `Interface_web`: aplicación React generada inicialmente en Figma Make.
 - `backend`: API Python/FastAPI y acceso ADO a Advantage Data Server.
+- `ia-service`: asistente contable (FastAPI + DeepSeek) que alimenta el widget de
+  chat del encabezado.
 - `db`: diseño del futuro esquema PostgreSQL, el diccionario de origen
   Advantage y el plan de migración de datos (`db/migration`).
 - `docs`: documentación funcional y técnica de cada función migrada.
@@ -44,6 +46,7 @@ node dev.js            # levanta todo y libera la terminal
 node dev.js --check    # solo verifica herramientas y dependencias
 node dev.js --stop     # detiene los servicios levantados
 node dev.js --no-db    # omite PostgreSQL (backend sobre Advantage)
+node dev.js --no-ia    # omite el asistente IA (ia-service)
 ```
 
 Los servicios quedan corriendo en segundo plano y cada uno escribe su registro

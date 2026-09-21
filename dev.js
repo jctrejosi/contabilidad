@@ -60,6 +60,7 @@ const path = require("node:path");
 const ROOT = __dirname;
 const BACKEND_DIR = path.join(ROOT, "backend");
 const WEB_DIR = path.join(ROOT, "Interface_web");
+const IA_DIR = path.join(ROOT, "ia-service");
 const DB_DIR = path.join(ROOT, "db", "postgresql");
 const ADD_CONTAB_DIR = path.join(ROOT, "ADD_CONTAB");
 const ADS_DICTIONARY = path.join(ADD_CONTAB_DIR, "PUBLIDATA.add");
@@ -72,6 +73,7 @@ const TASKKILL = path.join(process.env.SystemRoot || "C:\\Windows", "System32", 
 const CONFIG = {
   backendHost: "127.0.0.1",
   backendPort: Number(process.env.BACKEND_PORT || 8001),
+  iaServicePort: Number(process.env.IA_SERVICE_PORT || 8003),
   webPort: Number(process.env.WEB_PORT || process.env.PORT || 8443),
   dbPort: Number(process.env.DB_PORT || 5433),
   dbUser: process.env.DB_USER || "contabdsi",
@@ -85,7 +87,10 @@ const BACKEND_IMPORTS = ["fastapi", "uvicorn", "openpyxl", "multipart", "reportl
   IS_WIN ? ["win32com.client"] : [],
 );
 
-const SERVICES = { backend: "backend", web: "web", db: "db" };
+// Paquetes que deben poder importarse en el entorno del asistente (ia-service).
+const IA_IMPORTS = ["fastapi", "uvicorn", "dotenv", "httpx"];
+
+const SERVICES = { backend: "backend", iaService: "ia-service", web: "web", db: "db" };
 
 // Proveedor OLEDB que usa el backend para hablar con Advantage. Sin él no se
 // pueden abrir las tablas .ADT del legado, aunque los datos estén en el repo.
@@ -349,19 +354,27 @@ function detectPython() {
   return null;
 }
 
-function venvPython() {
+function venvPythonFor(dir) {
   return IS_WIN
-    ? path.join(BACKEND_DIR, ".venv", "Scripts", "python.exe")
-    : path.join(BACKEND_DIR, ".venv", "bin", "python");
+    ? path.join(dir, ".venv", "Scripts", "python.exe")
+    : path.join(dir, ".venv", "bin", "python");
 }
 
-function requirementsAreInstalled(python) {
-  const statement = `import ${BACKEND_IMPORTS.join(", ")}`;
+function venvPython() {
+  return venvPythonFor(BACKEND_DIR);
+}
+
+function requirementsAreInstalled(python, imports = BACKEND_IMPORTS) {
+  const statement = `import ${imports.join(", ")}`;
   return run(python, ["-c", statement], { capture: true }).status === 0;
 }
 
-function ensureBackendEnvironment() {
-  step("Backend · dependencias Python");
+/**
+ * Prepara el entorno virtual de un servicio Python (backend o ia-service):
+ * crea el venv si falta e instala sus requirements cuando cambian de huella.
+ */
+function ensurePythonEnvironment({ title, label, dir, imports }) {
+  step(`${title} · dependencias Python`);
 
   const python = detectPython();
   if (!python) {
@@ -369,42 +382,59 @@ function ensureBackendEnvironment() {
   }
   ok(`Python detectado: ${python.label}`);
 
-  const pythonPath = venvPython();
+  const venvDir = path.join(dir, ".venv");
+  const pythonPath = venvPythonFor(dir);
   if (!fs.existsSync(pythonPath)) {
-    info(`Creando entorno virtual en ${rel(path.join(BACKEND_DIR, ".venv"))}…`);
-    const created = run(python.cmd, [...python.args, "-m", "venv", path.join(BACKEND_DIR, ".venv")]);
+    info(`Creando entorno virtual en ${rel(venvDir)}…`);
+    const created = run(python.cmd, [...python.args, "-m", "venv", venvDir]);
     if (created !== 0 || !fs.existsSync(pythonPath)) {
-      throw new Error("No se pudo crear el entorno virtual del backend.");
+      throw new Error(`No se pudo crear el entorno virtual de ${label}.`);
     }
   }
 
-  const requirements = path.join(BACKEND_DIR, "requirements.txt");
-  const marker = path.join(BACKEND_DIR, ".venv", ".requirements.sha256");
+  const requirements = path.join(dir, "requirements.txt");
+  const marker = path.join(venvDir, ".requirements.sha256");
   const digest = sha256(fs.readFileSync(requirements));
   const markerMatches = fs.existsSync(marker) && fs.readFileSync(marker, "utf8").trim() === digest;
 
-  if (markerMatches && requirementsAreInstalled(pythonPath)) {
-    ok("Dependencias del backend ya instaladas.");
+  if (markerMatches && requirementsAreInstalled(pythonPath, imports)) {
+    ok(`Dependencias de ${label} ya instaladas.`);
     return;
   }
 
-  info("Instalando backend/requirements.txt…");
+  info(`Instalando ${rel(requirements)}…`);
   run(pythonPath, ["-m", "pip", "install", "--upgrade", "pip"]);
   const installed = run(pythonPath, ["-m", "pip", "install", "-r", requirements]);
-  if (installed !== 0) throw new Error("La instalación de dependencias Python falló.");
+  if (installed !== 0) throw new Error(`La instalación de dependencias de ${label} falló.`);
   fs.writeFileSync(marker, digest);
-  ok("Dependencias del backend instaladas.");
+  ok(`Dependencias de ${label} instaladas.`);
+}
+
+function verifyPythonEnvironment({ label, dir, imports }) {
+  const pythonPath = venvPythonFor(dir);
+  if (!fs.existsSync(pythonPath)) {
+    throw new Error(`Falta el entorno virtual ${rel(path.join(dir, ".venv"))} de ${label}. Ejecuta sin --no-install.`);
+  }
+  if (!requirementsAreInstalled(pythonPath, imports)) {
+    throw new Error(`Faltan dependencias Python de ${label}. Ejecuta sin --no-install.`);
+  }
+  ok(`Dependencias de ${label} presentes.`);
+}
+
+function ensureBackendEnvironment() {
+  ensurePythonEnvironment({ title: "Backend", label: "backend", dir: BACKEND_DIR, imports: BACKEND_IMPORTS });
 }
 
 function verifyBackendEnvironment() {
-  const pythonPath = venvPython();
-  if (!fs.existsSync(pythonPath)) {
-    throw new Error(`Falta el entorno virtual ${rel(path.join(BACKEND_DIR, ".venv"))}. Ejecuta sin --no-install.`);
-  }
-  if (!requirementsAreInstalled(pythonPath)) {
-    throw new Error("Faltan dependencias Python del backend. Ejecuta sin --no-install.");
-  }
-  ok("Dependencias del backend presentes.");
+  verifyPythonEnvironment({ label: "backend", dir: BACKEND_DIR, imports: BACKEND_IMPORTS });
+}
+
+function ensureIaServiceEnvironment() {
+  ensurePythonEnvironment({ title: "Asistente IA", label: "ia-service", dir: IA_DIR, imports: IA_IMPORTS });
+}
+
+function verifyIaServiceEnvironment() {
+  verifyPythonEnvironment({ label: "ia-service", dir: IA_DIR, imports: IA_IMPORTS });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -808,6 +838,27 @@ function startBackend() {
   });
 }
 
+function startIaService() {
+  const args = [
+    "-m",
+    "uvicorn",
+    "app.main:app",
+    "--host",
+    CONFIG.backendHost,
+    "--port",
+    String(CONFIG.iaServicePort),
+  ];
+  if (options.reload) args.push("--reload");
+
+  return startService({
+    name: SERVICES.iaService,
+    command: venvPythonFor(IA_DIR),
+    args,
+    // El módulo se importa como app.main, así que debe arrancar desde ia-service.
+    cwd: IA_DIR,
+  });
+}
+
 function startWeb() {
   // Se ejecuta el binario de Vite con el propio Node en lugar de `npm run dev`:
   // envolverlo en cmd.exe obliga a pasar por un shell y complica el cierre.
@@ -831,6 +882,7 @@ function startWeb() {
 async function releaseServicePorts() {
   await releasePort("backend", CONFIG.backendPort);
   await releasePort("interfaz web", CONFIG.webPort);
+  if (options.ia) await releasePort("asistente IA", CONFIG.iaServicePort);
 }
 
 function savePids() {
@@ -853,6 +905,7 @@ function abortStarted() {
   }
   freePort(CONFIG.backendPort);
   freePort(CONFIG.webPort);
+  if (options.ia) freePort(CONFIG.iaServicePort);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -861,10 +914,11 @@ function abortStarted() {
 
 function printUrls() {
   const backend = `http://${CONFIG.backendHost}:${CONFIG.backendPort}`;
+  const assistant = `http://${CONFIG.backendHost}:${CONFIG.iaServicePort}`;
   const web = `http://${CONFIG.backendHost}:${CONFIG.webPort}`;
   const database = `postgres://${CONFIG.dbUser}@127.0.0.1:${CONFIG.dbPort}/${CONFIG.dbName}`;
   const logNames = Object.values(SERVICES)
-    .filter((name) => name !== SERVICES.db || dbStarted)
+    .filter((name) => (name !== SERVICES.db || dbStarted) && (name !== SERVICES.iaService || options.ia))
     .map((name) => `${name}.log`)
     .join(", ");
 
@@ -873,6 +927,11 @@ function printUrls() {
   log("");
   log(`   Interfaz web   ${c.cyan(web)}`);
   log(`   API backend    ${c.cyan(backend)} ${c.dim("(/docs para Swagger)")}`);
+  log(
+    `   Asistente IA   ${
+      options.ia ? c.cyan(`${assistant} ${c.dim("(/docs para Swagger)")}`) : c.yellow("no iniciado")
+    }`,
+  );
   log(`   PostgreSQL     ${dbStarted ? c.cyan(database) : c.yellow("no iniciado")}`);
   log(
     `   Advantage      ${
@@ -905,6 +964,7 @@ function stopAll() {
   // Red de seguridad: liberar los puertos aunque algún pid haya quedado viejo.
   freePort(CONFIG.backendPort);
   freePort(CONFIG.webPort);
+  if (options.ia) freePort(CONFIG.iaServicePort);
 
   if (!options.keepDb && commandExists("docker") && dockerDaemonUp()) {
     info("Deteniendo PostgreSQL…");
@@ -947,6 +1007,14 @@ async function runChecks() {
   } else {
     log(`   Backend venv   ${c.yellow("requiere instalación")}`);
     pending.push("backend/requirements.txt");
+  }
+
+  const iaPythonPath = venvPythonFor(IA_DIR);
+  if (fs.existsSync(iaPythonPath) && requirementsAreInstalled(iaPythonPath, IA_IMPORTS)) {
+    log(`   IA venv        ${c.green("listo")}`);
+  } else {
+    log(`   IA venv        ${c.yellow("requiere instalación")}`);
+    pending.push("ia-service/requirements.txt");
   }
 
   const manager = detectPackageManager();
@@ -995,8 +1063,8 @@ function printHelp() {
   log("");
   log(c.blue("  dev.js · entorno de desarrollo de CONTABDSI"));
   log("");
-  log("   node dev.js                  instala lo que falte, levanta db + backend + interfaz");
-  log("                                e imprime las URLs; la terminal queda libre");
+  log("   node dev.js                  instala lo que falte, levanta db + backend + asistente");
+  log("                                + interfaz e imprime las URLs; la terminal queda libre");
   log("   node dev.js --check          verifica herramientas y dependencias");
   log("   node dev.js --stop           detiene los servicios levantados");
   log("");
@@ -1004,13 +1072,14 @@ function printHelp() {
   log("   --require-db                 falla si la base de datos no puede iniciar");
   log("   --require-ads                falla si Advantage (origen) no está disponible");
   log("   --no-install                 no instala dependencias");
+  log("   --no-ia                      no levanta el asistente IA (ia-service)");
   log("   --no-reload                  uvicorn sin recarga automática");
   log("   --keep-db                    no detiene PostgreSQL al hacer --stop");
   log("   --no-docker-autostart        no intenta abrir Docker Desktop");
   log("");
-  log(c.dim("   Puertos: BACKEND_PORT, WEB_PORT/PORT, DB_PORT"));
+  log(c.dim("   Puertos: BACKEND_PORT, IA_SERVICE_PORT, WEB_PORT/PORT, DB_PORT"));
   log(c.dim("   Si un puerto está ocupado, se libera antes de arrancar."));
-  log(c.dim("   Logs: logs/<servicio>.log (backend, web, db)"));
+  log(c.dim("   Logs: logs/<servicio>.log (backend, ia-service, web, db)"));
   log("");
 }
 
@@ -1026,6 +1095,7 @@ function parseArgs(argv) {
     stop: false,
     help: false,
     db: true,
+    ia: true,
     install: true,
     requireDb: false,
     requireAds: false,
@@ -1048,6 +1118,9 @@ function parseArgs(argv) {
         break;
       case "--no-db":
         parsed.db = false;
+        break;
+      case "--no-ia":
+        parsed.ia = false;
         break;
       case "--no-install":
         parsed.install = false;
@@ -1096,10 +1169,12 @@ async function main() {
 
   if (options.install) {
     ensureBackendEnvironment();
+    if (options.ia) ensureIaServiceEnvironment();
     ensureFrontendEnvironment();
   } else {
     info("Instalación de dependencias omitida (--no-install).");
     verifyBackendEnvironment();
+    if (options.ia) verifyIaServiceEnvironment();
     verifyFrontendEnvironment();
   }
 
@@ -1116,19 +1191,27 @@ async function main() {
 
   startBackend();
   startWeb();
+  if (options.ia) startIaService();
   savePids();
 
   const ready = await Promise.all([
     waitForPort({ label: "backend", port: CONFIG.backendPort, timeoutMs: CONFIG.startupTimeoutMs, quiet: true }),
     waitForPort({ label: "interfaz web", port: CONFIG.webPort, timeoutMs: CONFIG.startupTimeoutMs, quiet: true }),
+    options.ia
+      ? waitForPort({ label: "asistente IA", port: CONFIG.iaServicePort, timeoutMs: CONFIG.startupTimeoutMs, quiet: true })
+      : Promise.resolve(true),
   ]);
 
   trackListeners(SERVICES.backend, CONFIG.backendPort);
   trackListeners(SERVICES.web, CONFIG.webPort);
+  if (options.ia) trackListeners(SERVICES.iaService, CONFIG.iaServicePort);
   savePids();
 
   if (!ready[0]) warn(`El backend no respondió en el puerto ${CONFIG.backendPort}; revisa logs/backend.log.`);
   if (!ready[1]) warn(`La interfaz no respondió en el puerto ${CONFIG.webPort}; revisa logs/web.log.`);
+  if (options.ia && !ready[2]) {
+    warn(`El asistente IA no respondió en el puerto ${CONFIG.iaServicePort}; revisa logs/ia-service.log.`);
+  }
 
   if (ready[0]) {
     const health = await httpStatus(`http://${CONFIG.backendHost}:${CONFIG.backendPort}/api/health`);

@@ -18,8 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-import pythoncom
-import win32com.client
+from ._win32com import pythoncom, win32com
 
 
 DEFAULT_ENV_FILE = Path(__file__).with_name(".env")

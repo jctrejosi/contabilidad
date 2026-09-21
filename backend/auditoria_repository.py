@@ -13,9 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
-import pythoncom
-import win32com.client
-
+from ._win32com import pythoncom, win32com
 from .ads_repository import ADO_TYPE_INTEGER, ADO_TYPE_VARCHAR, _execute
 
 

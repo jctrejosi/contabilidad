@@ -14,9 +14,8 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from openpyxl import load_workbook
-import pythoncom
-import win32com.client
 
+from ._win32com import pythoncom, win32com
 from .ads_repository import _rows
 
 

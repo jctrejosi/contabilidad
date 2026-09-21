@@ -18,8 +18,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from time import perf_counter
 from typing import Any, Iterable
 
-import win32com.client
-
+from ._win32com import win32com
 from .accounting_lock import accounting_write_lock
 from .ads_repository import (
     ADO_COMMAND_TEXT,

@@ -1,6 +1,6 @@
 fastapi>=0.116,<1
 uvicorn[standard]>=0.35,<1
-pywin32>=311
+pywin32>=311; sys_platform == "win32"
 psycopg[binary]>=3.2,<4
 openpyxl>=3.1,<4
 python-multipart>=0.0.20,<1

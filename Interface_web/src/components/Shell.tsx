@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { PERIODO, USUARIO } from '../data/mock';
 import type { CompaniaSesion } from '../types';
+import BotChat from './BotChat';
 
 export type NavPage =
   | 'dashboard'
@@ -405,6 +406,13 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
               </div>
             )}
           </div>
+
+          {/* Asistente contable (botón al lado del usuario) */}
+          <BotChat
+            compania={compania}
+            periodo={`${PERIODO.anio} · ${periodoLabel}`}
+            usuario={USUARIO.nombre}
+          />
 
           {/* User */}
           <div className="flex items-center gap-2 pl-2 border-l border-gray-200">

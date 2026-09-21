@@ -189,9 +189,11 @@ def manifiesto() -> dict:
 # Estado de la carga
 # ---------------------------------------------------------------------------
 class Carga:
-    def __init__(self, conexion: psycopg.Connection, simulacion: bool) -> None:
+    def __init__(self, conexion: psycopg.Connection, simulacion: bool,
+                 cabecera_sintetica: bool = False) -> None:
         self.cn = conexion
         self.simulacion = simulacion
+        self.cabecera_sintetica = cabecera_sintetica
         self.ejecucion_id: int | None = None
         self.compania_id: int | None = None
         self.usuario_id: int | None = None
@@ -843,6 +845,19 @@ def cargar_libro(carga: Carga) -> None:
         cur.execute(ELEGIDOS_SQL)
         cur.execute("ANALYZE doc_elegido")
 
+        # Cabeceras sintéticas (opcional): se crean para las claves con renglones
+        # de valor y sin cabecera, y se vuelve a resolver la unión de claves para
+        # que esos renglones entren. Ver `SINTETICAS_SQL`.
+        if carga.cabecera_sintetica:
+            cur.execute(SINTETICAS_SQL, {"compania": carga.compania_id,
+                                         "usuario": carga.usuario_migracion()})
+            cur.execute("DROP TABLE IF EXISTS doc_cand")
+            cur.execute(CANDIDATAS_SQL, {"compania": carga.compania_id})
+            cur.execute("ANALYZE doc_cand")
+            cur.execute("DROP TABLE IF EXISTS doc_elegido")
+            cur.execute(ELEGIDOS_SQL)
+            cur.execute("ANALYZE doc_elegido")
+
         if carga.simulacion:
             ambiguas = rechazados = 0
         else:
@@ -860,6 +875,10 @@ def cargar_libro(carga: Carga) -> None:
         cur.execute("SELECT count(*) FROM documentos WHERE compania_id = %s "
                     "AND origen = 'Migracion'", (carga.compania_id,))
         documentos_total = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM documentos WHERE compania_id = %s "
+                    "AND origen = 'Migracion' AND legado->>'SINTETICA' = 'true'",
+                    (carga.compania_id,))
+        sinteticas = cur.fetchone()[0]
         cur.execute("SELECT count(*) FROM documento_lineas WHERE compania_id = %s "
                     "AND origen = 'Migracion'", (carga.compania_id,))
         renglones_total = cur.fetchone()[0]
@@ -871,7 +890,7 @@ def cargar_libro(carga: Carga) -> None:
     # vuelven a registrar, bajo su propia ejecución. En simulación no hay recuento
     # de rechazos que contrastar (ver arriba).
     if not carga.simulacion:
-        if documentos_total + cabeceras_rechazadas != total_cabeceras:
+        if documentos_total - sinteticas + cabeceras_rechazadas != total_cabeceras:
             raise RuntimeError(
                 f"El libro de cabeceras no cuadra: {total_cabeceras:,} en el origen, "
                 f"{documentos_total:,} en la base y {cabeceras_rechazadas:,} rechazadas.")
@@ -881,6 +900,8 @@ def cargar_libro(carga: Carga) -> None:
                 f"{renglones_total:,} en la base y {rechazados:,} rechazados.")
 
     carga.contar("documentos", f"Nuevos {documentos} · en la base {documentos_total:,}")
+    if sinteticas:
+        carga.contar("documentos", f"{sinteticas:,} sintéticas (renglón sin cabecera en CONDOCUM)")
     if cabeceras_rechazadas:
         carga.contar("documentos", f"Rechazadas {cabeceras_rechazadas} sin comprobante o sin fecha")
     if ambiguas:
@@ -1063,6 +1084,7 @@ GRUPOS_RENGLON_SQL = f"""
 CREATE TEMP TABLE mov_grp AS
 SELECT comprobante_id, tipo_id, documento, fecha,
        count(*) AS lineas,
+       count(*) FILTER (WHERE valor <> 0) AS con_valor,
        COALESCE(sum(valor) FILTER (WHERE valor > 0), 0) AS debitos,
        min(archivo) AS archivo
   FROM (SELECT mc.id AS comprobante_id,
@@ -1104,6 +1126,52 @@ SELECT DISTINCT ON (c.comprobante_id, c.tipo_id, c.documento, c.fecha)
                 AND g.documento = c.documento AND g.fecha = c.fecha
  ORDER BY c.comprobante_id, c.tipo_id, c.documento, c.fecha,
           (c.dvalor = g.debitos) DESC NULLS LAST, c.numero
+"""
+
+# Cabeceras sintéticas — opción `--cabecera-sintetica` (etapa B, §3.2 de
+# `../09_conciliacion_tsaldo.md`).
+#
+# Hay renglones cuya cabecera **existe en CONDOCUM pero con otra fecha** (p. ej.
+# `JP0000001564`: el renglón es de 2025-01-31 y la cabecera trae 2025-10-31), o
+# cuyo número el legado reutiliza para documentos distintos. Como la clave de
+# unión incluye la fecha, quedan huérfanos y se rechazan con causa. Con esta
+# bandera se les crea una cabecera **propia y marcada** para no perder el
+# movimiento ni descuadrar la cuenta. Sin la bandera nada cambia.
+#
+# `numero` va en un rango reservado (9.000.000.000+) para no chocar con
+# `documentos_uk (compania_id, anio, comprobante_id, numero)`, que usa el `_loc`
+# de CONDOCUM. La `idempotency_key` deriva de la clave, así que repetir la carga
+# no duplica: la segunda corrida inserta 0 filas.
+SINTETICAS_SQL = """
+INSERT INTO documentos (compania_id, anio, comprobante_id, numero, documento,
+                        tipo_documento_id, fecha, fecha_documento, periodo, tercero_id,
+                        concepto, estado, origen, usuario_id, idempotency_key, legado)
+SELECT %(compania)s,
+       EXTRACT(YEAR FROM g.fecha)::int,
+       g.comprobante_id,
+       9000000000 + row_number() OVER (ORDER BY g.comprobante_id, g.tipo_id,
+                                                 g.documento, g.fecha),
+       g.documento,
+       NULLIF(g.tipo_id, 0),
+       g.fecha,
+       g.fecha,
+       to_char(g.fecha, 'MM'),
+       NULL,
+       'Cabecera sintetica: renglon sin cabecera en CONDOCUM (etapa B)',
+       'Contabilizado',
+       'Migracion',
+       %(usuario)s,
+       md5('SINTETICA' || %(compania)s::text || g.comprobante_id::text || g.tipo_id::text
+           || COALESCE(g.documento, '') || g.fecha::text)::uuid,
+       jsonb_build_object('SINTETICA', true,
+                          'motivo', 'renglon sin cabecera en CONDOCUM')
+  FROM mov_grp g
+  LEFT JOIN doc_elegido e ON e.comprobante_id = g.comprobante_id AND e.tipo_id = g.tipo_id
+                         AND e.documento = g.documento AND e.fecha = g.fecha
+ WHERE e.documento_id IS NULL
+   AND g.fecha IS NOT NULL
+   AND g.con_valor > 0
+ON CONFLICT DO NOTHING
 """
 
 # Claves con más de una cabecera candidata: una fila por clave (no por renglón)
@@ -1427,6 +1495,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hasta", help="carga hasta esta entidad inclusive")
     parser.add_argument("--listar", action="store_true", help="muestra el orden de carga y sale")
     parser.add_argument("--simulacion", action="store_true", help="no escribe en la base")
+    parser.add_argument("--cabecera-sintetica", action="store_true",
+                        help="crea una cabecera marcada como sintética para los renglones "
+                             "sin cabecera en CONDOCUM, en vez de rechazarlos (etapa B)")
     parser.add_argument("--permitir-base-sucia", action="store_true",
                         help="carga aunque la base ya tenga compañías (datos de demostración)")
     argumentos = parser.parse_args(argv)
@@ -1449,7 +1520,7 @@ def main(argv: list[str] | None = None) -> int:
 
     inicio = time.monotonic()
     with psycopg.connect(argumentos.url) as conexion:
-        carga = Carga(conexion, argumentos.simulacion)
+        carga = Carga(conexion, argumentos.simulacion, argumentos.cabecera_sintetica)
         if argumentos.simulacion:
             print("SIMULACIÓN: no se escribe nada.")
         else:

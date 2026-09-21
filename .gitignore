@@ -4,6 +4,11 @@ backend/.venv/
 backend/.pytest_cache/
 __pycache__/
 *.pyc
-/tmp/dev/
+/tmp/
 /logs/
 /db/migration/staging/
+
+# Base de datos Advantage y binarios del servidor (~2.6 GB)
+/db_new/data/
+/db_new/logs/
+/db_new/server/

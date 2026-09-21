@@ -39,6 +39,14 @@ export default defineConfig(({ mode }) => {
           target: process.env.ADS_API_URL || 'http://127.0.0.1:8001',
           changeOrigin: true,
         },
+        // Asistente contable (ia-service, FastAPI en el puerto 8002). Se expone
+        // bajo /bot-api para no chocar con /api y poder usar un proxy inverso en
+        // producción. El prefijo se elimina antes de reenviar al servicio.
+        '/bot-api': {
+          target: process.env.BOT_API_URL || 'http://127.0.0.1:8003',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/bot-api/, ''),
+        },
       },
     },
     preview: {
