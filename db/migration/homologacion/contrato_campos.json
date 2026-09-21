@@ -1580,7 +1580,7 @@
           "longitud": 12,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "documentos.legado",
           "transformacion": "Sin uso en `docs/` ni en la interfaz: se conserva el original.",
           "en_inventario": true
         },
@@ -1657,7 +1657,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "documentos.legado",
           "transformacion": "Módulo de origen del documento; sin columna en documentos.",
           "en_inventario": true
         },
@@ -1668,7 +1668,7 @@
           "longitud": 12,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "documentos.legado",
           "transformacion": "Documento alterno a nivel de cabecera. El equivalente por línea (`MOVxx.TDOCUM2`) sí se carga en `documento_lineas.documento_afectado`; este se conserva.",
           "en_inventario": true
         },
@@ -1745,7 +1745,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "companias.legado",
           "transformacion": "Habilita la reasignación de códigos (CONREASIG, CONTAGRAL.PRG:497). La interfaz no expone ninguna función de reasignación, así que no se modela: se conserva.",
           "en_inventario": true
         },
@@ -2328,7 +2328,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2361,7 +2361,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2372,7 +2372,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2383,7 +2383,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2394,7 +2394,7 @@
           "longitud": 29,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Campos del maestro que la interfaz no declara en su tipo `Cuenta` (que sólo pide código, nombre, nivel, afectable, requiereTercero/Centro/Base, ajuste, clase de IVA y retención y saldo). Se conservan los originales en vez de inventar columnas.",
           "en_inventario": true
         },
@@ -2405,7 +2405,7 @@
           "longitud": 8,
           "decimales": 2,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2427,7 +2427,7 @@
           "longitud": 15,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Campos del maestro que la interfaz no declara en su tipo `Cuenta` (que sólo pide código, nombre, nivel, afectable, requiereTercero/Centro/Base, ajuste, clase de IVA y retención y saldo). Se conservan los originales en vez de inventar columnas.",
           "en_inventario": true
         },
@@ -2438,7 +2438,7 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2449,7 +2449,7 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2460,7 +2460,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2471,7 +2471,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2482,7 +2482,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2493,7 +2493,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2504,7 +2504,7 @@
           "longitud": 7,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2515,7 +2515,7 @@
           "longitud": 7,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2526,7 +2526,7 @@
           "longitud": 12,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Campos del maestro que la interfaz no declara en su tipo `Cuenta` (que sólo pide código, nombre, nivel, afectable, requiereTercero/Centro/Base, ajuste, clase de IVA y retención y saldo). Se conservan los originales en vez de inventar columnas.",
           "en_inventario": true
         },
@@ -2537,7 +2537,7 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2548,7 +2548,7 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2559,7 +2559,7 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2570,7 +2570,7 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2581,7 +2581,7 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2592,7 +2592,7 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2603,7 +2603,7 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2614,7 +2614,7 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2625,7 +2625,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2636,7 +2636,7 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2647,7 +2647,7 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2658,7 +2658,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2669,7 +2669,7 @@
           "longitud": 21,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2680,7 +2680,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2691,7 +2691,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2702,7 +2702,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2713,7 +2713,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2724,7 +2724,7 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2735,7 +2735,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2746,7 +2746,7 @@
           "longitud": 2,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -2757,7 +2757,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bloque de exógena, distribución por centro, costeo ABC, dimensiones y metadatos NIIF: 32 campos que **ninguna funcionalidad implementada consume** (la exógena y el costeo ABC no están entre las pantallas de `docs/` ni de la interfaz). Se conservan completos para que la base no pierda nada, sin inventar 32 columnas que nadie lee.",
           "en_inventario": true
         },
@@ -3066,7 +3066,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "cuentas.legado",
           "transformacion": "Bandera de 1 carácter sin semántica documentada y sin uso en la interfaz: se conserva en vez de inventarle un significado.",
           "en_inventario": true
         },
@@ -3524,7 +3524,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "comprobantes.legado",
           "transformacion": "Marca histórica del comprobante.",
           "en_inventario": true
         },
@@ -4492,7 +4492,7 @@
           "longitud": 9,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "terceros.legado",
           "transformacion": "Campo MEMO: en el registro sólo hay un puntero al `.adm`. Verificado que los 126.009 punteros de esta copia son cero, así que está vacío en el origen; se marca como memo no resuelto en vez de fingir que el dato no existía.",
           "en_inventario": true
         },
@@ -4998,8 +4998,8 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "derivado",
-          "destino": "documentos.creado_en + documentos.creado_por",
-          "transformacion": "Fecha, hora y usuario de captura del legado -> auditoría del destino. No sobrescribe creado_en (que es de la migración): se registra en la trazabilidad.",
+          "destino": "documento_lineas.legado",
+          "transformacion": "Usuario (y fecha y hora) de captura del legado. Medido: `TUSUA` trae valor en 4.962.576 renglones; `TDATE` y `TTIME` están vacías. No puede ir a `documentos.creado_por`: esa columna es un id entero y por documento, y el legado guarda iniciales de texto por renglón. Se conserva crudo con su nombre físico.",
           "en_inventario": true
         },
         {
@@ -5009,8 +5009,8 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "derivado",
-          "destino": "documentos.creado_en + documentos.creado_por",
-          "transformacion": "Fecha, hora y usuario de captura del legado -> auditoría del destino. No sobrescribe creado_en (que es de la migración): se registra en la trazabilidad.",
+          "destino": "documento_lineas.legado",
+          "transformacion": "Usuario (y fecha y hora) de captura del legado. Medido: `TUSUA` trae valor en 4.962.576 renglones; `TDATE` y `TTIME` están vacías. No puede ir a `documentos.creado_por`: esa columna es un id entero y por documento, y el legado guarda iniciales de texto por renglón. Se conserva crudo con su nombre físico.",
           "en_inventario": true
         },
         {
@@ -5020,8 +5020,8 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "derivado",
-          "destino": "documentos.creado_en + documentos.creado_por",
-          "transformacion": "Fecha, hora y usuario de captura del legado -> auditoría del destino. No sobrescribe creado_en (que es de la migración): se registra en la trazabilidad.",
+          "destino": "documento_lineas.legado",
+          "transformacion": "Usuario (y fecha y hora) de captura del legado. Medido: `TUSUA` trae valor en 4.962.576 renglones; `TDATE` y `TTIME` están vacías. No puede ir a `documentos.creado_por`: esa columna es un id entero y por documento, y el legado guarda iniciales de texto por renglón. Se conserva crudo con su nombre físico.",
           "en_inventario": true
         },
         {
@@ -5042,7 +5042,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "documento_lineas.legado",
           "transformacion": "Renglón borrado en el legado: no se carga como movimiento y se conserva el original con su marca.",
           "en_inventario": true
         },
@@ -5053,8 +5053,8 @@
           "longitud": 8,
           "decimales": 2,
           "clase": "derivado",
-          "destino": "saldos_cuenta (conciliación)",
-          "transformacion": "Saldo corrido por renglón. **Tiene valor en las 5.048.937 filas** de `MOV00`+`MOV01` (contado, no supuesto). No se carga como columna: se recalcula y se concilia contra el original, que es una validación gratis del cargador.",
+          "destino": "documento_lineas.legado",
+          "transformacion": "Saldo corrido por renglón. Tiene valor en las 5.048.937 filas de `MOV00`+`MOV01`, y distinto de cero en 545.554 (contado, no supuesto). No se carga como columna: se recalcula y se concilia contra el original (etapa B de db/migration/08_plan_para_culminar.md) y el valor crudo se conserva en `legado`.",
           "en_inventario": true
         },
         {
@@ -5353,8 +5353,8 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "derivado",
-          "destino": "documentos.creado_en + documentos.creado_por",
-          "transformacion": "Fecha, hora y usuario de captura del legado -> auditoría del destino. No sobrescribe creado_en (que es de la migración): se registra en la trazabilidad.",
+          "destino": "documento_lineas.legado",
+          "transformacion": "Usuario (y fecha y hora) de captura del legado. Medido: `TUSUA` trae valor en 4.962.576 renglones; `TDATE` y `TTIME` están vacías. No puede ir a `documentos.creado_por`: esa columna es un id entero y por documento, y el legado guarda iniciales de texto por renglón. Se conserva crudo con su nombre físico.",
           "en_inventario": true
         },
         {
@@ -5364,8 +5364,8 @@
           "longitud": 8,
           "decimales": 0,
           "clase": "derivado",
-          "destino": "documentos.creado_en + documentos.creado_por",
-          "transformacion": "Fecha, hora y usuario de captura del legado -> auditoría del destino. No sobrescribe creado_en (que es de la migración): se registra en la trazabilidad.",
+          "destino": "documento_lineas.legado",
+          "transformacion": "Usuario (y fecha y hora) de captura del legado. Medido: `TUSUA` trae valor en 4.962.576 renglones; `TDATE` y `TTIME` están vacías. No puede ir a `documentos.creado_por`: esa columna es un id entero y por documento, y el legado guarda iniciales de texto por renglón. Se conserva crudo con su nombre físico.",
           "en_inventario": true
         },
         {
@@ -5375,8 +5375,8 @@
           "longitud": 4,
           "decimales": 0,
           "clase": "derivado",
-          "destino": "documentos.creado_en + documentos.creado_por",
-          "transformacion": "Fecha, hora y usuario de captura del legado -> auditoría del destino. No sobrescribe creado_en (que es de la migración): se registra en la trazabilidad.",
+          "destino": "documento_lineas.legado",
+          "transformacion": "Usuario (y fecha y hora) de captura del legado. Medido: `TUSUA` trae valor en 4.962.576 renglones; `TDATE` y `TTIME` están vacías. No puede ir a `documentos.creado_por`: esa columna es un id entero y por documento, y el legado guarda iniciales de texto por renglón. Se conserva crudo con su nombre físico.",
           "en_inventario": true
         },
         {
@@ -5397,7 +5397,7 @@
           "longitud": 1,
           "decimales": 0,
           "clase": "procedencia",
-          "destino": "migracion_filas",
+          "destino": "documento_lineas.legado",
           "transformacion": "Renglón borrado en el legado: no se carga como movimiento y se conserva el original con su marca.",
           "en_inventario": true
         },
@@ -5408,8 +5408,8 @@
           "longitud": 8,
           "decimales": 2,
           "clase": "derivado",
-          "destino": "saldos_cuenta (conciliación)",
-          "transformacion": "Saldo corrido por renglón. **Tiene valor en las 5.048.937 filas** de `MOV00`+`MOV01` (contado, no supuesto). No se carga como columna: se recalcula y se concilia contra el original, que es una validación gratis del cargador.",
+          "destino": "documento_lineas.legado",
+          "transformacion": "Saldo corrido por renglón. Tiene valor en las 5.048.937 filas de `MOV00`+`MOV01`, y distinto de cero en 545.554 (contado, no supuesto). No se carga como columna: se recalcula y se concilia contra el original (etapa B de db/migration/08_plan_para_culminar.md) y el valor crudo se conserva en `legado`.",
           "en_inventario": true
         },
         {

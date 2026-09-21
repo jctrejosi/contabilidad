@@ -142,6 +142,9 @@ CREATE TABLE documentos (
   documento_original_id bigint,                              -- original <-> reversión
   motivo_anulacion      text,
   soporte_anulacion     text,
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado                jsonb,
   creado_en             timestamptz,
   creado_por            integer,
   actualizado_en        timestamptz,
@@ -184,6 +187,9 @@ CREATE TABLE documento_lineas (
   concepto             text,
   archivo_origen       text,                                -- B04: TARCHI (procedencia)
   origen               text NOT NULL DEFAULT 'Manual',
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado               jsonb,
   CONSTRAINT documento_lineas_numero_uk UNIQUE (documento_id, numero_linea),
   CONSTRAINT documento_lineas_sin_doble_valor CHECK (debito = 0 OR credito = 0),
   -- B05: FK compuestas

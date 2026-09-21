@@ -79,6 +79,7 @@ CREATE TABLE companias (
   digito             VARCHAR(5) NOT NULL,              -- dígito de verificación
   estado             VARCHAR(30) NOT NULL DEFAULT 'Activa',
   solo_consolidacion BOOLEAN NOT NULL DEFAULT false,   -- destino de consolidación (no opera)
+  legado             CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en          TIMESTAMP,
   creado_por         INTEGER,
   actualizado_en     TIMESTAMP,
@@ -155,6 +156,7 @@ CREATE TABLE parametros_operacion (
   leyenda2                    CLOB NOT NULL DEFAULT '',          -- CTLEY2
   modo_retencion              VARCHAR(30) NOT NULL DEFAULT 'retencion-a-base',
   periodos_habilitados        CLOB NOT NULL DEFAULT '{}',  -- JSON: validar en el servicio (CT00..CT12: true = habilitado)
+  legado                      CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en                   TIMESTAMP,
   creado_por                  INTEGER,
   actualizado_en              TIMESTAMP,
@@ -214,6 +216,7 @@ CREATE TABLE cuentas (
   parent_id         BIGINT,                              -- jerarquía
   path              VARCHAR(255),                        -- materializado: '/1/5/51/5105/510506'
   eliminado_en      TIMESTAMP,                           -- borrado lógico (NULL = vigente)
+  legado            CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en         TIMESTAMP,
   creado_por        INTEGER,
   actualizado_en    TIMESTAMP,
@@ -256,6 +259,7 @@ CREATE TABLE terceros (
   nacimiento      DATE,
   estado_web      VARCHAR(30) NOT NULL DEFAULT 'Inactivo',
   eliminado_en    TIMESTAMP,                             -- borrado lógico (NULL = vigente)
+  legado          CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en       TIMESTAMP,
   creado_por      INTEGER,
   actualizado_en  TIMESTAMP,
@@ -295,6 +299,7 @@ CREATE TABLE centros_costos (
   nivel           INTEGER NOT NULL DEFAULT 1,
   parent_id       BIGINT,                                -- jerarquía
   eliminado_en    TIMESTAMP,                             -- borrado lógico (NULL = vigente)
+  legado          CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en       TIMESTAMP,
   creado_por      INTEGER,
   actualizado_en  TIMESTAMP,
@@ -316,6 +321,7 @@ CREATE TABLE comprobantes (
   nombre          VARCHAR(255) NOT NULL,
   activo          BOOLEAN NOT NULL DEFAULT true,
   eliminado_en    TIMESTAMP,                             -- borrado lógico (NULL = vigente)
+  legado          CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en       TIMESTAMP,
   creado_por      INTEGER,
   actualizado_en  TIMESTAMP,
@@ -357,6 +363,7 @@ CREATE TABLE tipos_documento (
   tercero_obligatorio BOOLEAN NOT NULL DEFAULT false,
   centro_obligatorio  BOOLEAN NOT NULL DEFAULT false,
   eliminado_en        TIMESTAMP,                         -- borrado lógico (NULL = vigente)
+  legado              CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en           TIMESTAMP,
   creado_por          INTEGER,
   actualizado_en      TIMESTAMP,
@@ -659,6 +666,7 @@ CREATE TABLE documentos (
   documento_original_id BIGINT,                           -- original <-> reversión
   motivo_anulacion      CLOB,
   soporte_anulacion     CLOB,
+  legado                CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en             TIMESTAMP,
   creado_por            INTEGER,
   actualizado_en        TIMESTAMP,
@@ -721,6 +729,8 @@ CREATE TABLE documento_lineas (
   concepto             CLOB,
   archivo_origen       VARCHAR(255),                      -- TARCHI (B04, procedencia)
   origen               VARCHAR(30) NOT NULL DEFAULT 'Manual',
+  -- Sin bloque de auditoría en esta tabla: `legado` queda como última columna.
+  legado               CLOB,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   CONSTRAINT documento_lineas_pk PRIMARY KEY (id),
   CONSTRAINT documento_lineas_numero_uk UNIQUE (documento_id, numero_linea),
   CONSTRAINT documento_lineas_sin_doble_valor_ck CHECK (debito = 0 OR credito = 0),

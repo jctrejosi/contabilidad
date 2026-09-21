@@ -66,6 +66,53 @@ MESES = {"00": "Saldos Iniciales", "01": "Enero", "02": "Febrero", "03": "Marzo"
 
 
 # ---------------------------------------------------------------------------
+# `legado`: el resto de la fila del legado
+#
+# El contrato manda a `<tabla>.legado` los campos del origen que no tienen
+# columna propia. Se leen del **contrato**, no de una lista escrita a mano, para
+# que no pueda quedarse ninguno fuera; y sólo se guardan las claves con valor,
+# porque un jsonb con veinte claves vacías por fila es espacio muerto en cinco
+# millones de renglones. Etapa A de db/migration/08_plan_para_culminar.md.
+# ---------------------------------------------------------------------------
+def campos_legado() -> dict[str, tuple[str, ...]]:
+    """Campos cuyo destino declarado en el contrato es `<tabla>.legado`."""
+    contrato = json.loads(CONTRATO.read_text(encoding="utf-8"))
+    por_tabla: dict[str, tuple[str, ...]] = {}
+    for tabla in contrato["tablas"]:
+        campos = [campo["campo"] for campo in tabla["campos"]
+                  if campo["destino"].strip().endswith(".legado")]
+        if campos:
+            por_tabla[tabla["tabla"]] = tuple(campos)
+    return por_tabla
+
+
+CAMPOS_LEGADO = campos_legado()
+
+
+def legado_de(tabla: str, fila: dict) -> str | None:
+    """`legado` de una fila: crudo, con su nombre físico y sólo si trae valor."""
+    valores = {}
+    for campo in CAMPOS_LEGADO.get(tabla, ()):
+        limpio = texto(fila.get(campo))
+        if limpio:
+            valores[campo] = limpio
+    return json.dumps(valores, ensure_ascii=False) if valores else None
+
+
+def legado_sql(tablas: tuple[str, ...], alias: str) -> str:
+    """Expresión SQL del `legado` para las tablas de origen indicadas.
+
+    `MOV00` y `MOV01` comparten estructura y se copian a la misma tabla temporal,
+    así que se usa la unión de los campos de las dos.
+    """
+    campos = sorted({campo for tabla in tablas for campo in CAMPOS_LEGADO.get(tabla, ())})
+    if not campos:
+        return "NULL"
+    partes = ", ".join(f"'{campo}', NULLIF(btrim({alias}.\"{campo}\"), '')" for campo in campos)
+    return f"NULLIF(jsonb_strip_nulls(jsonb_build_object({partes})), '{{}}'::jsonb)"
+
+
+# ---------------------------------------------------------------------------
 # Conversión de celdas
 # ---------------------------------------------------------------------------
 def texto(valor: str | None) -> str | None:
@@ -344,10 +391,13 @@ def cargar_companias(carga: Carga) -> None:
     with carga.cn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO companias (codigo, nombre, nit, digito, estado) VALUES (%s, %s, %s, %s, 'Activa')
-            ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre RETURNING id
+            INSERT INTO companias (codigo, nombre, nit, digito, estado, legado)
+            VALUES (%s, %s, %s, %s, 'Activa', %s)
+            ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre,
+                                               legado = EXCLUDED.legado RETURNING id
             """,
-            (codigo, texto(activa["EMPNOM"]), nit or None, digito or ""),
+            (codigo, texto(activa["EMPNOM"]), nit or None, digito or "",
+             legado_de("CONEMP", activa)),
         )
         carga.compania_id = cur.fetchone()[0]
         cur.execute("INSERT INTO compania_anios (compania_id, anio) VALUES (%s, %s) ON CONFLICT DO NOTHING",
@@ -404,8 +454,8 @@ def cargar_parametros(carga: Carga) -> None:
               compania_id, anio, nombre_empresa, nit, direccion, ciudad, directorio_contabilidad,
               anio_operacion, contabilidad_conciliacion, verifica_documentos_lotes,
               terceros_documentos_propios, controla_usuario_lotes, comentario_certificado,
-              leyenda2, documento, fecha_operativa, periodos_habilitados)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+              leyenda2, documento, fecha_operativa, periodos_habilitados, legado)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (compania_id, anio) DO NOTHING
             """,
             (carga.compania_id, carga.anio, texto(fila["CTCIA"]), texto(fila["CTNIT"]),
@@ -413,7 +463,7 @@ def cargar_parametros(carga: Carga) -> None:
              texto(fila["CTANO"]), texto(fila["CTCLAVE1"]), bool(booleano(fila["CTVERDOC"])),
              bool(booleano(fila["CTTERDOC"])), texto(fila["CTPUC"]) == "1", texto(fila["CTLEY1"]),
              texto(fila["CTLEY2"]), texto(fila["CTDOCUM"]), fecha_aaaammdd(fila["CTFCHOY"]),
-             json.dumps(habilitados)),
+             json.dumps(habilitados), legado_de("CONCTR", fila)),
         )
     carga.contar("parametros_operacion", "Cargado")
 
@@ -444,11 +494,12 @@ def cargar_comprobantes(carga: Carga) -> None:
             continue
         existentes.add(codigo)
         nuevos.append((carga.compania_id, codigo, texto(fila["NOMBRE"]) or codigo,
-                       texto(fila["CTABDES"]), not bool(booleano(fila["HIST"]))))
+                       texto(fila["CTABDES"]), not bool(booleano(fila["HIST"])),
+                       legado_de("CONTICOM", fila)))
     with carga.cn.cursor() as cur:
         cur.executemany(
-            "INSERT INTO comprobantes (compania_id, codigo, nombre, descripcion_auxiliar, activo) "
-            "VALUES (%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", nuevos)
+            "INSERT INTO comprobantes (compania_id, codigo, nombre, descripcion_auxiliar, activo, legado) "
+            "VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING", nuevos)
     carga.contar("comprobantes", f"Cargados {len(nuevos)}")
     if repetidos:
         carga.registrar("CONTICOM", "Fusionado", repetidos, "comprobantes",
@@ -469,6 +520,7 @@ def cargar_centros(carga: Carga) -> None:
             "valor": texto(fila["VALOR"]) or 0, "porcentaje": texto(fila["PORCEN"]) or 0,
             "valor_porcentaje": texto(fila["VLRPOR"]) or 0, "codigo_item": texto(fila["CODITEM"]),
             "concepto": texto(fila["CONCEPTO"]), "cuenta": texto(fila["CUENTA"]),
+            "legado": legado_de("CONCECOS", fila),
         })
     codigos = {r["codigo"] for r in registros}
     with carga.cn.cursor() as cur:
@@ -480,17 +532,17 @@ def cargar_centros(carga: Carga) -> None:
                 """
                 INSERT INTO centros_costos (compania_id, codigo, nombre, nivel, parent_id, hist, tipo,
                                             carpeta, valor, porcentaje, valor_porcentaje, codigo_item,
-                                            cuenta_id, concepto)
+                                            cuenta_id, concepto, legado)
                 VALUES (%s,%s,%s,%s,
                         (SELECT id FROM centros_costos WHERE compania_id = %s AND codigo = %s),
-                        %s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        %s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (compania_id, codigo) DO NOTHING
                 """,
                 (carga.compania_id, registro["codigo"], registro["nombre"], len(cadena) + 1,
                  carga.compania_id, cadena[-1] if cadena else None, registro["hist"], registro["tipo"],
                  registro["carpeta"], registro["valor"], registro["porcentaje"],
                  registro["valor_porcentaje"], registro["codigo_item"],
-                 cuentas.get(registro["cuenta"] or ""), registro["concepto"]),
+                 cuentas.get(registro["cuenta"] or ""), registro["concepto"], registro["legado"]),
             )
     carga.contar("centros_costos", f"Cargados {len(registros)}")
 
@@ -532,6 +584,7 @@ def cargar_cuentas(carga: Carga) -> None:
             "distribucion": texto(fila["MDISTRICC"]) if texto(fila["MDISTRICC"]) in
             ("Ninguna", "Fija", "Porcentaje") else "Ninguna",
             "clasificacion": texto(fila["CTCTABASE"]),
+            "legado": legado_de("CONMAE", fila),
             "acumulados": [(f"{n:02d}", texto(fila[f"MACMDEB{n:02d}"]) or 0,
                             texto(fila[f"MACMCRE{n:02d}"]) or 0) for n in range(1, 13)],
         })
@@ -546,9 +599,10 @@ def cargar_cuentas(carga: Carga) -> None:
                 """
                 INSERT INTO cuentas (compania_id, codigo, nombre, nivel, afectable, controla_centro,
                                      controla_base, ajuste, clase_iva, clase_retencion, distribucion,
-                                     porcentaje, saldo_inicial, clasificacion_corriente, parent_id, path)
+                                     porcentaje, saldo_inicial, clasificacion_corriente, parent_id, path,
+                                     legado)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                        (SELECT id FROM cuentas WHERE compania_id = %s AND codigo = %s), %s)
+                        (SELECT id FROM cuentas WHERE compania_id = %s AND codigo = %s), %s, %s)
                 ON CONFLICT (compania_id, codigo) DO NOTHING RETURNING id
                 """,
                 (carga.compania_id, registro["codigo"], registro["nombre"],
@@ -557,7 +611,7 @@ def cargar_cuentas(carga: Carga) -> None:
                  registro["clase_iva"], registro["clase_retencion"], registro["distribucion"],
                  registro["porcentaje"], registro["saldo"], registro["clasificacion"],
                  carga.compania_id, cadena[-1] if cadena else None,
-                 "/" + "/".join([*cadena, registro["codigo"]])),
+                 "/" + "/".join([*cadena, registro["codigo"]]), registro["legado"]),
             )
             encontrada = cur.fetchone()
             cuenta_id = encontrada[0] if encontrada else None
@@ -618,7 +672,7 @@ def cargar_terceros(carga: Carga) -> None:
             estado, texto(fila["CMOTIVO"]), fecha_aaaammdd(fila["CFCHCREA"]),
             texto(fila["CSALDO"]) or 0, texto(fila["CCUPO"]) or 0, texto(fila["CSOCIAL"]),
             texto(fila["CNOM1"]), texto(fila["CNOM2"]), texto(fila["CAPE1"]), texto(fila["CAPE2"]),
-            texto(fila["CCODIGO"]),
+            texto(fila["CCODIGO"]), legado_de("FADCLI", fila),
         ))
     with carga.cn.cursor() as cur:
         cur.executemany(
@@ -626,8 +680,9 @@ def cargar_terceros(carga: Carga) -> None:
             INSERT INTO terceros (compania_id, nit, digito, nombre, tipo, tipo_documento, direccion,
                                   telefono, ciudad, codigo_ciudad, zona, correo, estado, motivo_bloqueo,
                                   fecha_creacion, saldo, cupo, nombre_comercial, primer_nombre,
-                                  segundo_nombre, primer_apellido, segundo_apellido, codigo_legado)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                                  segundo_nombre, primer_apellido, segundo_apellido, codigo_legado,
+                                  legado)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (compania_id, nit) DO NOTHING
             """, nuevos)
     carga.contar("terceros", f"Cargados {len(nuevos)}")
@@ -670,7 +725,7 @@ def cargar_tipos_documento(carga: Carga) -> None:
             entero(fila["MODULO"]), texto(fila["TIPO"]), texto(fila["PREFIJO"]),
             comprobantes.get(texto(fila["COMPRO"]) or ""),
             True if genera is None else genera, bool(booleano(fila["CONVER"])),
-            texto(fila["DOCCONVER"]),
+            texto(fila["DOCCONVER"]), legado_de("VISDOCUM", fila),
         ))
         if texto(fila["NIMP1"]) or texto(fila["IMP1"]):
             tarifas[(texto(fila["NIMP1"]) or "IVA", texto(fila["IMP1"]) or 0)] = True
@@ -691,8 +746,8 @@ def cargar_tipos_documento(carga: Carga) -> None:
             """
             INSERT INTO tipos_documento (compania_id, codigo, nombre, numeracion, consecutivo, modulo,
                                          naturaleza, prefijo, comprobante_id, genera_contabilizacion,
-                                         permite_conversion, conversion_codigo)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING
+                                         permite_conversion, conversion_codigo, legado)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING
             """, tipos)
         cur.executemany(
             "INSERT INTO tarifas_iva (compania_id, codigo, nombre, tarifa) VALUES (%s,%s,%s,%s) "
@@ -943,7 +998,7 @@ def crear_mapas(cur, compania_id: int) -> None:
 DOCUMENTOS_SQL = f"""
 INSERT INTO documentos (compania_id, anio, comprobante_id, numero, documento, tipo_documento_id,
                         fecha, fecha_documento, periodo, tercero_id, concepto, estado, origen,
-                        usuario_id, idempotency_key)
+                        usuario_id, idempotency_key, legado)
 SELECT %(compania)s,
        EXTRACT(YEAR FROM f.fecha)::int,
        mc.id,
@@ -959,7 +1014,8 @@ SELECT %(compania)s,
        'Migracion',
        %(usuario)s,
        md5(%(compania)s::text || COALESCE(d."DDOCUM", '') || COALESCE(d."DCOMPRO", '')
-           || d."_loc")::uuid
+           || d."_loc")::uuid,
+       {legado_sql(("CONDOCUM",), "d")}
   FROM stg_doc d
   CROSS JOIN LATERAL (SELECT {FECHA_CABECERA} AS fecha) f
   JOIN map_comprobantes mc ON mc.codigo = btrim(d."DCOMPRO")
@@ -1134,7 +1190,7 @@ LINEAS_SQL = f"""
 INSERT INTO documento_lineas (documento_id, compania_id, numero_linea, cuenta_id, tercero_id,
                               centro_costo_id, tipo_documento_id, debito, credito, base, clase,
                               fecha_documento, valor_moneda, nit_alterno, documento_afectado,
-                              concepto, archivo_origen, origen)
+                              concepto, archivo_origen, origen, legado)
 SELECT e.documento_id, %(compania)s,
        -- `MOVxx.TSEC` —la secuencia que el contrato prefería— está vacía en las
        -- 5.048.937 filas, así que se usa el orden físico de la instantánea, que es
@@ -1156,7 +1212,8 @@ SELECT e.documento_id, %(compania)s,
        NULLIF(btrim(m."TDOCUM2"), ''),
        NULLIF(btrim(m."TDETALLE"), ''),
        NULLIF(btrim(m."TARCHI"), ''),
-       'Migracion'
+       'Migracion',
+       {legado_sql(("MOV00", "MOV01"), "m")}
   FROM stg_mov m
   CROSS JOIN LATERAL (SELECT COALESCE(NULLIF(btrim(m."TVALOR"), '')::numeric, 0) AS valor) v
   CROSS JOIN LATERAL (SELECT {FECHA_RENGLON} AS fecha) f

@@ -376,17 +376,19 @@ REGLAS += [
     _r("MOVxx", "^TSEC$", DERIVADO, "documento_lineas.numero_linea",
        "Está vacía en las 5.048.937 filas, así que se numera con el orden físico de "
        "la instantánea (_archivo, _loc), que es el reemplazo previsto por el contrato."),
-    _r("MOVxx", "^TDATE$|^TTIME$|^TUSUA$", DERIVADO,
-       "documentos.creado_en + documentos.creado_por",
-       "Fecha, hora y usuario de captura del legado -> auditoría del destino. No "
-       "sobrescribe creado_en (que es de la migración): se registra en la trazabilidad."),
+    _r("MOVxx", "^TDATE$|^TTIME$|^TUSUA$", DERIVADO, "documento_lineas.legado",
+       "Usuario (y fecha y hora) de captura del legado. Medido: `TUSUA` trae valor en "
+       "4.962.576 renglones; `TDATE` y `TTIME` están vacías. No puede ir a "
+       "`documentos.creado_por`: esa columna es un id entero y por documento, y el legado "
+       "guarda iniciales de texto por renglón. Se conserva crudo con su nombre físico."),
     _r("MOVxx", "^BORRAR$", PROCEDENCIA, "migracion_filas",
        "Renglón borrado en el legado: no se carga como movimiento y se conserva el "
        "original con su marca."),
-    _r("MOVxx", "^TSALDO$", DERIVADO, "saldos_cuenta (conciliación)",
-       "Saldo corrido por renglón. **Tiene valor en las 5.048.937 filas** de `MOV00`+`MOV01` "
-       "(contado, no supuesto). No se carga como columna: se recalcula y se concilia "
-       "contra el original, que es una validación gratis del cargador."),
+    _r("MOVxx", "^TSALDO$", DERIVADO, "documento_lineas.legado",
+       "Saldo corrido por renglón. Tiene valor en las 5.048.937 filas de `MOV00`+`MOV01`, "
+       "y distinto de cero en 545.554 (contado, no supuesto). No se carga como columna: "
+       "se recalcula y se concilia contra el original (etapa B de "
+       "db/migration/08_plan_para_culminar.md) y el valor crudo se conserva en `legado`."),
     _r("MOVxx", "^(TINCON|TCV|TABMNIT|TESTADO|TSUBCTA)$", DESCARTADO, "—",
        "Contado en los datos: **vacíos en las 5.048.937 filas** de `MOV00`+`MOV01`. Son "
        "restos del físico sin uso en esta copia; no hay nada que migrar. Cierra D-MOV-1."),
@@ -564,6 +566,43 @@ REGLAS += [
        "no un maestro del negocio. Vacía en esta copia y sin equivalente en el destino.")
     for tabla in ("CATALOGO2", "P_A_100_50", "P_A_102_50")
 ]
+
+# ---------------------------------------------------------------------------
+# Los campos sin columna de destino van a `legado`, no a `migracion_filas`
+#
+# El contrato los mandaba a `migracion_filas`, que sólo registra lo rechazado, lo
+# fusionado y lo derivado: para las filas que **sí** se cargan no había nada, así
+# que sus campos sin columna se perdían. Medido antes de corregirlo: 4.962.576
+# valores de `TUSUA`, 735.975 de `DDOCUMI`, 456.222 de `DMODULO`, 282.948 en
+# `FADCLI` y 76.000 en `CONMAE`.
+#
+# Ahora se conservan crudos, con su nombre físico, en la columna `legado` de la
+# tabla que recibe el registro. Sólo lleva las claves que traen valor.
+#
+# `CONMOVI` y `CONLOTES` —cuyas entidades no están implementadas y que además
+# están vacías en la copia— siguen declarando `migracion_filas`.
+# Etapa A de `db/migration/08_plan_para_culminar.md`.
+# ---------------------------------------------------------------------------
+LEGADO = {
+    "CONEMP": "companias",
+    "CONPUC": "cuentas",
+    "CONCTR": "parametros_operacion",
+    "CONMAE": "cuentas",
+    "CONCECOS": "centros_costos",
+    "CONTICOM": "comprobantes",
+    "CONDOCUM": "documentos",
+    "MOVxx": "documento_lineas",
+    "FADCLI": "terceros",
+    "VISDOCUM": "tipos_documento",
+}
+
+REGLAS = [
+    Regla(regla.tabla, regla.patron, regla.clase, f"{LEGADO[regla.tabla]}.legado",
+          regla.transformacion)
+    if regla.clase == PROCEDENCIA and regla.tabla in LEGADO else regla
+    for regla in REGLAS
+]
+
 
 # ---------------------------------------------------------------------------
 # Tablas presentes en ADD_CONTAB/ pero sin catálogo de campos en el diccionario

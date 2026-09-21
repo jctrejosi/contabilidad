@@ -140,6 +140,7 @@ CREATE TABLE companias (
   digito             VARCHAR(2)   NOT NULL,   -- DV
   estado             VARCHAR(30)  NOT NULL DEFAULT 'Activa',
   solo_consolidacion LOGICAL      NOT NULL DEFAULT FALSE,
+  legado             MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en          TIMESTAMP,
   creado_por         INTEGER,
   actualizado_en     TIMESTAMP,
@@ -205,6 +206,7 @@ CREATE TABLE parametros_operacion (
   leyenda2                    MEMO         NOT NULL,  -- CTLEY2 (texto_libre)
   modo_retencion              VARCHAR(30)  NOT NULL DEFAULT 'retencion-a-base',
   periodos_habilitados        MEMO         NOT NULL,  -- JSON CT00..CT12 → habilitado; servicio inserta '{}'
+  legado                      MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en                   TIMESTAMP,
   creado_por                  INTEGER,
   actualizado_en              TIMESTAMP,
@@ -259,6 +261,7 @@ CREATE TABLE cuentas (
   parent_id        INTEGER,                  -- jerarquía
   path             VARCHAR(255),             -- ruta materializada '/1/5/51/5105/510506'
   eliminado_en     TIMESTAMP,                -- borrado lógico
+  legado           MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en        TIMESTAMP,
   creado_por       INTEGER,
   actualizado_en   TIMESTAMP,
@@ -297,6 +300,7 @@ CREATE TABLE terceros (
   nacimiento      DATE,
   estado_web      VARCHAR(30)   NOT NULL DEFAULT 'Inactivo',
   eliminado_en    TIMESTAMP,
+  legado          MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en       TIMESTAMP,
   creado_por      INTEGER,
   actualizado_en  TIMESTAMP,
@@ -329,6 +333,7 @@ CREATE TABLE centros_costos (
   nivel           INTEGER      NOT NULL DEFAULT 1,
   parent_id       INTEGER,                 -- jerarquía
   eliminado_en    TIMESTAMP,
+  legado          MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en       TIMESTAMP,
   creado_por      INTEGER,
   actualizado_en  TIMESTAMP,
@@ -348,6 +353,7 @@ CREATE TABLE comprobantes (
   nombre          VARCHAR(255) NOT NULL,
   activo          LOGICAL      NOT NULL DEFAULT TRUE,
   eliminado_en    TIMESTAMP,
+  legado          MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en       TIMESTAMP,
   creado_por      INTEGER,
   actualizado_en  TIMESTAMP,
@@ -389,6 +395,7 @@ CREATE TABLE tipos_documento (
   tercero_obligatorio LOGICAL      NOT NULL DEFAULT FALSE,
   centro_obligatorio  LOGICAL      NOT NULL DEFAULT FALSE,
   eliminado_en        TIMESTAMP,
+  legado              MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en           TIMESTAMP,
   creado_por          INTEGER,
   actualizado_en      TIMESTAMP,
@@ -650,6 +657,7 @@ CREATE TABLE documentos (
   documento_original_id INTEGER,                 -- original ↔ reversión
   motivo_anulacion      VARCHAR(500),
   soporte_anulacion     VARCHAR(100),
+  legado                MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
   creado_en             TIMESTAMP,
   creado_por            INTEGER,
   actualizado_en        TIMESTAMP,
@@ -703,7 +711,9 @@ CREATE TABLE documento_lineas (
   documento_afectado   VARCHAR(100),
   concepto             VARCHAR(500),
   archivo_origen       VARCHAR(255),          -- TARCHI
-  origen               VARCHAR(30)   NOT NULL DEFAULT 'Manual'
+  origen               VARCHAR(30)   NOT NULL DEFAULT 'Manual',
+  -- Sin bloque de auditoría en esta tabla: `legado` queda como última columna.
+  legado               MEMO,  -- campos del origen sin columna propia; en PostgreSQL es jsonb (etapa A)
 );
 -- CHECK: debito >= 0; credito >= 0; debito = 0 OR credito = 0 (nunca ambos);
 --        clase IN ('IVA','Retencion','Otro','')

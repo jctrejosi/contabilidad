@@ -17,6 +17,9 @@ CREATE TABLE companias (
   estado              text NOT NULL DEFAULT 'Activa'
                         CHECK (estado IN ('Activa', 'Inactiva')),
   solo_consolidacion  boolean NOT NULL DEFAULT false,       -- Destino de consolidación
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado              jsonb,
   creado_en           timestamptz,
   creado_por          integer,
   actualizado_en      timestamptz,
@@ -93,6 +96,9 @@ CREATE TABLE parametros_operacion (
   modo_retencion              text NOT NULL DEFAULT 'retencion-a-base'
                                 CHECK (modo_retencion IN ('retencion-a-base', 'base-a-retencion')),
   periodos_habilitados        jsonb NOT NULL DEFAULT '{}',   -- CT00..CT12: true=habilitado
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado                      jsonb,
   creado_en                   timestamptz,
   creado_por                  integer,
   actualizado_en              timestamptz,

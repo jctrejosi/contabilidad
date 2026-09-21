@@ -71,7 +71,8 @@
         {"nombre": "nit", "tipo": "texto", "requerido": true, "nota": "NIT sin dígito de verificación (CTNIT)"},
         {"nombre": "digito", "tipo": "texto", "requerido": true, "nota": "Dígito de verificación"},
         {"nombre": "estado", "tipo": "texto", "requerido": true, "nota": "Default 'Activa'; catálogo Activa/Inactiva"},
-        {"nombre": "solo_consolidacion", "tipo": "booleano", "requerido": true, "nota": "Default false; solo destino de consolidación (no opera)"}
+        {"nombre": "solo_consolidacion", "tipo": "booleano", "requerido": true, "nota": "Default false; solo destino de consolidación (no opera)"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["codigo"], ["nit", "digito"]],
@@ -142,7 +143,8 @@
         {"nombre": "documento", "tipo": "texto", "requerido": true, "nota": "Default '' (CTDOCUM)"},
         {"nombre": "leyenda2", "tipo": "texto_libre", "requerido": true, "nota": "Default '' (CTLEY2)"},
         {"nombre": "modo_retencion", "tipo": "texto", "requerido": true, "nota": "Default 'retencion-a-base'; catálogo retencion-a-base/base-a-retencion"},
-        {"nombre": "periodos_habilitados", "tipo": "documento", "requerido": true, "nota": "Default '{}'; mapa CT00..CT12 → habilitado"}
+        {"nombre": "periodos_habilitados", "tipo": "documento", "requerido": true, "nota": "Default '{}'; mapa CT00..CT12 → habilitado"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["compania_id", "anio"]],
@@ -196,7 +198,8 @@
         {"nombre": "saldo_inicial", "tipo": "dinero", "requerido": true, "nota": "Default 0; saldo inicial de la cuenta"},
         {"nombre": "parent_id", "tipo": "id", "requerido": false, "nota": "FK → cuentas(id); jerarquía"},
         {"nombre": "path", "tipo": "texto", "requerido": false, "nota": "Ruta materializada '/1/5/51/5105/510506'"},
-        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"}
+        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["compania_id", "codigo"], ["compania_id", "id"]],
@@ -237,7 +240,8 @@
         {"nombre": "sexo", "tipo": "texto", "requerido": false, "nota": "Catálogo M/F/J o nulo"},
         {"nombre": "nacimiento", "tipo": "fecha", "requerido": false, "nota": "Fecha de nacimiento"},
         {"nombre": "estado_web", "tipo": "texto", "requerido": true, "nota": "Default 'Inactivo'; catálogo Activo/Inactivo"},
-        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"}
+        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["compania_id", "nit"], ["compania_id", "id"]],
@@ -275,7 +279,8 @@
         {"nombre": "nombre", "tipo": "texto", "requerido": true, "nota": "Denominación"},
         {"nombre": "nivel", "tipo": "entero", "requerido": true, "nota": "Default 1; nivel jerárquico"},
         {"nombre": "parent_id", "tipo": "id", "requerido": false, "nota": "FK → centros_costos(id)"},
-        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"}
+        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["compania_id", "codigo"], ["compania_id", "id"]],
@@ -298,7 +303,8 @@
         {"nombre": "codigo", "tipo": "texto", "requerido": true, "nota": "p. ej. 'CE', 'RC', 'CP'"},
         {"nombre": "nombre", "tipo": "texto", "requerido": true, "nota": "Denominación"},
         {"nombre": "activo", "tipo": "booleano", "requerido": true, "nota": "Default true; habilitado"},
-        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"}
+        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["compania_id", "codigo"], ["compania_id", "id"]],
@@ -345,7 +351,8 @@
         {"nombre": "consecutivo", "tipo": "entero_largo", "requerido": true, "nota": "Default 1; consecutivo del tipo"},
         {"nombre": "tercero_obligatorio", "tipo": "booleano", "requerido": true, "nota": "Default false; exige tercero en el renglón"},
         {"nombre": "centro_obligatorio", "tipo": "booleano", "requerido": true, "nota": "Default false; exige centro en el renglón"},
-        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"}
+        {"nombre": "eliminado_en", "tipo": "fecha_hora", "requerido": false, "nota": "Borrado lógico"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["compania_id", "codigo"], ["compania_id", "id"]],
@@ -649,7 +656,8 @@
         {"nombre": "idempotency_key", "tipo": "uuid", "requerido": true, "nota": "Default gen_random_uuid(); previene doble contabilización"},
         {"nombre": "documento_original_id", "tipo": "id", "requerido": false, "nota": "FK → documentos(id); original ↔ reversión"},
         {"nombre": "motivo_anulacion", "tipo": "texto", "requerido": false, "nota": "Motivo de la anulación"},
-        {"nombre": "soporte_anulacion", "tipo": "texto", "requerido": false, "nota": "Soporte/acta de la anulación"}
+        {"nombre": "soporte_anulacion", "tipo": "texto", "requerido": false, "nota": "Soporte/acta de la anulación"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["compania_id", "anio", "comprobante_id", "numero"], ["idempotency_key"], ["compania_id", "id"], ["compania_id", "anio", "documento"]],
@@ -692,7 +700,8 @@
         {"nombre": "documento_afectado", "tipo": "texto", "requerido": false, "nota": "Documento que afecta"},
         {"nombre": "concepto", "tipo": "texto", "requerido": false, "nota": "Detalle del renglón"},
         {"nombre": "archivo_origen", "tipo": "texto", "requerido": false, "nota": "TARCHI; procedencia (B04)"},
-        {"nombre": "origen", "tipo": "texto", "requerido": true, "nota": "Default 'Manual'; catálogo origen_lote (sin CHECK en el esquema)"}
+        {"nombre": "origen", "tipo": "texto", "requerido": true, "nota": "Default 'Manual'; catálogo origen_lote (sin CHECK en el esquema)"},
+        {"nombre": "legado", "tipo": "documento", "requerido": false, "nota": "Campos del origen sin columna propia, crudos, con su nombre físico y sólo si traen valor (jsonb en PostgreSQL)"}
       ],
       "pk": ["id"],
       "unicos": [["documento_id", "numero_linea"]],

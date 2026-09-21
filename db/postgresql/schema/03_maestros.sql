@@ -31,6 +31,9 @@ CREATE TABLE cuentas (
   parent_id       bigint REFERENCES cuentas (id),            -- jerarquía
   path            text,                                      -- materializado: '/1/5/51/5105/510506'
   eliminado_en    timestamptz,
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado          jsonb,
   creado_en       timestamptz,
   creado_por      integer,
   actualizado_en  timestamptz,
@@ -70,6 +73,9 @@ CREATE TABLE terceros (
   estado_web      text NOT NULL DEFAULT 'Inactivo'
                     CHECK (estado_web IN ('Activo', 'Inactivo')),
   eliminado_en    timestamptz,
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado          jsonb,
   creado_en       timestamptz,
   creado_por      integer,
   actualizado_en  timestamptz,
@@ -97,6 +103,9 @@ CREATE TABLE centros_costos (
   nivel           integer NOT NULL DEFAULT 1,
   parent_id       bigint REFERENCES centros_costos (id),
   eliminado_en    timestamptz,
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado          jsonb,
   creado_en       timestamptz,
   creado_por      integer,
   actualizado_en  timestamptz,
@@ -116,6 +125,9 @@ CREATE TABLE comprobantes (
   nombre          text NOT NULL,
   activo          boolean NOT NULL DEFAULT true,
   eliminado_en    timestamptz,
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado          jsonb,
   creado_en       timestamptz,
   creado_por      integer,
   actualizado_en  timestamptz,
@@ -150,6 +162,9 @@ CREATE TABLE tipos_documento (
   tercero_obligatorio boolean NOT NULL DEFAULT false,
   centro_obligatorio  boolean NOT NULL DEFAULT false,
   eliminado_en        timestamptz,
+  -- Campos del origen sin columna propia, crudos, con su nombre físico y sólo si
+  -- traen valor (etapa A de db/migration/08_plan_para_culminar.md).
+  legado              jsonb,
   creado_en           timestamptz,
   creado_por          integer,
   actualizado_en      timestamptz,
