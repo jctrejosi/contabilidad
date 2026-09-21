@@ -238,26 +238,73 @@ function listenersOnPort(port) {
   return [...pids];
 }
 
+/** Campo numérico de /proc/<pid>/stat (la coma de `comm` puede traer espacios). */
+function procStatField(pid, index) {
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+    const cierre = stat.lastIndexOf(")");
+    const campos = stat.slice(cierre + 2).trim().split(/\s+/);
+    return Number(campos[index]);
+  } catch {
+    return null;
+  }
+}
+
+/** PID del padre de un proceso (Linux). */
+function parentPid(pid) {
+  // Tras ")", los campos son: state, ppid, pgrp, session, … → ppid = índice 1.
+  return procStatField(pid, 1);
+}
+
+/** Línea de comandos de un proceso (Linux), o cadena vacía si ya no existe. */
+function cmdlineOf(pid) {
+  try {
+    return fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\0/g, " ").trim();
+  } catch {
+    return "";
+  }
+}
+
+/** `fuser -k` sobre un puerto TCP; devuelve los pids cerrados. */
+function fuserKill(port) {
+  const result = spawnSync("fuser", ["-k", `${port}/tcp`], {
+    stdio: ["ignore", "pipe", "ignore"],
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  const output = `${result.stdout || ""}`.trim();
+  return output ? output.split(/\s+/).map(Number).filter(Number.isFinite) : [];
+}
+
 /**
  * Cierra lo que esté escuchando en el puerto y devuelve los pids cerrados.
- * El pid registrado puede quedar desfasado (uvicorn arranca un worker hijo, y
- * puede haber huérfanos de una sesión anterior), así que nos apoyamos en el
- * puerto. Unix: fuser -k; Windows: netstat + taskkill.
+ *
+ * En Linux, cerrar al que escucha no basta con `uvicorn --reload`: el proceso
+ * padre (el recargador) vuelve a levantar el worker y recupera el puerto, así
+ * que `releasePort` nunca lo vería libre. Por eso también se cierra ese ancestro
+ * cuando su línea de comandos es un recargador y se reintenta el cierre.
  */
 function freePort(port) {
-  if (!IS_WIN) {
-    const result = spawnSync("fuser", ["-k", `${port}/tcp`], {
-      stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf8",
-      windowsHide: true,
-    });
-    const output = `${result.stdout || ""}`.trim();
-    return output ? output.split(/\s+/).map(Number) : [];
+  if (IS_WIN) {
+    const pids = listenersOnPort(port);
+    for (const pid of pids) killPid(pid);
+    return pids;
   }
 
-  const pids = listenersOnPort(port);
-  for (const pid of pids) killPid(pid);
-  return pids;
+  const pids = fuserKill(port);
+  const recargadores = new Set();
+  for (const pid of pids) {
+    let ancestro = parentPid(pid);
+    for (let salto = 0; salto < 2 && ancestro && ancestro > 1; salto++) {
+      if (!/uvicorn|vite/.test(cmdlineOf(ancestro))) break;
+      recargadores.add(ancestro);
+      ancestro = parentPid(ancestro);
+    }
+  }
+  for (const pid of recargadores) killPid(pid);
+  if (recargadores.size) fuserKill(port);
+
+  return [...new Set([...pids, ...recargadores])];
 }
 
 /**

@@ -4,10 +4,9 @@ Servicio **Python (FastAPI)** que da soporte al asistente contable del
 aplicativo, el widget de chat que aparece en el encabezado principal al lado del
 usuario (personaje **"Daisy"**, el mismo del ecommerce).
 
-La estructura replica la del `ia-service` del ecommerce y queda **lista para
-function calling**: hoy no hay herramientas registradas, así que el asistente
-responde en modo conversación; al agregar funciones en `app/tools.py` el loop de
-`app/deepseek.py` las ejecuta automáticamente sin tocar el resto.
+La estructura replica la del `ia-service` del ecommerce. El loop de
+`app/deepseek.py` ejecuta las herramientas registradas en `app/tools.py`; agregar
+una función nueva no requiere tocar nada más.
 
 ## Arquitectura
 
@@ -16,12 +15,44 @@ ia-service/
 ├── app/
 │   ├── main.py      # API FastAPI (/chat, /chat/options, /health)
 │   ├── config.py    # Variables de entorno
-│   ├── tools.py     # Herramientas (function calling) — VACÍO por ahora
+│   ├── backend.py   # Cliente de la API del backend (los handlers NO tocan la BD)
+│   ├── tools.py     # Herramientas (function calling) + sus handlers
 │   └── deepseek.py  # Cliente DeepSeek + loop de function calling ya armado
 ├── requirements.txt
 ├── dev.sh           # Uvicorn con reload
 └── .env.example
 ```
+
+## Cómo consulta los datos
+
+El asistente **no habla con la base de datos**. Sus herramientas usan
+`app/backend.py` para llamar a la API del backend (`/api/...`), que resuelve el
+motor de datos (Advantage o PostgreSQL según `CONTABDSI_STORE`) y centraliza las
+reglas por compañía. Así el bot no se acopla al esquema ni a la migración en
+curso, y hereda PostgreSQL cuando la migración avance.
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `BACKEND_API_URL` | `http://127.0.0.1:8001` | Base de la API del backend |
+| `BACKEND_TIMEOUT` | `30` | Timeout de cada llamada (segundos) |
+
+La compañía activa llega en `context.compania` de `/chat` y los handlers la
+toman con `backend.require_company(ctx)`.
+
+## Herramientas implementadas
+
+Todas son de solo lectura. Devuelven al modelo un resumen corto (máximo 10
+coincidencias) para no inflar el contexto.
+
+| Herramienta | Qué hace | Endpoint |
+|---|---|---|
+| `buscar_cuenta` | Busca cuentas del plan por código (exacto o parcial) o nombre | `GET /api/cuentas` |
+| `consultar_periodo` | Período contable habilitado de la compañía | `GET /api/periodo-operacion` |
+| `buscar_tercero` | Busca terceros por NIT, nombre o ciudad | `GET /api/terceros` |
+
+`buscar_cuenta` cachea el catálogo resumido por compañía durante
+`IA_SERVICE_CATALOG_TTL` segundos (300 por defecto): el endpoint devuelve miles
+de filas y no conviene pedirlo en cada pregunta.
 
 ## API
 
@@ -47,9 +78,11 @@ ia-service/
 3. Regístrala en `FUNCTION_MAP`.
 4. Opcional: añádela a `QUICK_OPTIONS` como sugerencia del widget.
 
-Guarda los resultados que deba renderizar el frontend en `ctx["payload"]`; el
-endpoint `/chat` los devuelve tal cual. El encabezado de `app/tools.py` documenta
-el contrato con más detalle.
+Reglas del handler: consulta la API con `backend.get/post` (nunca la BD), toma la
+compañía con `backend.require_company(ctx)`, devuelve un **resumen corto** al
+modelo y manda lo pesado a `payload(ctx)` (que no se le envía al modelo, solo al
+widget). Ante cualquier fallo, `backend.fail(exc)`. El encabezado de
+`app/tools.py` documenta el contrato completo.
 
 ## Desarrollo local
 
