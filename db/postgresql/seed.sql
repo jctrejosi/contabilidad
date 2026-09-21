@@ -113,7 +113,7 @@ BEGIN
 
   -- ================= Compañía =================
   INSERT INTO companias (codigo, nombre, nit, digito, estado)
-  VALUES ('001', 'Compañía Demo S.A.S.', '900.123.456', '7', 'Activa')
+  VALUES ('1', 'Compañía Demo S.A.S.', '900.123.456', '7', 'Activa')
   RETURNING id INTO v_empresa;
 
   INSERT INTO compania_anios (compania_id, anio) VALUES (v_empresa, 2026) RETURNING id INTO v_anio;
@@ -141,10 +141,16 @@ BEGIN
 
   INSERT INTO parametros_operacion
     (compania_id, anio, nombre_empresa, nit, directorio_contabilidad, anio_operacion,
-     verifica_documentos_lotes, controla_usuario_lotes, modo_retencion)
+     verifica_documentos_lotes, controla_usuario_lotes, modo_retencion, periodos_habilitados)
   VALUES
     (v_empresa, 2026, 'Compañía Demo S.A.S.', '900.123.456-7',
-     'C:\VISION20\CONTAB\001\', '2026', true, true, 'retencion-a-base');
+     'C:\VISION20\CONTAB\001\', '2026', true, true, 'retencion-a-base',
+     -- Claves `00`..`12` (sin prefijo): son las que lee `get_accounting_period`
+     -- para los meses habilitados (equivale a `CONCTR.CTxx`). Se habilitan todos
+     -- menos el 00.
+     '{"00": false, "01": true, "02": true, "03": true, "04": true,
+       "05": true, "06": true, "07": true, "08": true, "09": true,
+       "10": true, "11": true, "12": true}'::jsonb);
 
   -- ================= Plan de cuentas =================
   INSERT INTO cuentas (compania_id, codigo, nombre, nivel, afectable) VALUES (v_empresa,'1','ACTIVO',1,false) RETURNING id INTO c1;

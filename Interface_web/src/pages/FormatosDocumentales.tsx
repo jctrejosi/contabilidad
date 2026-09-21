@@ -75,14 +75,14 @@ function ElementoCanvas({ elemento, seleccionado, vistaPrevia, onSelect }: { ele
   const seleccionStyle = !vistaPrevia && seleccionado ? { outline: '1.5px dashed #0073C0', outlineOffset: 1 } : {};
 
   if (elemento.tipo === 'linea') {
-    return <div onClick={onSelect} style={{ ...style, ...seleccionStyle, backgroundColor: '#1f2937' }} aria-label="Línea" />;
+    return <div onClick={onSelect} className="cursor-pointer" style={{ ...style, ...seleccionStyle, backgroundColor: '#1f2937' }} aria-label="Línea" />;
   }
   if (elemento.tipo === 'rectangulo') {
-    return <div onClick={onSelect} style={{ ...style, ...seleccionStyle, border: '1px solid #6b7280' }} aria-label="Rectángulo" />;
+    return <div onClick={onSelect} className="cursor-pointer" style={{ ...style, ...seleccionStyle, border: '1px solid #6b7280' }} aria-label="Rectángulo" />;
   }
   if (elemento.tipo === 'imagen') {
     return (
-      <div onClick={onSelect} style={{ ...style, ...seleccionStyle }} className="flex items-center justify-center border border-dashed border-gray-400 bg-gray-100 text-gray-400" aria-label="Imagen">
+      <div onClick={onSelect} style={{ ...style, ...seleccionStyle }} className="cursor-pointer flex items-center justify-center border border-dashed border-gray-400 bg-gray-100 text-gray-400" aria-label="Imagen">
         <span className="text-lg">🖼</span>
       </div>
     );
@@ -90,13 +90,13 @@ function ElementoCanvas({ elemento, seleccionado, vistaPrevia, onSelect }: { ele
   if (elemento.tipo === 'campo') {
     const valor = vistaPrevia && elemento.campo ? VALORES_CAMPOS[elemento.campo] : elemento.texto || `{${elemento.campo || ''}}`;
     return (
-      <div onClick={onSelect} style={{ ...style, ...seleccionStyle }} className="truncate text-gray-800" aria-label={`Campo ${nombreCampo(elemento.campo)}`}>
+      <div onClick={onSelect} style={{ ...style, ...seleccionStyle }} className="cursor-pointer truncate text-gray-800" aria-label={`Campo ${nombreCampo(elemento.campo)}`}>
         {valor}
       </div>
     );
   }
   return (
-    <div onClick={onSelect} style={{ ...style, ...seleccionStyle }} className="text-gray-800" aria-label="Leyenda">
+    <div onClick={onSelect} style={{ ...style, ...seleccionStyle }} className="cursor-pointer text-gray-800" aria-label="Leyenda">
       {elemento.texto}
     </div>
   );

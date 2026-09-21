@@ -14,7 +14,7 @@ from . import config, tools
 
 log = logging.getLogger("ia-service.deepseek")
 
-SYSTEM_PROMPT = """Eres "Conta", el asistente contable de CONTABDSI, la aplicación de contabilidad general de DSI S.A.
+SYSTEM_PROMPT = """Eres "Daisy", la asistente contable de CONTABDSI, la aplicación de contabilidad general de DSI S.A.
 
 AYUDAS A:
 - Contadores, auxiliares, auditores y analistas tributarios que usan CONTABDSI.

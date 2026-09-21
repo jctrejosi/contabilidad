@@ -24,6 +24,17 @@
   --color-petroleum-50: #EFFAFF;
 }
 
+/* Tailwind v4 dejó los controles nativos con el cursor por defecto (flecha).
+   Todo elemento accionable debe mostrar la mano; se exceptúan los
+   deshabilitados. Ver también `cursor-pointer` en los clicables que no son
+   <button> (divs/tr con onClick). */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+}
+
 .input-lote {
   width: 100%;
   border: 1px solid #d1d5db;

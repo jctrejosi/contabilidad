@@ -29,6 +29,8 @@
  *   node dev.js                  instala lo que falte, levanta todo y libera la terminal
  *   node dev.js --check          solo verifica herramientas y dependencias
  *   node dev.js --stop           detiene los servicios levantados
+ *   node dev.js --db-postgres    arranca el backend contra PostgreSQL (modelo nuevo)
+ *   node dev.js --db-advantage   arranca el backend contra Advantage (legado; por defecto)
  *   node dev.js --no-db          omite PostgreSQL
  *   node dev.js --no-install     no instala dependencias, solo verifica
  *   node dev.js --require-db     falla si la base de datos no puede iniciar
@@ -39,11 +41,12 @@
  *                                no intenta abrir Docker Desktop
  *
  * Variables de entorno: BACKEND_PORT, WEB_PORT (o PORT), DB_PORT, DB_USER,
- * DB_NAME, DEV_TIMEOUT_MS, DOCKER_START_TIMEOUT_MS, NO_COLOR.
+ * DB_NAME, DATABASE_URL, DEV_TIMEOUT_MS, DOCKER_START_TIMEOUT_MS, NO_COLOR.
  *
- * Nota: el backend depende de Advantage Data Server vía OLEDB (pywin32), así
- * que está orientado a Windows; la base PostgreSQL de `db/postgresql` es el
- * modelo de referencia que usará el backend migrado.
+ * Motor de datos: con `--db-postgres` el backend usa el modelo nuevo
+ * (`CONTABDSI_STORE=postgres` + `DATABASE_URL`); con `--db-advantage` (por
+ * defecto) usa el legado vía OLEDB, que exige Windows y el proveedor de
+ * Advantage. El esquema y la migración están en `db/` (ver `db/migration/`).
  */
 
 const { spawn, spawnSync } = require("node:child_process");
@@ -81,6 +84,22 @@ const CONFIG = {
   startupTimeoutMs: Number(process.env.DEV_TIMEOUT_MS || 120000),
   dockerTimeoutMs: Number(process.env.DOCKER_START_TIMEOUT_MS || 90000),
 };
+
+// Motor de datos del backend. `--db-advantage` (por defecto) usa el legado vía
+// OLEDB; `--db-postgres` inyecta `CONTABDSI_STORE=postgres` y `DATABASE_URL` en
+// el proceso de uvicorn para que lea y escriba el modelo nuevo. El proceso tiene
+// precedencia sobre `backend/.env`, así que el flag manda aunque el archivo diga
+// otra cosa.
+const STORE_ADVANTAGE = "advantage";
+const STORE_POSTGRES = "postgres";
+
+function resolvedDatabaseUrl() {
+  const fromEnv = (process.env.DATABASE_URL || "").trim();
+  if (fromEnv) return fromEnv;
+  const fromFile = (readLocalEnv().DATABASE_URL || "").trim();
+  if (fromFile) return fromFile;
+  return `postgres://${CONFIG.dbUser}:${CONFIG.dbUser}@127.0.0.1:${CONFIG.dbPort}/${CONFIG.dbName}`;
+}
 
 // Los paquetes que el backend necesita importar para considerarse instalado.
 const BACKEND_IMPORTS = ["fastapi", "uvicorn", "openpyxl", "multipart", "reportlab", "pypdf"].concat(
@@ -618,6 +637,7 @@ function ensureAdvantage(options) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 let dbStarted = false;
+let dbReachable = false;
 
 function dockerDaemonUp() {
   return commandExists("docker") && run("docker", ["info"], { capture: true }).status === 0;
@@ -830,11 +850,20 @@ function startBackend() {
   ];
   if (options.reload) args.push("--reload");
 
+  // El flag fija el motor de forma explícita en el proceso del backend (gana
+  // sobre `backend/.env`), para que `--db-postgres` no dependa de lo que diga el
+  // archivo.
+  const env = {
+    CONTABDSI_STORE: options.store === STORE_POSTGRES ? "postgres" : "ads",
+  };
+  if (options.store === STORE_POSTGRES) env.DATABASE_URL = resolvedDatabaseUrl();
+
   return startService({
     name: SERVICES.backend,
     command: venvPython(),
     args,
     cwd: ROOT,
+    env,
   });
 }
 
@@ -916,7 +945,8 @@ function printUrls() {
   const backend = `http://${CONFIG.backendHost}:${CONFIG.backendPort}`;
   const assistant = `http://${CONFIG.backendHost}:${CONFIG.iaServicePort}`;
   const web = `http://${CONFIG.backendHost}:${CONFIG.webPort}`;
-  const database = `postgres://${CONFIG.dbUser}@127.0.0.1:${CONFIG.dbPort}/${CONFIG.dbName}`;
+  const database = resolvedDatabaseUrl();
+  const esPostgres = options.store === STORE_POSTGRES;
   const logNames = Object.values(SERVICES)
     .filter((name) => (name !== SERVICES.db || dbStarted) && (name !== SERVICES.iaService || options.ia))
     .map((name) => `${name}.log`)
@@ -932,12 +962,17 @@ function printUrls() {
       options.ia ? c.cyan(`${assistant} ${c.dim("(/docs para Swagger)")}`) : c.yellow("no iniciado")
     }`,
   );
-  log(`   PostgreSQL     ${dbStarted ? c.cyan(database) : c.yellow("no iniciado")}`);
+  log(
+    `   Motor de datos ${esPostgres ? c.cyan("PostgreSQL (modelo nuevo)") : c.cyan("Advantage (legado)")}`,
+  );
+  log(`   PostgreSQL     ${dbStarted || dbReachable ? c.cyan(database) : c.yellow("no iniciado")}`);
   log(
     `   Advantage      ${
-      adsReady
-        ? c.cyan(`${rel(adsDictionary)} · origen del legado`)
-        : c.yellow("no disponible (motor ADS no instalado)")
+      esPostgres
+        ? c.yellow("no aplica (motor PostgreSQL)")
+        : adsReady
+          ? c.cyan(`${rel(adsDictionary)} · motor activo`)
+          : c.yellow("no disponible (motor ADS no instalado)")
     }`,
   );
   log("");
@@ -1068,6 +1103,9 @@ function printHelp() {
   log("   node dev.js --check          verifica herramientas y dependencias");
   log("   node dev.js --stop           detiene los servicios levantados");
   log("");
+  log("   node dev.js --db-postgres    arranca el backend contra PostgreSQL (modelo nuevo)");
+  log("   node dev.js --db-advantage   arranca el backend contra Advantage (legado; por defecto)");
+  log("");
   log("   --no-db                      omite PostgreSQL");
   log("   --require-db                 falla si la base de datos no puede iniciar");
   log("   --require-ads                falla si Advantage (origen) no está disponible");
@@ -1078,6 +1116,9 @@ function printHelp() {
   log("   --no-docker-autostart        no intenta abrir Docker Desktop");
   log("");
   log(c.dim("   Puertos: BACKEND_PORT, IA_SERVICE_PORT, WEB_PORT/PORT, DB_PORT"));
+  log(c.dim("   --db-postgres usa DATABASE_URL (o DB_USER/DB_PORT/DB_NAME); sin ella,"));
+  log(c.dim("   postgres://contabdsi@127.0.0.1:5433/contabdsi. Para los datos migrados:"));
+  log(c.dim("   DATABASE_URL=postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi_datos"));
   log(c.dim("   Si un puerto está ocupado, se libera antes de arrancar."));
   log(c.dim("   Logs: logs/<servicio>.log (backend, ia-service, web, db)"));
   log("");
@@ -1097,6 +1138,7 @@ function parseArgs(argv) {
     db: true,
     ia: true,
     install: true,
+    store: STORE_ADVANTAGE,
     requireDb: false,
     requireAds: false,
     reload: true,
@@ -1118,6 +1160,12 @@ function parseArgs(argv) {
         break;
       case "--no-db":
         parsed.db = false;
+        break;
+      case "--db-postgres":
+        parsed.store = STORE_POSTGRES;
+        break;
+      case "--db-advantage":
+        parsed.store = STORE_ADVANTAGE;
         break;
       case "--no-ia":
         parsed.ia = false;
@@ -1178,12 +1226,34 @@ async function main() {
     verifyFrontendEnvironment();
   }
 
-  ensureAdvantage(options);
+  if (options.store === STORE_POSTGRES) {
+    info(`Motor de datos: PostgreSQL · ${resolvedDatabaseUrl()}`);
+    info("Advantage no se necesita: el backend lee y escribe el modelo nuevo.");
+  } else {
+    ensureAdvantage(options);
+  }
 
   if (options.db) {
-    await ensureDatabase(options);
+    // Con el modelo nuevo, si ya hay PostgreSQL escuchando (un clúster local, por
+    // ejemplo) se usa esa instancia y no se intenta el contenedor: arrancarlo daría
+    // «port is already allocated».
+    if (options.store === STORE_POSTGRES && (await portOpen(CONFIG.dbPort))) {
+      info(`PostgreSQL ya responde en el puerto ${CONFIG.dbPort}; se usa esa instancia.`);
+      dbReachable = true;
+    } else {
+      await ensureDatabase(options);
+    }
   } else {
     info("Base de datos omitida (--no-db).");
+  }
+
+  if (options.store === STORE_POSTGRES) {
+    dbReachable = dbReachable || (await portOpen(CONFIG.dbPort));
+    if (!dbReachable) {
+      warn(`PostgreSQL no responde en el puerto ${CONFIG.dbPort}.`);
+      warn("Levanta la base (`docker compose up -d` en db/postgresql) o define DATABASE_URL.");
+      if (options.requireDb) throw new Error("PostgreSQL no está disponible (--db-postgres).");
+    }
   }
 
   step("Levantando servicios");
@@ -1216,8 +1286,13 @@ async function main() {
   if (ready[0]) {
     const health = await httpStatus(`http://${CONFIG.backendHost}:${CONFIG.backendPort}/api/health`);
     if (health === null || health >= 400) {
-      warn("El backend responde pero /api/health no confirma la conexión con Advantage.");
-      warn("Revisa backend/.env (ADS_DATA_SOURCE, ADS_USER_ID, ADS_PASSWORD); la interfaz funciona sin datos reales.");
+      if (options.store === STORE_POSTGRES) {
+        warn("El backend responde pero /api/health no confirma la conexión con PostgreSQL.");
+        warn(`Revisa DATABASE_URL y que la base esté levantada: ${resolvedDatabaseUrl()}`);
+      } else {
+        warn("El backend responde pero /api/health no confirma la conexión con Advantage.");
+        warn("Revisa backend/.env (ADS_DATA_SOURCE, ADS_USER_ID, ADS_PASSWORD); la interfaz funciona sin datos reales.");
+      }
     }
   }
 

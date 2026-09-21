@@ -44,6 +44,7 @@ anteriores, impuestos, seguridad, activos, exógena, reembolsos, presupuesto…
 | [`10_balance_comprobacion.md`](10_balance_comprobacion.md) | Balance de comprobación contra PostgreSQL: fuente y ensamblado compartido (etapa C5) |
 | [`11_lotes_y_importaciones.md`](11_lotes_y_importaciones.md) | Lectura de lotes e importaciones y el mapeo `CONMOVI`/`CONLOTES` (etapa C6) |
 | [`12_escrituras.md`](12_escrituras.md) | **Escrituras contra PostgreSQL** y sus decisiones (etapa D) |
+| [`13_informe_final.md`](13_informe_final.md) | **Informe final de la migración**: estado por etapa, cifras, decisiones, verificación y pendientes |
 | [`cargador/`](cargador/README.md) | **Cargador del staging a PostgreSQL**: orden de entidades, decisiones de carga y estado de la corrida |
 | [`extractor/`](extractor/README.md) | Formato `.adt` entendido, catálogo real del `.add`, y el contrato del extractor |
 | [`extractor/leer_diccionario.py`](extractor/leer_diccionario.py) | **Parser de `PUBLIDATA.add`**: los campos reales de la copia, verificados contra los `.adt` |

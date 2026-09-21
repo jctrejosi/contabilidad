@@ -2,7 +2,7 @@
 
 Servicio **Python (FastAPI)** que da soporte al asistente contable del
 aplicativo, el widget de chat que aparece en el encabezado principal al lado del
-usuario (personaje **"Conta"**).
+usuario (personaje **"Daisy"**, el mismo del ecommerce).
 
 La estructura replica la del `ia-service` del ecommerce y queda **lista para
 function calling**: hoy no hay herramientas registradas, así que el asistente

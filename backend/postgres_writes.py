@@ -326,7 +326,9 @@ def update_operation_parameters(cia: str, payload: dict[str, Any]) -> dict[str, 
     from .postgres_repository import get_operation_parameters
 
     data = _normalize(payload)
-    periodos = {f"CT{code}": bool(value) for code, value in data["periodosHabilitados"].items()}
+    # Las claves del jsonb son los códigos de período sin prefijo (`00`..`12`): son
+    # las que lee `PERIODOS_ALIASES` al reconstruir `CT00`..`CT12` para el mapeador.
+    periodos = {code: bool(value) for code, value in data["periodosHabilitados"].items()}
     connection = _connect()
     try:
         with connection.cursor() as cursor:

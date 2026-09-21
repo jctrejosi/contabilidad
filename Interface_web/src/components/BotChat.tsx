@@ -33,7 +33,7 @@ interface BotChatProps {
 /**
  * Botón del encabezado + panel de chat del asistente contable.
  *
- * El panel se despliega desde el lado izquierdo (debajo del encabezado) y se
+ * El panel se despliega desde el lado derecho (debajo del encabezado) y se
  * monta en un portal para no quedar atrapado en el contexto de apilamiento del
  * header.
  */
@@ -129,10 +129,10 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
       >
         <img
           src={LOGO_BOT}
-          alt="Conta, asistente contable"
-          className="w-7 h-7 rounded-full object-cover"
+          alt="Daisy, asistente contable"
+          className="w-9 h-9 rounded-full object-cover"
         />
-        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-white" />
+        <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-white" />
       </button>
 
       {open &&
@@ -140,7 +140,7 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
           <>
             <style>{`
               @keyframes botPanelIn {
-                0%   { transform: translateX(-16px); opacity: 0; }
+                0%   { transform: translateX(16px); opacity: 0; }
                 100% { transform: translateX(0); opacity: 1; }
               }
               @keyframes botMessageIn {
@@ -149,15 +149,15 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
               }
             `}</style>
 
-            {/* Fondo del área de trabajo (debajo del encabezado): cierra al hacer clic fuera */}
+            {/* Fondo a pantalla completa: cierra al hacer clic fuera */}
             <div
-              className="fixed left-0 right-0 top-14 bottom-0 z-60 bg-black/30"
+              className="fixed inset-0 z-60 bg-black/30"
               onClick={() => setOpen(false)}
             />
 
-            {/* Panel desplegado al lado izquierdo, debajo del encabezado */}
+            {/* Panel desplegado al lado derecho, a altura completa */}
             <aside
-              className="fixed left-0 top-14 bottom-0 z-61 w-full max-w-95 bg-white shadow-2xl border-r border-gray-200 flex flex-col"
+              className="fixed right-0 inset-y-0 z-61 w-full max-w-95 bg-white shadow-2xl border-l border-gray-200 flex flex-col"
               style={{ animation: 'botPanelIn 0.22s ease-out both' }}
               role="dialog"
               aria-label="Asistente contable"
@@ -169,10 +169,10 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
                 <img
                   src={LOGO_BOT}
                   alt=""
-                  className="w-9 h-9 rounded-full object-cover bg-white shrink-0"
+                  className="w-11 h-11 rounded-full object-cover bg-white shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold leading-tight">Conta</p>
+                  <p className="text-sm font-semibold leading-tight">Daisy</p>
                   <p className="text-[11px] flex items-center gap-1 text-petroleum-200">
                     <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                     Asistente contable de CONTABDSI
@@ -207,7 +207,7 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
               <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-gray-50">
                 {messages.length === 0 && (
                   <div className="text-sm text-gray-600 leading-relaxed">
-                    <p>¡Hola! 👋 Soy Conta, tu asistente contable de CONTABDSI.</p>
+                    <p>¡Hola! 👋 Soy Daisy, tu asistente contable de CONTABDSI.</p>
                     <p className="mt-1">
                       Te ayudo a entender el flujo contable: comprobantes, lotes,
                       contabilización, informes, impuestos y configuración.

@@ -131,6 +131,18 @@ Por eso:
   inexistentes antes que crear un Borrador que no se podrá verificar. Se puede
   relajar si el flujo de trabajo lo pide.
 
+### 3.10 Correcciones que descubrió el barrido de endpoints
+
+- **`periodos_habilitados` (round-trip roto).** La lectura
+  (`PERIODOS_ALIASES`) lee del jsonb las claves **`00`..`12`**, pero la escritura
+  guardaba **`CT00`..`CT12`**: grabar los parámetros dejaba los meses ilegibles y
+  `/api/periodo-operacion` respondía `422`. Corregido en
+  `postgres_writes.update_operation_parameters` (se guarda `{code: bool}`).
+  El seed de demostración también usaba `CT00`..`CT12` y no habilitaba ningún
+  mes; corregido a `00`..`12` con los meses abiertos.
+- **`seed.sql`**: `companias.codigo` era `'001'` y el cliente lo normaliza a
+  `'1'`, así que la app no encontraba la compañía; ahora es `'1'`.
+
 ## 4. Verificación
 
 **`scripts/validate.sql` sigue en verde** (11 validaciones: multidocumento,
@@ -155,6 +167,14 @@ descuadre por documento, idempotencia, anulación, conciliación) con el cambio 
 Tras todas las escrituras, **el libro y los saldos coinciden por cuenta**
 (consulta de conciliación: 0 cuentas descuadradas). Los 79 tests de
 `backend/tests/` siguen en verde.
+
+**Barrido de endpoints** (`tmp/smoke_endpoints.py`), que ejercita **todas** las
+rutas y cubre lo que el guion anterior no tocaba (movimiento mensual, detalle de
+documento, importaciones, alta/modificación de lote, borrado de partida y lote):
+
+- Base de ensayo, con escrituras y *round-trip* de parámetros: **53/53** con el
+  código esperado y 0 con `5xx`.
+- Base migrada, sólo lectura y casos negativos: **22/22**.
 
 ## 5. Pendiente
 

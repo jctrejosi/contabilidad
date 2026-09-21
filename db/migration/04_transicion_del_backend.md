@@ -124,8 +124,17 @@ La variable del proceso tiene precedencia sobre `backend/.env`, así que alterna
 en caliente es `set CONTABDSI_STORE=ads` (o `postgres`) antes de arrancar.
 
 **Patrón para el resto de módulos:** añadir la operación a `store.py` con su
-dispatcher y su implementación en `postgres_repository.py`, sin tocar el
-contrato JSON ni React. El orden recomendado es el de la tabla de §3.
+dispatcher y su implementación en `postgres_repository.py` (lectura) o
+`postgres_writes.py` (escritura), sin tocar el contrato JSON ni React. El orden
+recomendado es el de la tabla de §3.
+
+**Cómo se elige el motor al arrancar.** `node dev.js --db-postgres` levanta el
+backend con `CONTABDSI_STORE=postgres` y `DATABASE_URL` (del entorno o de
+`backend/.env`, con
+`postgres://contabdsi@127.0.0.1:5433/contabdsi` por defecto); `node dev.js
+--db-advantage` (por defecto) lo levanta contra el legado. El flag fija la
+variable en el proceso y gana sobre `backend/.env`. Detalle en
+[`13_informe_final.md`](13_informe_final.md) §3.
 
 Los ocho endpoints de maestros prueban el patrón completo: la implementación de
 PostgreSQL consulta los **mismos nombres físicos** del legado y reutiliza los

@@ -67,7 +67,10 @@ def list_companies() -> list[dict[str, Any]]:
         check_digit = str(digito or "").strip()
         companies.append(
             {
-                "codigo": str(codigo),
+                # Tres dígitos, como ``CONEMP`` (`_company_from_row` del motor viejo):
+                # el destino guarda el código sin ceros (`27`), pero el contrato
+                # expone `027`.
+                "codigo": f"{int(codigo):03d}",
                 "nombre": str(nombre),
                 "nit": f"{nit}-{check_digit}" if check_digit else str(nit),
                 "habilitada": str(estado) == "Activa",
@@ -92,8 +95,9 @@ def check_connection() -> None:
 # ---------------------------------------------------------------------------
 MONTH_CODES = tuple(f"{month:02d}" for month in range(13))
 
-# `periodosHabilitados` del contrato sale del jsonb `periodos_habilitados`, con
-# los nombres `CT00`..`CT12` que espera el mapeador de CONCTR.
+# `periodosHabilitados` del contrato sale del jsonb `periodos_habilitados`: las
+# claves del jsonb son los códigos `00`..`12` y el mapeador de CONCTR espera
+# columnas `CT00`..`CT12`, así que aquí se aliasan.
 PERIODOS_ALIASES = ", ".join(
     f"(p.periodos_habilitados->>'{code}') AS \"CT{code}\"" for code in MONTH_CODES
 )

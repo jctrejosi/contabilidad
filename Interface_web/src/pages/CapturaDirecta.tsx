@@ -698,7 +698,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                 return (
                   <tr
                     key={line.id}
-                    className="border-b border-gray-100 hoverable"
+                    className="border-b border-gray-100 hoverable cursor-pointer"
                     onClick={() => setEditingId(line.id)}
                   >
                     <td className="px-2 py-1.5 text-gray-400">{idx + 1}</td>
