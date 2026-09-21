@@ -11,6 +11,9 @@ import {
 /** Mismo logo del bot que usa el ecommerce (Daisy), servido desde `public/`. */
 const LOGO_BOT = `${import.meta.env.BASE_URL}logo-bot.png`;
 
+/** Duración de la animación de cierre; debe coincidir con `.bot-panel-out`. */
+const CLOSE_ANIMATION_MS = 200;
+
 /** Sesión nueva por conversación; el asistente no guarda estado entre pestañas. */
 function nuevoSessionId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -39,6 +42,9 @@ interface BotChatProps {
  */
 export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
   const [open, setOpen] = useState(false);
+  // `mounted` mantiene el portal en el DOM mientras corre la animación de
+  // cierre; sin esto el panel desaparecería de golpe al cerrar.
+  const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,6 +58,17 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
   useEffect(() => {
     obtenerOpcionesBot().then(setOptions).catch(() => {});
   }, []);
+
+  // Montaje diferido al cerrar: deja ver la animación de salida antes de
+  // desmontar el portal.
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      return;
+    }
+    const timer = setTimeout(() => setMounted(false), CLOSE_ANIMATION_MS);
+    return () => clearTimeout(timer);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -135,30 +152,52 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
         <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-white" />
       </button>
 
-      {open &&
+      {mounted &&
         createPortal(
           <>
             <style>{`
               @keyframes botPanelIn {
-                0%   { transform: translateX(16px); opacity: 0; }
+                0%   { transform: translateX(100%); opacity: 0; }
                 100% { transform: translateX(0); opacity: 1; }
+              }
+              @keyframes botPanelOut {
+                0%   { transform: translateX(0); opacity: 1; }
+                100% { transform: translateX(100%); opacity: 0; }
+              }
+              @keyframes botFadeIn {
+                0%   { opacity: 0; }
+                100% { opacity: 1; }
+              }
+              @keyframes botFadeOut {
+                0%   { opacity: 1; }
+                100% { opacity: 0; }
               }
               @keyframes botMessageIn {
                 0%   { transform: translateY(4px); opacity: 0; }
                 100% { transform: translateY(0); opacity: 1; }
               }
+              .bot-panel-in     { animation: botPanelIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+              .bot-panel-out    { animation: botPanelOut ${CLOSE_ANIMATION_MS}ms ease-in both; }
+              .bot-backdrop-in  { animation: botFadeIn 0.2s ease-out both; }
+              .bot-backdrop-out { animation: botFadeOut ${CLOSE_ANIMATION_MS}ms ease-in both; }
+              @media (prefers-reduced-motion: reduce) {
+                .bot-panel-in, .bot-panel-out, .bot-backdrop-in, .bot-backdrop-out { animation-duration: 1ms; }
+              }
             `}</style>
 
             {/* Fondo a pantalla completa: cierra al hacer clic fuera */}
             <div
-              className="fixed inset-0 z-60 bg-black/30"
+              className={`fixed inset-0 z-60 bg-black/30 ${
+                open ? 'bot-backdrop-in' : 'bot-backdrop-out'
+              }`}
               onClick={() => setOpen(false)}
             />
 
             {/* Panel desplegado al lado derecho, a altura completa */}
             <aside
-              className="fixed right-0 inset-y-0 z-61 w-full max-w-95 bg-white shadow-2xl border-l border-gray-200 flex flex-col"
-              style={{ animation: 'botPanelIn 0.22s ease-out both' }}
+              className={`fixed right-0 inset-y-0 z-61 w-full max-w-95 bg-white shadow-2xl border-l border-gray-200 flex flex-col ${
+                open ? 'bot-panel-in' : 'bot-panel-out'
+              }`}
               role="dialog"
               aria-label="Asistente contable"
             >
