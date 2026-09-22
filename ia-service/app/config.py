@@ -12,6 +12,15 @@ DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com")
 DEEPSEEK_TIMEOUT = float(os.getenv("DEEPSEEK_TIMEOUT", "60"))
 
+# Backend de CONTABDSI al que las herramientas piden los datos por HTTP (fase 0
+# del plan del asistente): el servicio nunca lee la base de datos. El puerto por
+# defecto es el que levanta dev.js para backend/.
+BACKEND_URL = os.getenv("IA_SERVICE_BACKEND_URL", "http://localhost:8001").rstrip("/")
+BACKEND_TIMEOUT = float(os.getenv("IA_SERVICE_BACKEND_TIMEOUT", "30"))
+# Sondeo del backend en /health: corto, para que la comprobación de estado no se
+# quede esperando si el backend está caído.
+BACKEND_HEALTH_TIMEOUT = float(os.getenv("IA_SERVICE_BACKEND_HEALTH_TIMEOUT", "2"))
+
 # Puerto del servicio (8002 lo usa el ia-service del ecommerce si se levanta en
 # paralelo; por eso aquí se usa 8003). Vite lo consume por el proxy /bot-api.
 PORT = int(os.getenv("IA_SERVICE_PORT", "8003"))

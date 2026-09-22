@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Shell, { type NavPage } from './components/Shell';
 import { LOTES_INICIALES, ALERTAS } from './data/mock';
+import type { ClaveDocumento } from './api/documentos';
 import type { CompaniaSesion, Lote } from './types';
 
 import Dashboard from './pages/Dashboard';
@@ -51,8 +52,8 @@ export default function App() {
   const [compania, setCompania] = useState<CompaniaSesion | null>(null);
   const [page, setPage] = useState<NavPage>('dashboard');
   const [lotes, setLotes] = useState<Lote[]>(LOTES_INICIALES);
-  const [selectedLoteId, setSelectedLoteId] = useState<string | null>(null);
   const [showDocumentPage, setShowDocumentPage] = useState(false);
+  const [documentoOficial, setDocumentoOficial] = useState<ClaveDocumento | null>(null);
 
   if (!compania) {
     return (
@@ -60,7 +61,6 @@ export default function App() {
         onSelect={seleccion => {
           setCompania(seleccion);
           setPage('dashboard');
-          setSelectedLoteId(null);
           setShowDocumentPage(false);
         }}
       />
@@ -73,16 +73,10 @@ export default function App() {
   function navigate(p: NavPage) {
     setPage(p);
     setShowDocumentPage(false);
-    if (p !== 'movimientos/lotes') setSelectedLoteId(null);
   }
 
-  function openLote(id: string) {
-    setSelectedLoteId(id);
-    setPage('movimientos/lotes');
-    setShowDocumentPage(false);
-  }
-
-  function openDocumento() {
+  function openDocumento(clave: ClaveDocumento) {
+    setDocumentoOficial(clave);
     setShowDocumentPage(true);
     setPage('movimientos/lotes');
   }
@@ -99,16 +93,16 @@ export default function App() {
   function renderPage() {
     // Special case: document official page
     if (showDocumentPage && page === 'movimientos/lotes') {
-      return <DocumentoOficial onNavigate={navigate} />;
+      return <DocumentoOficial cia={companiaActiva.codigo} compania={companiaActiva} clave={documentoOficial} onNavigate={navigate} />;
     }
 
     switch (page) {
       case 'dashboard':
         return (
           <Dashboard
-            lotes={lotes}
+            cia={companiaActiva.codigo}
+            compania={companiaActiva}
             onNavigate={navigate}
-            onOpenLote={openLote}
           />
         );
 
@@ -247,7 +241,7 @@ export default function App() {
         return <Reorganizacion />;
 
       default:
-        return <Dashboard lotes={lotes} onNavigate={navigate} onOpenLote={openLote} />;
+        return <Dashboard cia={companiaActiva.codigo} compania={companiaActiva} onNavigate={navigate} />;
     }
   }
 
@@ -259,7 +253,6 @@ export default function App() {
       compania={companiaActiva}
       onChangeCompany={() => {
         setPage('dashboard');
-        setSelectedLoteId(null);
         setShowDocumentPage(false);
         setCompania(null);
       }}

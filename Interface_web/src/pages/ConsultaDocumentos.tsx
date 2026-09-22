@@ -16,7 +16,7 @@ const fmtCOP = (value: number) => new Intl.NumberFormat('es-CO', {
 
 interface Props {
   cia: string;
-  onOpenDocumento?: () => void;
+  onOpenDocumento?: (documento: DocumentoContable) => void;
 }
 
 interface Filtros {
@@ -203,7 +203,7 @@ function DocumentoConDetalle({ documento, abierto, cargando, lineas, error, onTo
   lineas?: MovimientoDocumento[];
   error?: string;
   onToggle: () => void;
-  onOpenDocumento?: () => void;
+  onOpenDocumento?: (documento: DocumentoContable) => void;
 }) {
   const totalDebito = lineas?.reduce((total, linea) => total + linea.debito, 0) ?? 0;
   const totalCredito = lineas?.reduce((total, linea) => total + linea.credito, 0) ?? 0;
@@ -216,7 +216,7 @@ function DocumentoConDetalle({ documento, abierto, cargando, lineas, error, onTo
       <td className="px-3 py-2 font-mono text-gray-600">{documento.nit || '—'}</td>
       <td title={documento.detalle} className="max-w-72 truncate px-3 py-2 text-gray-600">{documento.tercero || documento.detalle || '—'}</td>
       <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-gray-800">{fmtCOP(documento.valor)}</td>
-      <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={onToggle} className="text-xs text-petroleum-600 hover:underline">{abierto ? 'Ocultar detalle' : 'Ver detalle'}</button>{onOpenDocumento && <button type="button" onClick={onOpenDocumento} className="ml-3 text-xs text-petroleum-600 hover:underline">Documento oficial</button>}</td>
+      <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={onToggle} className="text-xs text-petroleum-600 hover:underline">{abierto ? 'Ocultar detalle' : 'Ver detalle'}</button>{onOpenDocumento && <button type="button" onClick={() => onOpenDocumento(documento)} className="ml-3 text-xs text-petroleum-600 hover:underline">Documento oficial</button>}</td>
     </tr>
     {abierto && <tr><td colSpan={8} className="bg-gray-50/70 px-3 py-3">
       {cargando && <div className="rounded border border-gray-200 bg-white p-6 text-center text-xs text-gray-500">Consultando las partidas del documento en MOV01…</div>}

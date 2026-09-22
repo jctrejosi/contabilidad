@@ -52,6 +52,23 @@ con PostgreSQL, y no necesita credenciales de base. Se añade
 **una** herramienta inocua para probar el loop de punta a punta.
 *Salida:* el modelo la invoca y el `payload` llega al frontend.
 
+> **Estado 2026-09-22: hecha.** `IA_SERVICE_BACKEND_URL` (por defecto
+> `http://localhost:8001`) y `IA_SERVICE_BACKEND_TIMEOUT` en `app/config.py` y en
+> `.env.example`; cliente HTTP único en `app/backend_client.py` con tiempo de
+> espera y mapeo de errores a `{"ok": false, "mensaje": ...}`; forma acordada del
+> `payload` declarada en `app/payload.py` (la de `InformeAdicional` más los campos
+> de trazabilidad); y en `app/tools.py` están registradas las **ocho**
+> herramientas de solo texto del apartado 3.1 de `HERRAMIENTAS_PRIORIZADAS.md`
+> (pasos 2 a 4 de su punto 3.4), no una sola: el paso 2 de aquel documento pide
+> T-01 como herramienta inocua y los pasos 3 y 4 el resto de la ola 1.
+> Verificación en `ia-service/scripts/verificar_herramientas.py` y `GET /health`
+> lista las herramientas registradas y si se le anuncian al modelo.
+>
+> **Pendiente de la fase 0:** la comprobación de que el `payload` llega al
+> frontend de punta a punta no se puede cerrar aquí, porque depende de la fase 2
+> (el widget todavía no lo pinta); y la línea base de preguntas trampa del punto 5
+> (paso 4) de `HERRAMIENTAS_PRIORIZADAS.md` no se grabó.
+
 ### Fase 1 — Herramientas del contexto
 `consultar_periodo_operacion`, `consultar_parametros_operacion`,
 `listar_companias`. Baratas, ya existen como endpoints, y evitan que el asistente

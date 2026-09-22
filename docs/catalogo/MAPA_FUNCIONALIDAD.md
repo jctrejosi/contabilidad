@@ -78,9 +78,9 @@ campos de filtro identicos.
 
 | Pantalla | Controles | Conectados | Locales/simulados | Inertes |
 |---|---:|---:|---:|---:|
-| Informes | 26 | 9 | 13 | 4 |
-| BalanceComprobacion | 11 | 0 | 10 | 1 |
-| DocumentoOficial | 4 | 0 | 3 | 1 |
+| Informes | 25 | 9 | 12 | 4 |
+| BalanceComprobacion | 9 | 3 | 6 | 0 |
+| DocumentoOficial | 4 | 0 | 4 | 0 |
 
 ### Procesos
 
@@ -122,12 +122,19 @@ campos de filtro identicos.
 
 | Metrica | Valor |
 |---|---:|
-| Controles revisados (input + select + textarea + button) | 705 |
-| Conectados | 242 |
-| Locales o simulados | 446 |
-| Inertes | 17 |
+| Controles revisados (input + select + textarea + button) | 702 |
+| Conectados | 245 |
+| Locales o simulados | 442 |
+| Inertes | 15 |
 
-Desglose por tipo: 219 `input`, 80 `select`, 5 `textarea`, 401 `button`.
+Desglose por tipo: 216 `input`, 81 `select`, 5 `textarea`, 400 `button`.
+
+Cifras recalculadas tras el bloque A del plan de implementación: el Dashboard,
+DocumentoOficial y BalanceComprobacion dejaron de leer de `data/mock`, y los seis
+informes antes marcados "Pendiente" se enrutan a la ruta existente
+`GET /api/informes/adicionales/{report_id}`. El Dashboard no suma controles
+conectados porque sus tres botones solo navegan: los datos del tablero ahora se
+cargan de `/api/lotes` y `/api/documentos` sin un control que los dispare.
 
 Pantallas y componentes recorridos: 42 paginas de `src/pages/` mas 4
 componentes de `src/components/` (Shell, BotChat, CrearTerceroModal,
@@ -187,18 +194,27 @@ que le falta.
 
 ### Informes
 
-14. **Boton "Generar"/"Abrir pantalla" de cada tarjeta (Informes)**: el boton no
-    tiene manejador propio (el clic funciona solo por burbujeo al contenedor).
-15. **Informes marcados como "Pendiente" (Informes)**: el parametro modal avisa
-    que no estan implementados. Falta backend para esos informes.
-16. **Pantalla BalanceComprobacion**: usa `SALDOS_BALANCE` de `data/mock` pese a
-    que existen `api/balanceComprobacion.ts` y
-    `/api/informes/balance-comprobacion` (los usa `Informes.tsx`). Falta cablear
-    la pantalla suelta o eliminarla.
-17. **"Imprimir" (BalanceComprobacion, DocumentoOficial)**: sin manejador. Falta
-    impresion o exportacion.
-18. **DocumentoOficial**: recibe `MOVIMIENTOS_FEB` del mock; falta consultar
-    `/api/documentos/detalle` con la clave de la cabecera.
+14. **Resuelto (bloque A) — Boton "Generar"/"Abrir pantalla" de cada tarjeta
+    (Informes)**: el boton ahora tiene su propio manejador (`abrirInforme`) y ya
+    no depende del burbujeo al contenedor.
+15. **Resuelto en la interfaz (bloque A) — Informes marcados como "Pendiente"
+    (Informes)**: se retiro el bloqueo del modal. Los seis informes
+    (`acum-corriente`, `def-cuentas-flujo`, `flujo-comparativo`, `esfa-apertura`,
+    `nic-saldos`, `generador-personalizado`) se envian a la ruta existente
+    `GET /api/informes/adicionales/{report_id}`. El backend
+    (`informes_adicionales_repository.py:431-441`) todavia responde con un error
+    descriptivo para los seis, porque dependen de la configuracion de A5 (tablas
+    `flujo_caja_renglones` y `rubros_niif`, fuera de este bloque).
+16. **Resuelto (bloque A) — Pantalla BalanceComprobacion**: ya usa
+    `api/balanceComprobacion.ts` y `GET /api/informes/balance-comprobacion`; no
+    queda `SALDOS_BALANCE` ni `data/mock` en la pantalla.
+17. **Resuelto (bloque A) — "Imprimir" (BalanceComprobacion, DocumentoOficial)**:
+    el de BalanceComprobacion exporta por
+    `GET /api/informes/balance-comprobacion/exportar`; el de DocumentoOficial usa
+    `window.print()` sobre las partidas reales de MOV01.
+18. **Resuelto (bloque A) — DocumentoOficial**: recibe la clave de la cabecera
+    (compañia, comprobante, tipo, documento, fecha) y consulta
+    `GET /api/documentos/detalle`; ya no filtra `MOVIMIENTOS_FEB`.
 
 ### Procesos
 
@@ -234,8 +250,10 @@ que le falta.
 
 ### Transversal
 
-27. **Dashboard**: indicadores, lotes y "tareas pendientes" salen del mock.
-    Podria usar rutas existentes (`/api/lotes`, `/api/documentos`).
+27. **Resuelto (bloque A) — Dashboard**: indicadores, lotes y "tareas pendientes"
+    ya no salen del mock; se calculan con `GET /api/lotes` y `GET /api/documentos`
+    (mas `GET /api/periodo-operacion` para el rotulo del periodo). Las alertas,
+    que no tienen ruta propia, se derivan del estado real de CONMOVI.
 
 ---
 
@@ -250,10 +268,10 @@ que le falta.
   Plantillas (165), Reclasificaciones (235) y Reembolsos (224) via `onCrearLote`
   (estado local en `App.tsx`, linea 95). El texto posterior ("Borrador guardado
   en Lotes") no se corresponde con ningun lote del backend.
-- **Botones inertes por falta de manejador**: BalanceComprobacion (linea 42,
-  "Imprimir"); DocumentoOficial (156, "Imprimir documento"); Informes (695 y
-  738, "Generar"/"Abrir pantalla"); Cierres (118, "Iniciar asistente de
-  traslado").
+- **Botones inertes por falta de manejador**: Cierres (118, "Iniciar asistente de
+  traslado"). Los de BalanceComprobacion (42, "Imprimir"), DocumentoOficial (156,
+  "Imprimir documento") e Informes (695 y 738, "Generar"/"Abrir pantalla") se
+  resolvieron en el bloque A del plan de implementacion y ya no son inertes.
 - **Controles deshabilitados como marcador** (7 en total): Terceros 296
   (Importar), 298 (Cupos), 299-305 (Reasignar NIT), 306 (Nuevo tercero) y 328
   (pestana Informes); Centros 116; Comprobantes 79; TiposDocumento 104; Cierres
@@ -293,8 +311,10 @@ que le falta.
 - No se ejecuto la interfaz ni los tests: la clasificacion sale de la lectura
   del codigo, no de una prueba en runtime contra el backend.
 - No se revisaron `Interface_web/tests/` ni `Interface_web/scripts/smoke.mjs`.
-- No se verifico si `BalanceComprobacion.tsx` se monta en algun punto fuera de
-  `App.tsx` (no aparece importada alli, coincide con "pagina huerfana").
+- `BalanceComprobacion.tsx` sigue sin montarse en `App.tsx` (pagina huerfana).
+  El bloque A la cableo a `api/balanceComprobacion.ts`, pero el informe real que
+  ve el usuario es el de `Informes.tsx`; la pantalla suelta queda sin punto de
+  entrada y habria que montarla o eliminarla en un bloque posterior.
 - No se audito la validacion campo por campo del resto de los formularios
   contra los `BaseModel` del backend, solo el caso de terceros.
 - `Integraciones` muestra cuatro tablas de referencia (vehiculos, zonas, eventos,

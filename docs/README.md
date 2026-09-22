@@ -9,4 +9,5 @@
 - `catalogo/`: inventario del aplicativo y fuente de conocimiento del asistente (mapa funcional control por control y plan del asistente por fases).
 - `sesiones/`: bitácoras de sesión de trabajo, una por fecha.
 - `auditorias/`: auditorías con hallazgos clasificados por severidad; base del plan de trabajo por dependencia (auditoría de funcionalidad).
+  - `auditorias/VALIDACION_ASISTENTE.md`: validación del asistente contra `POST /chat` con las ocho herramientas de la ola 1 (fase 0), en las bases de demostración y migrada.
 - `plan/`: plan de implementación de la funcionalidad que falta, con el inventario de endpoints nuevos por bloque, el orden por dependencia y el detalle de contrato por módulo.

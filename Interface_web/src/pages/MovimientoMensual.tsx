@@ -4,11 +4,12 @@ import {
   type MovimientoMensualReal,
   type MovimientoMensualResponse,
 } from '../api/movimientoMensual';
+import type { ClaveDocumento } from '../api/documentos';
 
 interface Props {
   /** Código de la compañía seleccionada al ingresar a la aplicación. */
   cia: string;
-  onOpenDocumento?: () => void;
+  onOpenDocumento?: (clave: ClaveDocumento) => void;
 }
 
 const fmtCOP = (value: number) => new Intl.NumberFormat('es-CO', {
@@ -165,7 +166,7 @@ export default function MovimientoMensual({ cia, onOpenDocumento }: Props) {
           </div>
           <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2"><div><div className="text-xs text-gray-400">Débito</div><div className="font-mono font-bold text-gray-800">{selected.debito ? fmtCOP(selected.debito) : '—'}</div></div><div><div className="text-xs text-gray-400">Crédito</div><div className="font-mono font-bold text-gray-600">{selected.credito ? fmtCOP(selected.credito) : '—'}</div></div></div>
           <div><div className="mb-1 text-xs text-gray-400">Concepto</div><div className="text-xs text-gray-700">{selected.concepto || '—'}</div></div>
-          {onOpenDocumento && <button type="button" onClick={onOpenDocumento} className="w-full rounded bg-petroleum-500 py-2 text-xs font-medium text-white">Ver documento oficial →</button>}
+          {onOpenDocumento && <button type="button" onClick={() => onOpenDocumento({ documento: selected.documento, comprobante: selected.comprobante, tipoDocumento: selected.tipoDoc, fecha: selected.fecha })} className="w-full rounded bg-petroleum-500 py-2 text-xs font-medium text-white">Ver documento oficial →</button>}
         </aside>}
       </div>
     </div>
