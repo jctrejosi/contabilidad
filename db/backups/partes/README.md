@@ -37,6 +37,13 @@ Funciona con el contenedor de `db/postgresql/docker-compose.yml` (el caso de
 Windows, que no puede usar `scripts/up.sh`) y también con un PostgreSQL del
 anfitrión.
 
+Si solo quieres **llenar la base** sin levantar los servicios, el mismo paso es un
+comando suelto:
+
+```bash
+node dev.js --restore
+```
+
 A mano, si se prefiere:
 
 ```bash
@@ -55,7 +62,31 @@ pg_restore -d "postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi_datos" \
 La base destino debe existir; `--clean --if-exists` sirve tanto si está recién
 creada como si ya tiene el esquema.
 
-## Cómo se generó
+## Regenerarlo
+
+En el PC que **tiene** la base cargada, `dev.js` produce el respaldo completo
+—volcado, corte en partes y manifiesto— sin depender de `bash` (sirve en Windows):
+
+```bash
+DATABASE_URL=postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi_datos \
+  node dev.js --backup
+```
+
+Deja el `.dump` completo en `db/backups/` (ignorado por git) y las partes con el
+`respaldo.json` en `db/backups/partes/` (versionadas). Para publicarlo:
+
+```bash
+git add db/backups/partes
+git commit -m "Actualiza el respaldo de la migración"
+git push
+```
+
+El corte por archivo lo fija `BACKUP_CHUNK_BYTES` (por defecto 63 481 282 B, por
+debajo del límite de 100 MiB de GitHub).
+
+## Cómo se generó (receta manual)
+
+`node dev.js --backup` equivale a esta receta:
 
 ```bash
 pg_dump -Fc -Z6 -d "postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi_datos" \

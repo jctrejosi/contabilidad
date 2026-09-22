@@ -217,46 +217,65 @@ def test_normalize_close_validates_before_connecting() -> None:
 # ---------------------------------------------------------------------------
 def test_lot_action_request_requires_the_period_and_the_result_account() -> None:
     payload = CierreLotActionRequest(
-        usuario="JPG", motivo=MOTIVO, mes="13", cuentaResultado="5905"
+        usuario="JPG", motivo=MOTIVO, mes="13", cuentaResultado="3605"
     )
-    assert (payload.mes, payload.cuentaResultado) == ("13", "5905")
+    assert (payload.mes, payload.cuentaResultado) == ("13", "3605")
     with pytest.raises(ValidationError):
-        CierreLotActionRequest(usuario="JPG", motivo=MOTIVO, mes="19", cuentaResultado="5905")
+        CierreLotActionRequest(usuario="JPG", motivo=MOTIVO, mes="19", cuentaResultado="3605")
     with pytest.raises(ValidationError):
         CierreLotActionRequest(usuario="JPG", motivo=MOTIVO, mes="13", cuentaResultado="59A5")
     with pytest.raises(ValidationError):
-        CierreLotActionRequest(usuario="JPG", mes="13", cuentaResultado="5905")  # sin motivo
+        CierreLotActionRequest(usuario="JPG", mes="13", cuentaResultado="3605")  # sin motivo
 
 
 def test_normalize_lot_action_validates_the_period_before_connecting() -> None:
     data = normalize_lot_action(
-        {"usuario": "JPG", "motivo": MOTIVO, "mes": "5", "cuentaResultado": "5905"}
+        {"usuario": "JPG", "motivo": MOTIVO, "mes": "5", "cuentaResultado": "3605"}
     )
     assert data["mes"] == "05"  # zfill como el resto del contrato
     with pytest.raises(CierreValidationError):
         normalize_lot_action(
-            {"usuario": "JPG", "motivo": MOTIVO, "mes": "19", "cuentaResultado": "5905"}
+            {"usuario": "JPG", "motivo": MOTIVO, "mes": "19", "cuentaResultado": "3605"}
         )
 
 
-def test_calcular_lineas_cierre_cancels_each_result_account_against_the_result() -> None:
+def test_calcular_lineas_cierre_cancels_each_result_unit_against_the_result() -> None:
     lineas = calcular_lineas_cierre(
-        [("510506", 250.0), ("413505", -1000.0)], "5905"
+        [
+            {"cuenta": "510506", "saldo": 250.0, "centro": "ADM"},
+            {"cuenta": "413505", "saldo": -1000.0},
+        ],
+        "3605",
     )
-    # El gasto (débito) se cancela con crédito; el ingreso (crédito) con débito.
-    por_cuenta = {linea["cuenta"]: linea for linea in lineas}
-    assert por_cuenta["510506"] == {"cuenta": "510506", "debito": 0.0, "credito": 250.0}
-    assert por_cuenta["413505"] == {"cuenta": "413505", "debito": 1000.0, "credito": 0.0}
-    # El neto (crédito 750) llega a la cuenta de resultado en el lado contrario.
-    assert por_cuenta["5905"] == {"cuenta": "5905", "debito": 0.0, "credito": 750.0}
+    # El gasto (débito) se cancela con crédito; el ingreso (crédito) con débito. La
+    # unidad conserva su centro para no descuadrar el auxiliar.
+    por_clave = {(linea["cuenta"], linea["centro"]): linea for linea in lineas}
+    assert por_clave[("510506", "ADM")] == {
+        "cuenta": "510506", "nit": "", "centro": "ADM", "debito": 0.0, "credito": 250.0,
+    }
+    assert por_clave[("413505", "")] == {
+        "cuenta": "413505", "nit": "", "centro": "", "debito": 1000.0, "credito": 0.0,
+    }
+    # El neto (crédito 750) llega a la cuenta patrimonial sin dimensiones.
+    assert por_clave[("3605", "")] == {
+        "cuenta": "3605", "nit": "", "centro": "", "debito": 0.0, "credito": 750.0,
+    }
     totales = totales_de_lineas(lineas)
     assert totales == {"lineas": 3, "debito": 1000.0, "credito": 1000.0, "cuadrado": True}
 
 
 def test_calcular_lineas_cierre_without_a_result_account_when_it_is_balanced() -> None:
-    lineas = calcular_lineas_cierre([("413505", -1000.0), ("510506", 1000.0)], "5905")
+    lineas = calcular_lineas_cierre(
+        [{"cuenta": "413505", "saldo": -1000.0}, {"cuenta": "510506", "saldo": 1000.0}], "3605"
+    )
     assert [linea["cuenta"] for linea in lineas] == ["413505", "510506"]
     assert totales_de_lineas(lineas)["cuadrado"] is True
+
+
+def test_result_and_receiver_classes_are_distinct() -> None:
+    """Se cancelan las clases 4 a 7; el neto va a una cuenta patrimonial (clase 3)."""
+    assert cierres_repository.RESULT_ACCOUNT_CLASSES == ("4", "5", "6", "7")
+    assert cierres_repository.RECEIVER_ACCOUNT_CLASSES == ("3",)
 
 
 def test_cierre_lote_maps_the_already_generated_conflict_to_409(monkeypatch) -> None:
@@ -264,7 +283,7 @@ def test_cierre_lote_maps_the_already_generated_conflict_to_409(monkeypatch) -> 
         raise CierreConflict("El cierre 7 ya generó el lote CI26.")
 
     monkeypatch.setattr(store, "generate_cierre_lot", _boom)
-    payload = CierreLotActionRequest(usuario="JPG", motivo=MOTIVO, mes="13", cuentaResultado="5905")
+    payload = CierreLotActionRequest(usuario="JPG", motivo=MOTIVO, mes="13", cuentaResultado="3605")
     with pytest.raises(HTTPException) as error:
         cierre_lote(payload, id=7, cia="027", dry_run=False)
     assert error.value.status_code == 409
@@ -386,7 +405,7 @@ def test_ads_cierres_are_a_declared_unsupported_branch() -> None:
         cierres_repository.create_cierre("027", {"anio": 2026, "usuario": "JPG", "motivo": MOTIVO})
     with pytest.raises(CierresLegacyNotSupported, match="cierres"):
         cierres_repository.generate_cierre_lot(
-            "027", 7, {"usuario": "JPG", "motivo": MOTIVO, "mes": "13", "cuentaResultado": "5905"}
+            "027", 7, {"usuario": "JPG", "motivo": MOTIVO, "mes": "13", "cuentaResultado": "3605"}
         )
     with pytest.raises(CierresLegacyNotSupported, match="cierre_traslados"):
         cierres_repository.transfer_cierre("027", 7, TRASLADO)
@@ -403,5 +422,5 @@ def test_ads_transfer_validates_the_confirmation_then_declares_the_503() -> None
 def test_ads_lot_action_validates_the_period_then_declares_the_503() -> None:
     with pytest.raises(CierreValidationError, match="período"):
         cierres_repository.generate_cierre_lot(
-            "027", 7, {"usuario": "JPG", "motivo": MOTIVO, "mes": "19", "cuentaResultado": "5905"}
+            "027", 7, {"usuario": "JPG", "motivo": MOTIVO, "mes": "19", "cuentaResultado": "3605"}
         )

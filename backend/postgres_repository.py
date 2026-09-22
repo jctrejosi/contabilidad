@@ -2021,16 +2021,18 @@ def _cierre_de_la_compania(cursor: Any, compania_id: int, cierre_id: int) -> dic
 
 
 def _cuenta_resultado(cursor: Any, compania_id: int, codigo: str) -> dict[str, Any]:
-    """Valida que la cuenta que recibe el cierre sea de resultado y afectable (§1.3).
+    """Valida la cuenta que **recibe** el cierre: patrimonial, afectable y sin dimensiones (§1.3).
 
-    El modelo nuevo no marca las cuentas con un indicador "es de resultado": se
-    usa la clase del PUC (4 ingresos, 5 gastos, 6 costos de venta, 7 costos de
-    producción) más ``afectable``.
+    El cierre cancela las cuentas de resultado (clases 4 a 7) y lleva su neto al
+    patrimonio del ejercicio (clase 3; el prototipo lo confirma con una cuenta de
+    clase 3, ``Cierres.tsx:88-91``). La partida del neto es una sola, así que la
+    cuenta receptora no puede exigir tercero ni centro.
     """
-    from .cierres_repository import RESULT_ACCOUNT_CLASSES, CierreValidationError
+    from .cierres_repository import RECEIVER_ACCOUNT_CLASSES, CierreValidationError
 
     cursor.execute(
-        "SELECT id, afectable, left(codigo, 1) FROM cuentas WHERE compania_id = %s AND codigo = %s",
+        "SELECT id, afectable, left(codigo, 1), controla_tercero, controla_centro "
+        "FROM cuentas WHERE compania_id = %s AND codigo = %s",
         (compania_id, codigo),
     )
     fila = cursor.fetchone()
@@ -2038,33 +2040,99 @@ def _cuenta_resultado(cursor: Any, compania_id: int, codigo: str) -> dict[str, A
         raise CierreValidationError(f"No existe la cuenta de resultado {codigo} en la compañía.")
     if not bool(fila[1]):
         raise CierreValidationError(f"La cuenta {codigo} no es afectable: no puede recibir el cierre.")
-    if _text(fila[2]) not in RESULT_ACCOUNT_CLASSES:
+    if _text(fila[2]) not in RECEIVER_ACCOUNT_CLASSES:
         raise CierreValidationError(
-            f"La cuenta {codigo} no es una cuenta de resultado (clases 4 a 7)."
+            f"La cuenta {codigo} no es la cuenta patrimonial del resultado del ejercicio "
+            "(clase 3): el cierre lleva el neto de las clases 4 a 7 al patrimonio, no a "
+            "otra cuenta de resultado."
+        )
+    if bool(fila[3]) or bool(fila[4]):
+        raise CierreValidationError(
+            f"La cuenta {codigo} controla tercero o centro: el neto del cierre es una sola "
+            "partida y no puede llevar esas dimensiones."
         )
     return {"id": int(fila[0]), "codigo": codigo}
 
 
-def _saldos_resultado(cursor: Any, compania_id: int, anio: int) -> list[tuple[str, float]]:
-    """Saldos del año de las cuentas de resultado afectables, con saldo distinto de cero.
-
-    La convención del saldo es la misma de la simulación de consolidación:
-    ``saldo_inicial + debito + credito`` con el crédito en negativo.
-    """
+def _saldos_por_centro(
+    cursor: Any, compania_id: int, anio: int, cuenta_id: int
+) -> list[tuple[str, float]]:
+    """Saldo del año de una cuenta de resultado desagregado por centro (§1.3)."""
     cursor.execute(
-        "SELECT cu.codigo, COALESCE(SUM(s.saldo_inicial), 0) + COALESCE(SUM(s.debito), 0) "
-        "+ COALESCE(SUM(s.credito), 0) AS saldo "
-        "FROM cuentas cu JOIN saldos_cuenta s "
-        "ON s.cuenta_id = cu.id AND s.compania_id = cu.compania_id "
-        "WHERE cu.compania_id = %s AND s.anio = %s AND cu.afectable "
-        "AND left(cu.codigo, 1) IN ('4', '5', '6', '7') "
-        "GROUP BY cu.codigo "
-        "HAVING COALESCE(SUM(s.saldo_inicial), 0) + COALESCE(SUM(s.debito), 0) "
-        "+ COALESCE(SUM(s.credito), 0) <> 0 "
-        "ORDER BY cu.codigo",
-        (compania_id, anio),
+        "SELECT cc.codigo, COALESCE(SUM(sc.debito), 0) + COALESCE(SUM(sc.credito), 0) AS saldo "
+        "FROM saldos_cuenta_centro sc JOIN centros_costos cc "
+        "ON cc.compania_id = sc.compania_id AND cc.id = sc.centro_costo_id "
+        "WHERE sc.compania_id = %s AND sc.anio = %s AND sc.cuenta_id = %s "
+        "GROUP BY cc.codigo "
+        "HAVING COALESCE(SUM(sc.debito), 0) + COALESCE(SUM(sc.credito), 0) <> 0 "
+        "ORDER BY cc.codigo",
+        (compania_id, anio, cuenta_id),
     )
     return [(_text(codigo), float(saldo or 0)) for codigo, saldo in cursor.fetchall()]
+
+
+def _saldos_por_tercero(
+    cursor: Any, compania_id: int, anio: int, cuenta_id: int
+) -> list[tuple[str, float]]:
+    """Saldo del año de una cuenta de resultado desagregado por tercero (§1.3)."""
+    cursor.execute(
+        "SELECT t.nit, COALESCE(SUM(st.debito), 0) + COALESCE(SUM(st.credito), 0) AS saldo "
+        "FROM saldos_cuenta_tercero st JOIN terceros t "
+        "ON t.compania_id = st.compania_id AND t.id = st.tercero_id "
+        "WHERE st.compania_id = %s AND st.anio = %s AND st.cuenta_id = %s "
+        "GROUP BY t.id, t.nit "
+        "HAVING COALESCE(SUM(st.debito), 0) + COALESCE(SUM(st.credito), 0) <> 0 "
+        "ORDER BY t.nit",
+        (compania_id, anio, cuenta_id),
+    )
+    return [(_text(nit), float(saldo or 0)) for nit, saldo in cursor.fetchall()]
+
+
+def _unidades_resultado(cursor: Any, compania_id: int, anio: int) -> list[dict[str, Any]]:
+    """Saldos del año de las cuentas de resultado, expandidos por tercero y centro (§1.3).
+
+    La convención del saldo es la misma de la simulación de consolidación:
+    ``saldo_inicial + debito + credito`` con el crédito en negativo. Una cuenta que
+    controla centro se expande con ``saldos_cuenta_centro`` y una que controla
+    tercero con ``saldos_cuenta_tercero``, para que el cierre deje en cero también
+    los auxiliares; la que no controla ninguno va como una sola unidad. La cuenta
+    que controla los dos no se expande: las dos proyecciones son marginales y su
+    cruce no se puede reconstruir, así que se declara en vez de dejar un auxiliar
+    descuadrado.
+    """
+    from .cierres_repository import RESULT_ACCOUNT_CLASSES, CierreValidationError
+
+    cursor.execute(
+        "SELECT cu.id, cu.codigo, cu.controla_tercero, cu.controla_centro, "
+        "COALESCE(SUM(s.saldo_inicial), 0) + COALESCE(SUM(s.debito), 0) "
+        "+ COALESCE(SUM(s.credito), 0) AS saldo "
+        "FROM cuentas cu JOIN saldos_cuenta s "
+        "ON s.cuenta_id = cu.id AND s.compania_id = cu.compania_id AND s.anio = %s "
+        "WHERE cu.compania_id = %s AND cu.afectable AND left(cu.codigo, 1) = ANY(%s) "
+        "GROUP BY cu.id, cu.codigo, cu.controla_tercero, cu.controla_centro "
+        "HAVING COALESCE(SUM(s.saldo_inicial), 0) + COALESCE(SUM(s.debito), 0) "
+        "+ COALESCE(SUM(s.credito), 0) <> 0 ORDER BY cu.codigo",
+        (anio, compania_id, list(RESULT_ACCOUNT_CLASSES)),
+    )
+    cuentas = cursor.fetchall()
+    unidades: list[dict[str, Any]] = []
+    for cuenta_id, codigo, controla_tercero, controla_centro, saldo in cuentas:
+        codigo = _text(codigo)
+        if controla_tercero and controla_centro:
+            raise CierreValidationError(
+                f"La cuenta de resultado {codigo} controla tercero y centro a la vez: el cierre "
+                "no puede expandirla con los saldos por tercero y por centro, que son "
+                "proyecciones separadas. Se declara para no dejar los auxiliares descuadrados."
+            )
+        if controla_centro:
+            for centro, valor in _saldos_por_centro(cursor, compania_id, anio, cuenta_id):
+                unidades.append({"cuenta": codigo, "saldo": valor, "nit": "", "centro": centro})
+        elif controla_tercero:
+            for nit, valor in _saldos_por_tercero(cursor, compania_id, anio, cuenta_id):
+                unidades.append({"cuenta": codigo, "saldo": valor, "nit": nit, "centro": ""})
+        else:
+            unidades.append({"cuenta": codigo, "saldo": float(saldo or 0), "nit": "", "centro": ""})
+    return unidades
 
 
 def _periodo_sembrado(cursor: Any, compania_id: int, anio: int, periodo: str) -> bool:

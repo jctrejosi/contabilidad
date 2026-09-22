@@ -73,6 +73,9 @@ const PIDS_FILE = path.join(LOGS_DIR, ".pids.json");
 const BACKUPS_DIR = path.join(ROOT, "db", "backups");
 const BACKUP_PARTS_DIR = path.join(BACKUPS_DIR, "partes");
 const BACKUP_MANIFEST = path.join(BACKUP_PARTS_DIR, "respaldo.json");
+// Tope por archivo del respaldo: por debajo de los 100 MiB que admite GitHub.
+// Es el mismo corte con el que se generó el respaldo que viaja en git.
+const BACKUP_CHUNK_BYTES = Number(process.env.BACKUP_CHUNK_BYTES || 63481282);
 
 const IS_WIN = process.platform === "win32";
 const TASKKILL = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
@@ -1095,6 +1098,212 @@ async function ensureMigrationData(options) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Datos migrados · generar el respaldo en partes (pg_dump → partes + manifiesto)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Versión mayor del servidor PostgreSQL (18, 17…), o cadena vacía si no se sabe. */
+function pgMajorVersion(url, database) {
+  const raw = psqlScalar(url, database, "SHOW server_version_num");
+  if (!raw || !/^\d+$/.test(raw)) return "";
+  return String(Math.floor(Number(raw) / 10000));
+}
+
+/** Conteo de una tabla, o `null` si la tabla no existe (aquí es información, no error). */
+function tableCount(url, database, table) {
+  const value = psqlScalar(url, database, `SELECT count(*) FROM ${table}`);
+  return value === null ? null : Number(value);
+}
+
+/**
+ * `pg_dump -Fc -Z6` dentro del contenedor si existe y, si no, con el cliente del
+ * anfitrión. Dentro del contenedor no hay que traer 120 MB por la tubería: el
+ * volcado se deja en `/tmp` y se copia con `docker cp`.
+ */
+function dumpDatabase(url, database, target) {
+  if (dbContainerRunning()) {
+    const remoto = "/tmp/contabdsi-backup.dump";
+    const dumped = spawnSync(
+      "docker",
+      ["exec", DB_CONTAINER, "pg_dump", "-Fc", "-Z6", "-U", CONFIG.dbUser, "-d", database, "-f", remoto],
+      { stdio: "pipe", windowsHide: true, encoding: "utf8", timeout: 3600000 },
+    );
+    if (dumped.status !== 0) {
+      if ((dumped.stderr || "").trim()) warn((dumped.stderr || "").trim());
+      return false;
+    }
+    const copiado = spawnSync("docker", ["cp", `${DB_CONTAINER}:${remoto}`, target], {
+      stdio: "pipe",
+      windowsHide: true,
+      encoding: "utf8",
+      timeout: 900000,
+    });
+    spawnSync("docker", ["exec", DB_CONTAINER, "rm", "-f", remoto], { stdio: "ignore", windowsHide: true });
+    if (copiado.status !== 0) {
+      if ((copiado.stderr || "").trim()) warn((copiado.stderr || "").trim());
+      return false;
+    }
+    return true;
+  }
+
+  const result = spawnSync("pg_dump", ["-Fc", "-Z6", "-d", url, "-f", target], {
+    stdio: "pipe",
+    windowsHide: true,
+    encoding: "utf8",
+    timeout: 3600000,
+  });
+  if (result.error && result.error.code === "ENOENT") {
+    warn("No hay contenedor de PostgreSQL ni cliente `pg_dump` en el PATH.");
+    return false;
+  }
+  if (result.status !== 0) {
+    if ((result.stderr || "").trim()) warn((result.stderr || "").trim());
+    return false;
+  }
+  return true;
+}
+
+/** Vacía las partes anteriores: con un respaldo nuevo, las viejas sobran y confunden. */
+function clearOldParts() {
+  if (!fs.existsSync(BACKUP_PARTS_DIR)) return;
+  for (const name of fs.readdirSync(BACKUP_PARTS_DIR)) {
+    if (/\.part\d+$/.test(name)) fs.unlinkSync(path.join(BACKUP_PARTS_DIR, name));
+  }
+}
+
+/** Parte el `.dump` en `backup.part00`, `backup.part01`… y devuelve los nombres creados. */
+function splitIntoParts(dumpPath, nombre) {
+  const total = fs.statSync(dumpPath).size;
+  const partes = [];
+  const fd = fs.openSync(dumpPath, "r");
+  const buffer = Buffer.allocUnsafe(BACKUP_CHUNK_BYTES);
+  try {
+    let offset = 0;
+    let index = 0;
+    while (offset < total) {
+      const name = `${nombre}.part${String(index).padStart(2, "0")}`;
+      const outFd = fs.openSync(path.join(BACKUP_PARTS_DIR, name), "w");
+      try {
+        let escrito = 0;
+        while (escrito < BACKUP_CHUNK_BYTES && offset < total) {
+          const pedido = Math.min(BACKUP_CHUNK_BYTES - escrito, total - offset);
+          const leido = fs.readSync(fd, buffer, 0, pedido, offset);
+          if (leido <= 0) break;
+          fs.writeSync(outFd, buffer, 0, leido);
+          escrito += leido;
+          offset += leido;
+        }
+      } finally {
+        fs.closeSync(outFd);
+      }
+      partes.push(name);
+      index += 1;
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return partes;
+}
+
+/**
+ * Genera el respaldo en partes de la base de `DATABASE_URL`: `pg_dump` + corte en
+ * partes + manifiesto que consume `ensureMigrationData`. Es la versión de `dev.js`
+ * de la receta manual de `db/backups/partes/README.md`, y corre igual en Windows
+ * porque el cliente va dentro del contenedor. No toca una base sin documentos y
+ * avisa si se apunta a la base de demostración.
+ */
+function runBackup() {
+  step("Datos migrados · generar el respaldo en partes");
+
+  const url = resolvedDatabaseUrl();
+  const database = databaseNameOf(url);
+  if (!database) {
+    warn("No se pudo deducir el nombre de la base desde DATABASE_URL.");
+    return false;
+  }
+  if (database === SEEDED_DB) {
+    warn(`«${SEEDED_DB}» es la base de demostración (con seed): para la migración respalda la base de datos reales.`);
+  }
+
+  const documentos = tableCount(url, database, "documentos");
+  if (documentos === null) {
+    warn(`La base «${database}» no existe o no tiene esquema: no hay nada que respaldar.`);
+    return false;
+  }
+  if (documentos === 0) {
+    warn(`La base «${database}» no tiene documentos: no hay nada que respaldar.`);
+    return false;
+  }
+
+  fs.mkdirSync(BACKUP_PARTS_DIR, { recursive: true });
+  const creado = new Date().toISOString().slice(0, 10);
+  const archivo = `${database}_${creado.replace(/-/g, "")}.dump`;
+  const target = path.join(BACKUPS_DIR, archivo);
+
+  info(`Volcando «${database}» → ${rel(target)} (detalle en logs/db.log).`);
+  const { fd, logPath } = openLog(SERVICES.db);
+  try {
+    if (!dumpDatabase(url, database, target)) {
+      warn(`El volcado falló; revisa ${rel(logPath)}.`);
+      return false;
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  const dump = fs.readFileSync(target);
+  const digest = sha256(dump);
+  clearOldParts();
+  const partes = splitIntoParts(target, archivo);
+
+  const conteos = {};
+  for (const tabla of ["documentos", "documento_lineas", "terceros"]) {
+    const total = tableCount(url, database, tabla);
+    if (total !== null) conteos[tabla] = total;
+  }
+  const manifiesto = {
+    archivo,
+    creado,
+    base: database,
+    postgres: pgMajorVersion(url, database),
+    bytes: dump.length,
+    sha256: digest,
+    partes,
+    conteos,
+  };
+  fs.writeFileSync(BACKUP_MANIFEST, `${JSON.stringify(manifiesto, null, 2)}\n`);
+
+  ok(`Respaldo listo: ${partes.length} parte(s), ${dump.length} bytes, SHA-256 ${digest.slice(0, 16)}…`);
+  for (const name of partes) {
+    const ruta = path.join(BACKUP_PARTS_DIR, name);
+    info(`   ${rel(ruta)} · ${fs.statSync(ruta).size} bytes`);
+  }
+  info(`   manifiesto: ${rel(BACKUP_MANIFEST)}`);
+  log("");
+  info("Viaja por git (el .dump completo se ignora). Para publicarlo:");
+  info("   git add db/backups/partes && git commit -m \"Actualiza el respaldo de la migración\" && git push");
+  return true;
+}
+
+/**
+ * Llena la base de `DATABASE_URL` desde el respaldo en partes: levanta PostgreSQL
+ * si hace falta y delega en `ensureMigrationData`. Es el mismo paso que corre solo
+ * con `--db-postgres`, pero aquí es el único objetivo del comando. No pisa una base
+ * que ya tenga documentos.
+ */
+async function runRestore(options) {
+  options.store = STORE_POSTGRES;
+  if (options.db) {
+    if (!(await portOpen(CONFIG.dbPort))) await ensureDatabase(options);
+    dbReachable = await portOpen(CONFIG.dbPort);
+  }
+  if (!dbReachable) {
+    warn(`PostgreSQL no responde en el puerto ${CONFIG.dbPort}; levántala o define DATABASE_URL.`);
+    return false;
+  }
+  return ensureMigrationData({ ...options, restore: true });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Servicios
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1410,6 +1619,10 @@ function printHelp() {
   log("   node dev.js --check          verifica herramientas y dependencias");
   log("   node dev.js --stop           detiene los servicios levantados");
   log("");
+  log("   node dev.js --backup         genera el respaldo en partes de la base de DATABASE_URL");
+  log("                                (pg_dump + corte + manifiesto en db/backups/partes/)");
+  log("   node dev.js --restore        llena la base de DATABASE_URL desde ese respaldo");
+  log("");
   log("   node dev.js --db-postgres    arranca el backend contra PostgreSQL (modelo nuevo)");
   log("   node dev.js --db-advantage   arranca el backend contra Advantage (legado; por defecto)");
   log("");
@@ -1429,6 +1642,7 @@ function printHelp() {
   log(c.dim("   DATABASE_URL=postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi_datos"));
   log(c.dim("   Con --db-postgres, si esa base está vacía se restaura sola el respaldo de"));
   log(c.dim("   db/backups/partes/ (la base de demostración con seed nunca se toca)."));
+  log(c.dim("   --backup y --restore son comandos de un solo paso: no levantan los servicios."));
   log(c.dim("   Si un puerto está ocupado, se libera antes de arrancar."));
   log(c.dim("   Logs: logs/<servicio>.log (backend, ia-service, web, db)"));
   log("");
@@ -1455,6 +1669,8 @@ function parseArgs(argv) {
     keepDb: false,
     dockerAutostart: true,
     restore: true,
+    backup: false,
+    restoreOnly: false,
   };
 
   for (const argument of argv) {
@@ -1502,6 +1718,12 @@ function parseArgs(argv) {
       case "--no-restore":
         parsed.restore = false;
         break;
+      case "--backup":
+        parsed.backup = true;
+        break;
+      case "--restore":
+        parsed.restoreOnly = true;
+        break;
       default:
         warn(`Opción desconocida: ${argument}`);
     }
@@ -1522,6 +1744,14 @@ async function main() {
   }
   if (options.check) {
     await runChecks();
+    return;
+  }
+  if (options.backup) {
+    runBackup();
+    return;
+  }
+  if (options.restoreOnly) {
+    await runRestore(options);
     return;
   }
 

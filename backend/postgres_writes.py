@@ -5116,7 +5116,7 @@ def generate_cierre_lot(
     )
     from .postgres_repository import (
         _checklist_cierre, _cierre_de_la_compania, _cuenta_resultado,
-        _masters_de_cierre, _saldos_resultado,
+        _masters_de_cierre, _unidades_resultado,
     )
 
     data = normalize_lot_action(payload)
@@ -5144,7 +5144,7 @@ def generate_cierre_lot(
                     f"{', '.join(_bloqueantes(checklist))}."
                 )
             lineas = calcular_lineas_cierre(
-                _saldos_resultado(cursor, compania_id, anio), data["cuenta_resultado"]
+                _unidades_resultado(cursor, compania_id, anio), data["cuenta_resultado"]
             )
             if not lineas:
                 raise CierreValidationError(
@@ -5178,7 +5178,7 @@ def generate_cierre_lot(
                 company_code,
                 lote,
                 {
-                    "cuenta": linea["cuenta"], "nit": "", "centro": "",
+                    "cuenta": linea["cuenta"], "nit": linea["nit"], "centro": linea["centro"],
                     "comprobante": masters["comprobante"],
                     "tipoDocumento": masters["tipo_documento"],
                     "documento": lote, "documentoAfectado": "",
@@ -5279,11 +5279,16 @@ def _crear_documentos_traslado(
     traslados: list[dict[str, Any]],
     masters: dict[str, Any],
     usuario: str,
-) -> None:
-    """Crea un lote en cada período destino con las líneas del traslado (§1.4)."""
+) -> list[str]:
+    """Crea un lote en cada período destino con las líneas del traslado (§1.4).
+
+    Devuelve los códigos de lote creados, para que el llamador pueda retirarlos si
+    una partida falla a mitad de camino (compensación única del traslado).
+    """
     from . import store
     from .cierres_repository import TRANSFER_LOT_PREFIX
 
+    creados: list[str] = []
     por_destino: dict[str, list[dict[str, Any]]] = {}
     for linea in traslados:
         por_destino.setdefault(linea["destino"], []).append(linea)
@@ -5294,12 +5299,13 @@ def _crear_documentos_traslado(
             company_code,
             {"lote": lote, "nombre": f"Traslado {destino} {anio}", "mes": destino, "usuario": usuario},
         )
+        creados.append(lote)
         for linea in lineas:
             store.save_lot_line(
                 company_code,
                 lote,
                 {
-                    "cuenta": linea["cuenta"], "nit": "", "centro": "",
+                    "cuenta": linea["cuenta"], "nit": linea["nit"], "centro": linea["centro"],
                     "comprobante": masters["comprobante"],
                     "tipoDocumento": masters["tipo_documento"],
                     "documento": lote, "documentoAfectado": "",
@@ -5307,6 +5313,7 @@ def _crear_documentos_traslado(
                     "debito": linea["debito"], "credito": linea["credito"], "base": 0,
                 },
             )
+    return creados
 
 
 def _auditar_traslado(
@@ -5417,9 +5424,19 @@ def transfer_cierre(
         }
 
     ids = _persistir_traslados(company_code, cierre_id, traslados)
+    creados: list[str] = []
     try:
-        _crear_documentos_traslado(company_code, anio, traslados, masters, data["usuario"])
+        creados = _crear_documentos_traslado(company_code, anio, traslados, masters, data["usuario"])
     except Exception:
+        # Compensación única: se retiran los lotes creados a medias y la matriz, para
+        # no dejar un traslado a medio aplicar ni un lote huérfano.
+        from . import store
+
+        for codigo_lote in creados:
+            try:
+                store.delete_lot(company_code, codigo_lote, force=True)
+            except Exception:  # pragma: no cover - la compensación no oculta el fallo original
+                pass
         _retirar_traslados(ids)
         raise
     _auditar_traslado(company_code, cierre_id, traslados, totales, data)

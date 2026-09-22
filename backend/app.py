@@ -986,6 +986,8 @@ class TransferLine(BaseModel):
     origenPeriodo: str = Field(pattern=r"^(0[0-9]|1[0-8])$")
     destinoPeriodo: str = Field(pattern=r"^(0[0-9]|1[0-8])$")
     cuenta: str = Field(pattern=r"^[0-9]{1,12}$")
+    nit: str = Field("", max_length=11, description="Tercero, si la cuenta lo controla.")
+    centro: str = Field("", max_length=7, description="Centro de costo, si la cuenta lo controla.")
     debito: float = Field(0, ge=0)
     credito: float = Field(0, ge=0)
 

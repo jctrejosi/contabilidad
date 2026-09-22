@@ -54,10 +54,15 @@ CLOSING_LOT_PREFIX = "CI"
 TRANSFER_LOT_PREFIX = "TR"
 
 # Las cuentas de resultado del PUC son las clases 4 (ingresos), 5 (gastos),
-# 6 (costos de venta) y 7 (costos de producción). Es el criterio con el que se
-# identifican tanto la cuenta que recibe el cierre como las que se cancelan; el
+# 6 (costos de venta) y 7 (costos de produccion): son las que **se cancelan**. El
 # modelo nuevo no marca las cuentas con una columna "es de resultado".
 RESULT_ACCOUNT_CLASSES = ("4", "5", "6", "7")
+# La cuenta que **recibe** el cierre no es una cuenta de resultado sino una cuenta
+# patrimonial del ejercicio (clase 3: grupo 36 "Resultados del ejercicio" en el
+# PUC). El prototipo lo confirma: cancela las clases 4 a 7 "contra la cuenta de
+# resultados del ejercicio" y su campo viene con una cuenta de clase 3
+# (``Cierres.tsx:88-91``).
+RECEIVER_ACCOUNT_CLASSES = ("3",)
 
 MAX_TRANSFER_LINES = 5000
 
@@ -177,8 +182,11 @@ def normalize_transfer(payload: dict[str, Any]) -> dict[str, Any]:
 
     Valida lo que no necesita el motor: que haya al menos una línea, que cada
     período y cuenta tengan forma, que cada línea tenga un solo lado y que la
-    matriz cuadre. La existencia real de los períodos se consulta contra
-    ``periodos_contables`` en el repositorio (P-5).
+    matriz cuadre. Cada línea puede llevar ``nit`` y ``centro`` —los documentos del
+    período destino los conservan— para las cuentas que controlan tercero o centro;
+    la matriz ``cierre_traslados`` los descarta porque su clave es la cuenta. La
+    existencia real de los períodos se consulta contra ``periodos_contables`` en el
+    repositorio (P-5).
     """
     entrada = payload.get("traslados")
     if not isinstance(entrada, list) or not entrada:
@@ -205,6 +213,8 @@ def normalize_transfer(payload: dict[str, Any]) -> dict[str, Any]:
                 "origen": _periodo(item.get("origenPeriodo"), f"origen de la línea {indice}"),
                 "destino": _periodo(item.get("destinoPeriodo"), f"destino de la línea {indice}"),
                 "cuenta": _cuenta(item.get("cuenta"), f"la línea {indice}"),
+                "nit": _text(item.get("nit")),
+                "centro": _text(item.get("centro")).upper(),
                 "debito": debito,
                 "credito": credito,
             }
@@ -308,31 +318,42 @@ def puede_cerrar(checklist: list[dict[str, Any]]) -> bool:
 # Cálculo de las partidas del lote de cierre (contrato puro)
 # ---------------------------------------------------------------------------
 def calcular_lineas_cierre(
-    saldos: list[tuple[str, Any]], cuenta_resultado: str
+    saldos: list[dict[str, Any]], cuenta_resultado: str
 ) -> list[dict[str, Any]]:
-    """Cancela cada cuenta de resultado contra ``cuenta_resultado`` (§1.3).
+    """Cancela cada saldo de resultado contra ``cuenta_resultado`` (§1.3).
 
-    ``saldos`` son pares ``(codigo, saldo)`` con la convención del libro (positivo
-    de naturaleza débito, negativo de naturaleza crédito). Cada cuenta se cancela
-    con el signo contrario y el neto se lleva a la cuenta de resultado, de modo que
-    el lote nace cuadrado. Las cuentas con saldo cero no generan partida.
+    ``saldos`` son unidades ``{"cuenta", "saldo", "nit", "centro"}``. El ``saldo``
+    usa la convención del libro (positivo de naturaleza débito, negativo de
+    naturaleza crédito). Cada unidad se cancela con el signo contrario y el neto se
+    lleva a la cuenta de resultado, de modo que el lote nace cuadrado. La unidad
+    conserva su tercero y su centro —la expansión la hace la lectura, que los saca
+    de los saldos por tercero y por centro— para que el cierre deje en cero también
+    los auxiliares; la partida del neto va sin dimensiones. Las unidades con saldo
+    cero no generan partida.
     """
     lineas: list[dict[str, Any]] = []
     total = Decimal("0")
-    for codigo, saldo in saldos:
-        valor = Decimal(str(saldo or 0))
+    for unidad in saldos:
+        codigo = _text(unidad.get("cuenta"))
+        valor = Decimal(str(unidad.get("saldo") or 0))
         if valor == 0:
             continue
+        partida = {
+            "cuenta": codigo,
+            "nit": _text(unidad.get("nit")),
+            "centro": _text(unidad.get("centro")),
+        }
         if valor > 0:
-            lineas.append({"cuenta": codigo, "debito": 0.0, "credito": float(valor)})
+            lineas.append({**partida, "debito": 0.0, "credito": float(valor)})
         else:
-            lineas.append({"cuenta": codigo, "debito": float(-valor), "credito": 0.0})
+            lineas.append({**partida, "debito": float(-valor), "credito": 0.0})
         total += valor
     if total != 0:
+        neto = {"cuenta": cuenta_resultado, "nit": "", "centro": ""}
         if total > 0:
-            lineas.append({"cuenta": cuenta_resultado, "debito": float(total), "credito": 0.0})
+            lineas.append({**neto, "debito": float(total), "credito": 0.0})
         else:
-            lineas.append({"cuenta": cuenta_resultado, "debito": 0.0, "credito": float(-total)})
+            lineas.append({**neto, "debito": 0.0, "credito": float(-total)})
     return lineas
 
 
