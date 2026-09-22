@@ -32,6 +32,8 @@ from .postgres_repository import (
     _compania_id,
     _connect,
     _cuentas_desde_filas,
+    _filas,
+    _origenes_de_consolidacion,
 )
 
 
@@ -3219,3 +3221,1585 @@ def delete_formato_documental(
         "bajaLogica": True,
         "referencias": None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Bloque D1 · Impuestos (escrituras PostgreSQL)
+# ---------------------------------------------------------------------------
+def _formato_id(
+    cursor: Any, compania_id: int, codigo: str, vigencia: int, *, incluir_baja: bool = False
+) -> int:
+    """Identidad de un formato por compañía, código y vigencia (404 si no está)."""
+    from .impuestos_repository import TaxFormatNotFound
+
+    sql = (
+        "SELECT id FROM formatos_exogenos WHERE compania_id = %s AND codigo = %s "
+        "AND vigencia = %s"
+    )
+    if not incluir_baja:
+        sql += " AND eliminado_en IS NULL"
+    cursor.execute(sql, (compania_id, codigo, vigencia))
+    fila = cursor.fetchone()
+    if fila is None:
+        raise TaxFormatNotFound(
+            f"No existe el formato {codigo} para la vigencia {vigencia}."
+        )
+    return int(fila[0])
+
+
+def _conteos_formato(cursor: Any, formato_id: int) -> tuple[int, int]:
+    """Conteos calculados de conceptos y cuentas asignadas de un formato."""
+    cursor.execute(
+        "SELECT (SELECT count(*) FROM formato_conceptos WHERE formato_id = %s), "
+        "(SELECT count(*) FROM formato_asignaciones WHERE formato_id = %s AND activo)",
+        (formato_id, formato_id),
+    )
+    conceptos, cuentas = cursor.fetchone()
+    return int(conceptos or 0), int(cuentas or 0)
+
+
+def _cuentas_del_plan(cursor: Any, compania_id: int, codigos: list[str]) -> dict[str, int]:
+    """Identidad por código de las cuentas que existen en el plan de la compañía."""
+    if not codigos:
+        return {}
+    cursor.execute(
+        "SELECT codigo, id FROM cuentas WHERE compania_id = %s AND codigo = ANY(%s)",
+        (compania_id, codigos),
+    )
+    return {_text(codigo): int(identidad) for codigo, identidad in cursor.fetchall()}
+
+
+def acumular_iva(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Recalcula ``acumulados_iva`` desde la relación fiscal del renglón (1.2).
+
+    La relación es ``documento_lineas.clase = 'IVA'`` más ``tarifa_iva_id`` y
+    ``base`` (D-MOV-2 y B03, ``db/postgresql/schema/04_movimientos.sql`` L155-184).
+    Las filas de clase ``IVA`` sin tarifa o sin tercero **no** se acumulan: se
+    cuentan y se declaran en ``advertencia`` en vez de atribuirlas a ciegas.
+    """
+    from .impuestos_repository import (
+        AccumulationConflict, normalize_accumulation, periodo_de_mes,
+    )
+
+    data = normalize_accumulation(payload)
+    p_ini = periodo_de_mes(data["mesDesde"])
+    p_fin = periodo_de_mes(data["mesHasta"])
+    calculo = (
+        "SELECT d.periodo, dl.tercero_id, dl.tarifa_iva_id, SUM(dl.base), "
+        "SUM(dl.debito + dl.credito) FROM documento_lineas dl "
+        "JOIN documentos d ON d.id = dl.documento_id "
+        "WHERE dl.compania_id = %s AND d.anio = %s AND d.periodo >= %s AND d.periodo <= %s "
+        "AND d.estado = 'Contabilizado' AND dl.clase = 'IVA' "
+        "AND dl.tarifa_iva_id IS NOT NULL AND dl.tercero_id IS NOT NULL "
+        "GROUP BY d.periodo, dl.tercero_id, dl.tarifa_iva_id"
+    )
+    sin_relacion = (
+        "SELECT count(*) FROM documento_lineas dl JOIN documentos d ON d.id = dl.documento_id "
+        "WHERE dl.compania_id = %s AND d.anio = %s AND d.periodo >= %s AND d.periodo <= %s "
+        "AND d.estado = 'Contabilizado' AND dl.clase = 'IVA' "
+        "AND (dl.tarifa_iva_id IS NULL OR dl.tercero_id IS NULL)"
+    )
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            cursor.execute(
+                "SELECT 1 FROM cierres WHERE compania_id = %s AND anio = %s "
+                "AND estado = 'Ejecutado' LIMIT 1",
+                (compania_id, data["anio"]),
+            )
+            if cursor.fetchone() is not None:
+                raise AccumulationConflict(
+                    f"El año {data['anio']} está cerrado: no se puede reacumular el IVA."
+                )
+            parametros = (compania_id, data["anio"], p_ini, p_fin)
+            cursor.execute(calculo, parametros)
+            nuevas = {
+                (periodo, int(tercero), int(tarifa)): (float(base or 0), float(valor or 0))
+                for periodo, tercero, tarifa, base, valor in cursor.fetchall()
+            }
+            cursor.execute(sin_relacion, parametros)
+            no_clasificadas = int(cursor.fetchone()[0])
+            cursor.execute(
+                "SELECT periodo, tercero_id, tarifa_iva_id, base, valor FROM acumulados_iva "
+                "WHERE compania_id = %s AND anio = %s AND periodo >= %s AND periodo <= %s",
+                parametros,
+            )
+            previas = {
+                (_text(periodo), int(tercero), int(tarifa)): (float(base or 0), float(valor or 0))
+                for periodo, tercero, tarifa, base, valor in cursor.fetchall()
+            }
+            if not dry_run:
+                cursor.execute(
+                    "DELETE FROM acumulados_iva WHERE compania_id = %s AND anio = %s "
+                    "AND periodo >= %s AND periodo <= %s",
+                    parametros,
+                )
+                for (periodo, tercero, tarifa), (base, valor) in nuevas.items():
+                    cursor.execute(
+                        "INSERT INTO acumulados_iva (compania_id, anio, periodo, tercero_id, "
+                        "tarifa_iva_id, base, valor) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                        (compania_id, data["anio"], periodo, tercero, tarifa, base, valor),
+                    )
+                cursor.execute(
+                    "INSERT INTO estado_acumulaciones (compania_id, anio, tipo, periodo_hasta, "
+                    "ultima_acumulacion) VALUES (%s, %s, 'Iva', %s, now()) "
+                    "ON CONFLICT (compania_id, anio, tipo) DO UPDATE SET "
+                    "periodo_hasta = EXCLUDED.periodo_hasta, ultima_acumulacion = now()",
+                    (compania_id, data["anio"], p_fin),
+                )
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Acumulación de IVA", "Impuestos", f"{data['anio']} {p_ini}-{p_fin}",
+                    data["motivo"],
+                    {"periodos": [p_ini, p_fin], "filas": len(nuevas),
+                     "sinRelacionFiscal": no_clasificadas},
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    diferencias = sum(
+        1 for clave, valor in nuevas.items() if previas.get(clave) != valor
+    ) + sum(1 for clave in previas if clave not in nuevas)
+    item = {
+        "tipo": "IVA",
+        "periodos": [p_ini] if p_ini == p_fin else [p_ini, p_fin],
+        "filas": len(nuevas),
+        "base": round(sum(base for base, _ in nuevas.values()), 2),
+        "valor": round(sum(valor for _, valor in nuevas.values()), 2),
+        "diferencias": diferencias,
+        "dryRun": dry_run,
+        "sinRelacionFiscal": no_clasificadas,
+    }
+    if no_clasificadas:
+        item["advertencia"] = (
+            f"{no_clasificadas} fila(s) de clase IVA no tienen tarifa o tercero y no se "
+            "acumularon: la relación fiscal no se puede inventar (falta la tarifa "
+            "histórica del renglón)."
+        )
+    return {"item": item, "source": "acumulados_iva"}
+
+
+def acumular_retencion(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Recalcula ``acumulados_retencion`` desde la relación fiscal del renglón (1.5).
+
+    A diferencia de ``regenerar_acumulados(Retencion)`` —que hoy actualiza terceros
+    y no retenciones (matriz, P16)— este recálculo se apoya en
+    ``documento_lineas.clase = 'Retencion'`` más ``concepto_retencion_id``. Las
+    filas sin esa relación no se acumulan y se declaran.
+    """
+    from .impuestos_repository import (
+        AccumulationConflict, normalize_accumulation, periodo_de_mes,
+    )
+
+    data = normalize_accumulation(payload)
+    p_ini = periodo_de_mes(data["mesDesde"])
+    p_fin = periodo_de_mes(data["mesHasta"])
+    calculo = (
+        "SELECT d.periodo, dl.tercero_id, dl.concepto_retencion_id, SUM(dl.base), "
+        "SUM(dl.debito + dl.credito) FROM documento_lineas dl "
+        "JOIN documentos d ON d.id = dl.documento_id "
+        "WHERE dl.compania_id = %s AND d.anio = %s AND d.periodo >= %s AND d.periodo <= %s "
+        "AND d.estado = 'Contabilizado' AND dl.clase = 'Retencion' "
+        "AND dl.concepto_retencion_id IS NOT NULL AND dl.tercero_id IS NOT NULL "
+        "GROUP BY d.periodo, dl.tercero_id, dl.concepto_retencion_id"
+    )
+    sin_relacion = (
+        "SELECT count(*) FROM documento_lineas dl JOIN documentos d ON d.id = dl.documento_id "
+        "WHERE dl.compania_id = %s AND d.anio = %s AND d.periodo >= %s AND d.periodo <= %s "
+        "AND d.estado = 'Contabilizado' AND dl.clase = 'Retencion' "
+        "AND (dl.concepto_retencion_id IS NULL OR dl.tercero_id IS NULL)"
+    )
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            cursor.execute(
+                "SELECT 1 FROM cierres WHERE compania_id = %s AND anio = %s "
+                "AND estado = 'Ejecutado' LIMIT 1",
+                (compania_id, data["anio"]),
+            )
+            if cursor.fetchone() is not None:
+                raise AccumulationConflict(
+                    f"El año {data['anio']} está cerrado: no se pueden reacumular retenciones."
+                )
+            parametros = (compania_id, data["anio"], p_ini, p_fin)
+            cursor.execute(calculo, parametros)
+            nuevas = {
+                (periodo, int(tercero), int(concepto)): (float(base or 0), float(valor or 0))
+                for periodo, tercero, concepto, base, valor in cursor.fetchall()
+            }
+            cursor.execute(sin_relacion, parametros)
+            no_clasificadas = int(cursor.fetchone()[0])
+            cursor.execute(
+                "SELECT periodo, tercero_id, concepto_retencion_id, base, valor FROM "
+                "acumulados_retencion WHERE compania_id = %s AND anio = %s "
+                "AND periodo >= %s AND periodo <= %s",
+                parametros,
+            )
+            previas = {
+                (_text(periodo), int(tercero), int(concepto)): (float(base or 0), float(valor or 0))
+                for periodo, tercero, concepto, base, valor in cursor.fetchall()
+            }
+            if not dry_run:
+                cursor.execute(
+                    "DELETE FROM acumulados_retencion WHERE compania_id = %s AND anio = %s "
+                    "AND periodo >= %s AND periodo <= %s",
+                    parametros,
+                )
+                for (periodo, tercero, concepto), (base, valor) in nuevas.items():
+                    cursor.execute(
+                        "INSERT INTO acumulados_retencion (compania_id, anio, periodo, "
+                        "tercero_id, concepto_retencion_id, base, valor) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                        (compania_id, data["anio"], periodo, tercero, concepto, base, valor),
+                    )
+                cursor.execute(
+                    "INSERT INTO estado_acumulaciones (compania_id, anio, tipo, periodo_hasta, "
+                    "ultima_acumulacion) VALUES (%s, %s, 'Retencion', %s, now()) "
+                    "ON CONFLICT (compania_id, anio, tipo) DO UPDATE SET "
+                    "periodo_hasta = EXCLUDED.periodo_hasta, ultima_acumulacion = now()",
+                    (compania_id, data["anio"], p_fin),
+                )
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Acumulación de retenciones", "Impuestos",
+                    f"{data['anio']} {p_ini}-{p_fin}", data["motivo"],
+                    {"periodos": [p_ini, p_fin], "filas": len(nuevas),
+                     "sinRelacionFiscal": no_clasificadas},
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    diferencias = sum(
+        1 for clave, valor in nuevas.items() if previas.get(clave) != valor
+    ) + sum(1 for clave in previas if clave not in nuevas)
+    item = {
+        "tipo": "Retencion",
+        "periodos": [p_ini] if p_ini == p_fin else [p_ini, p_fin],
+        "filas": len(nuevas),
+        "base": round(sum(base for base, _ in nuevas.values()), 2),
+        "valor": round(sum(valor for _, valor in nuevas.values()), 2),
+        "diferencias": diferencias,
+        "dryRun": dry_run,
+        "sinRelacionFiscal": no_clasificadas,
+    }
+    if no_clasificadas:
+        item["advertencia"] = (
+            f"{no_clasificadas} fila(s) de clase Retencion no tienen concepto o tercero y "
+            "no se acumularon: la relación fiscal no se puede inventar."
+        )
+    return {"item": item, "source": "acumulados_retencion"}
+
+
+def create_formato(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea un formato de exógena de la compañía (2.2) en ``formatos_exogenos``."""
+    from .impuestos_repository import TaxFormatAlreadyExists, format_item, normalize_format
+
+    data = normalize_format(payload, include_codigo=True)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            cursor.execute(
+                "SELECT eliminado_en FROM formatos_exogenos WHERE compania_id = %s "
+                "AND codigo = %s AND vigencia = %s",
+                (compania_id, data["codigo"], data["vigencia"]),
+            )
+            existente = cursor.fetchone()
+            if existente is not None:
+                _de_baja(existente, codigo_cia, data["codigo"], TaxFormatAlreadyExists)
+            cursor.execute(
+                "INSERT INTO formatos_exogenos (compania_id, codigo, nombre, vigencia, "
+                "activo, creado_por) VALUES (%s, %s, %s, %s, %s, %s)",
+                (compania_id, data["codigo"], data["nombre"], data["vigencia"],
+                 data["activo"], _usuario_id(cursor, user)),
+            )
+            _auditar(
+                cursor, compania_id, _usuario_id(cursor, user),
+                "Alta de formato de exógena", "Impuestos",
+                f"{data['codigo']}/{data['vigencia']}", "",
+                {"nombre": data["nombre"], "activo": data["activo"]},
+            )
+        _commit(connection, False)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {"item": format_item({**data, "conceptos": 0, "cuentasAsignadas": 0}),
+            "source": "formatos_exogenos"}
+
+
+def update_formato(
+    company_code: str, codigo: str, vigencia: int, payload: dict[str, Any],
+    *, user: str = "WEB",
+) -> dict[str, Any]:
+    """Modifica nombre y estado de un formato (2.3); la vigencia es su clave."""
+    from .impuestos_repository import (
+        TaxFormatConflict, TaxFormatNotFound, format_item, normalize_format,
+    )
+
+    if payload.get("vigencia") is not None and int(payload["vigencia"]) != int(vigencia):
+        raise TaxFormatConflict(
+            "La vigencia es parte de la clave del formato: no se puede cambiar desde esta ruta."
+        )
+    data = normalize_format(
+        {**payload, "codigo": codigo, "vigencia": vigencia}, include_codigo=True
+    )
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            cursor.execute(
+                "SELECT id FROM formatos_exogenos WHERE compania_id = %s AND codigo = %s "
+                "AND vigencia = %s AND eliminado_en IS NULL",
+                (compania_id, data["codigo"], data["vigencia"]),
+            )
+            fila = cursor.fetchone()
+            if fila is None:
+                cursor.execute(
+                    "SELECT 1 FROM formatos_exogenos WHERE compania_id = %s AND codigo = %s "
+                    "AND eliminado_en IS NULL",
+                    (compania_id, data["codigo"]),
+                )
+                if cursor.fetchone() is not None:
+                    raise TaxFormatConflict(
+                        f"El formato {data['codigo']} existe con otra vigencia: la vigencia "
+                        "es parte de la clave."
+                    )
+                raise TaxFormatNotFound(
+                    f"No existe el formato {data['codigo']} para la vigencia {vigencia}."
+                )
+            formato_id = int(fila[0])
+            cursor.execute(
+                "UPDATE formatos_exogenos SET nombre = %s, activo = %s, actualizado_por = %s "
+                "WHERE id = %s",
+                (data["nombre"], data["activo"], _usuario_id(cursor, user), formato_id),
+            )
+            conceptos, cuentas = _conteos_formato(cursor, formato_id)
+            _auditar(
+                cursor, compania_id, _usuario_id(cursor, user),
+                "Modificación de formato de exógena", "Impuestos",
+                f"{data['codigo']}/{data['vigencia']}", "",
+                {"nombre": data["nombre"], "activo": data["activo"]},
+            )
+        _commit(connection, False)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    item = format_item({**data, "conceptos": conceptos, "cuentasAsignadas": cuentas})
+    item["vigencia"] = data["vigencia"]
+    return {"item": item, "source": "formatos_exogenos"}
+
+
+def delete_formato(
+    company_code: str, codigo: str, vigencia: int, *, reason: str,
+    user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Baja lógica de un formato sin generaciones exportadas (2.4)."""
+    from .companias_repository import validate_company_reason
+    from .impuestos_repository import TaxFormatConflict
+
+    motivo = validate_company_reason(reason)
+    codigo_limpio = str(codigo or "").strip().upper()
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            formato_id = _formato_id(cursor, compania_id, codigo_limpio, vigencia)
+            cursor.execute(
+                "SELECT 1 FROM medio_filas mf JOIN generaciones_medios g "
+                "ON g.id = mf.generacion_id WHERE mf.formato_id = %s AND g.compania_id = %s "
+                "AND g.estado = 'Exportado' LIMIT 1",
+                (formato_id, compania_id),
+            )
+            if cursor.fetchone() is not None:
+                raise TaxFormatConflict(
+                    "El formato tiene una generación de medios exportada: un medio ya "
+                    "presentado no se puede quedar sin su definición."
+                )
+            if not dry_run:
+                cursor.execute(
+                    "UPDATE formatos_exogenos SET eliminado_en = now(), actualizado_por = %s "
+                    "WHERE id = %s",
+                    (_usuario_id(cursor, user), formato_id),
+                )
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Baja de formato de exógena", "Impuestos",
+                    f"{codigo_limpio}/{vigencia}", motivo, {},
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "codigo": codigo_limpio,
+        "vigencia": vigencia,
+        "eliminado": not dry_run,
+        "bajaLogica": True,
+        "referencias": None,
+    }
+
+
+def replace_formato_conceptos(
+    company_code: str, codigo: str, vigencia: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reemplaza en bloque los conceptos de un formato (2.5).
+
+    Un concepto referenciado por filas ya generadas no se retira: se conserva y se
+    reporta en ``retenidos`` con su causa (la historia del medio no puede perder su
+    concepto).
+    """
+    from .impuestos_repository import (
+        TaxFormatValidationError, normalize_format_conceptos,
+    )
+
+    data = normalize_format_conceptos(payload)
+    codigo_limpio = str(codigo or "").strip().upper()
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            formato_id = _formato_id(cursor, compania_id, codigo_limpio, vigencia)
+            cuentas = _cuentas_del_plan(
+                cursor, compania_id,
+                [c["cuenta"] for c in data["conceptos"] if c["cuenta"]],
+            )
+            for concepto in data["conceptos"]:
+                if concepto["cuenta"] and concepto["cuenta"] not in cuentas:
+                    raise TaxFormatValidationError(
+                        f"No existe la cuenta {concepto['cuenta']} en el plan de la compañía."
+                    )
+            cursor.execute(
+                "SELECT id, codigo FROM formato_conceptos WHERE formato_id = %s",
+                (formato_id,),
+            )
+            existentes = {_text(cod): int(identidad) for identidad, cod in cursor.fetchall()}
+            cursor.execute(
+                "SELECT DISTINCT mf.concepto_id FROM medio_filas mf "
+                "JOIN generaciones_medios g ON g.id = mf.generacion_id "
+                "WHERE g.compania_id = %s AND mf.concepto_id IS NOT NULL",
+                (compania_id,),
+            )
+            referenciados = {int(fila[0]) for fila in cursor.fetchall()}
+            entrantes = {concepto["codigo"]: concepto for concepto in data["conceptos"]}
+            retenidos: list[dict[str, Any]] = []
+            retirados = 0
+            if not dry_run:
+                for cod, identidad in existentes.items():
+                    if cod in entrantes:
+                        continue
+                    if identidad in referenciados:
+                        retenidos.append({
+                            "codigo": cod,
+                            "causa": "tiene filas generadas en un medio y no se puede retirar",
+                        })
+                        continue
+                    cursor.execute("DELETE FROM formato_conceptos WHERE id = %s", (identidad,))
+                    retirados += 1
+                for concepto in data["conceptos"]:
+                    cuenta_id = cuentas.get(concepto["cuenta"])
+                    if concepto["codigo"] in existentes:
+                        cursor.execute(
+                            "UPDATE formato_conceptos SET nombre = %s, tarifa = %s, cuenta_id = %s "
+                            "WHERE id = %s",
+                            (concepto["nombre"], concepto["tarifa"], cuenta_id,
+                             existentes[concepto["codigo"]]),
+                        )
+                    else:
+                        cursor.execute(
+                            "INSERT INTO formato_conceptos (formato_id, codigo, nombre, tarifa, "
+                            "cuenta_id) VALUES (%s, %s, %s, %s, %s)",
+                            (formato_id, concepto["codigo"], concepto["nombre"],
+                             concepto["tarifa"], cuenta_id),
+                        )
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Reemplazo de conceptos de formato", "Impuestos",
+                    f"{codigo_limpio}/{vigencia}", data["motivo"],
+                    {"conceptos": len(data["conceptos"]), "retenidos": len(retenidos)},
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    creados = len([c for c in entrantes if c not in existentes])
+    actualizados = len([c for c in entrantes if c in existentes])
+    item = {
+        "codigo": codigo_limpio,
+        "vigencia": vigencia,
+        "conceptos": len(data["conceptos"]),
+        "creados": creados,
+        "actualizados": actualizados,
+        "retirados": retirados if not dry_run else len(
+            [c for c in existentes if c not in entrantes]
+        ),
+        "dryRun": dry_run,
+    }
+    if retenidos:
+        item["retenidos"] = retenidos
+    return {"item": item, "source": "formato_conceptos"}
+
+
+def replace_formato_asignaciones(
+    company_code: str, codigo: str, vigencia: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reemplaza en bloque las cuentas asignadas a un formato (2.6)."""
+    from .impuestos_repository import (
+        TaxFormatValidationError, normalize_format_asignaciones,
+    )
+
+    data = normalize_format_asignaciones(payload)
+    codigo_limpio = str(codigo or "").strip().upper()
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            formato_id = _formato_id(cursor, compania_id, codigo_limpio, vigencia)
+            cuentas = _cuentas_del_plan(cursor, compania_id, data["cuentas"])
+            faltantes = [c for c in data["cuentas"] if c not in cuentas]
+            if faltantes:
+                raise TaxFormatValidationError(
+                    "No existen en el plan de la compañía las cuentas: " + ", ".join(faltantes)
+                )
+            cursor.execute(
+                "SELECT cuenta_id FROM formato_asignaciones WHERE formato_id = %s",
+                (formato_id,),
+            )
+            existentes = {int(fila[0]) for fila in cursor.fetchall()}
+            nuevas = {cuentas[c] for c in data["cuentas"]}
+            if not dry_run:
+                for cuenta_id in existentes - nuevas:
+                    cursor.execute(
+                        "DELETE FROM formato_asignaciones WHERE formato_id = %s AND cuenta_id = %s",
+                        (formato_id, cuenta_id),
+                    )
+                for cuenta_id in nuevas:
+                    cursor.execute(
+                        "INSERT INTO formato_asignaciones (formato_id, cuenta_id, activo) "
+                        "VALUES (%s, %s, true) ON CONFLICT (formato_id, cuenta_id) "
+                        "DO UPDATE SET activo = true",
+                        (formato_id, cuenta_id),
+                    )
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Reemplazo de asignaciones de formato", "Impuestos",
+                    f"{codigo_limpio}/{vigencia}", data["motivo"],
+                    {"asignadas": len(nuevas)},
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    item = {
+        "codigo": codigo_limpio,
+        "vigencia": vigencia,
+        "asignadas": len(nuevas),
+        "creadas": len(nuevas - existentes),
+        "retiradas": len(existentes - nuevas),
+        "dryRun": dry_run,
+    }
+    return {"item": item, "source": "formato_asignaciones"}
+
+
+def copy_formatos(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Copia definiciones de exógena de otra compañía (2.7).
+
+    Es copia de definiciones, no de datos: traduce las cuentas **por código** y
+    reporta en ``cuentasNoEncontradas`` las que no existen en el destino, sin
+    inventarlas. Todo viaja en una transacción.
+    """
+    from .impuestos_repository import (
+        TaxFormatNotFound, normalize_format_copy,
+    )
+
+    data = normalize_format_copy(payload, cia_destino=company_code)
+    codigo_destino = str(normalize_company_code(company_code))
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_origen = _compania(cursor, data["ciaOrigen"])
+            compania_origen = _compania_id(cursor, codigo_origen)
+            compania_destino = _compania_id(cursor, codigo_destino)
+            if data["formatos"]:
+                cursor.execute(
+                    "SELECT id, codigo, nombre, activo FROM formatos_exogenos "
+                    "WHERE compania_id = %s AND vigencia = %s AND codigo = ANY(%s)",
+                    (compania_origen, data["vigenciaOrigen"], data["formatos"]),
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, codigo, nombre, activo FROM formatos_exogenos "
+                    "WHERE compania_id = %s AND vigencia = %s AND activo "
+                    "AND eliminado_en IS NULL ORDER BY codigo",
+                    (compania_origen, data["vigenciaOrigen"]),
+                )
+            origen = cursor.fetchall()
+            if data["formatos"] and len(origen) != len(set(data["formatos"])):
+                raise TaxFormatNotFound(
+                    "Algún formato pedido no existe en la compañía de origen para esa vigencia."
+                )
+            copiados = reemplazados = total_conceptos = total_asignaciones = 0
+            cuentas_no_encontradas: list[str] = []
+            for formato_id, codigo, nombre, activo in origen:
+                cursor.execute(
+                    "SELECT id FROM formatos_exogenos WHERE compania_id = %s AND codigo = %s "
+                    "AND vigencia = %s AND eliminado_en IS NULL",
+                    (compania_destino, _text(codigo), data["vigenciaDestino"]),
+                )
+                destino = cursor.fetchone()
+                if destino is not None and not data["reemplazar"]:
+                    continue
+                if not dry_run:
+                    if destino is None:
+                        cursor.execute(
+                            "INSERT INTO formatos_exogenos (compania_id, codigo, nombre, vigencia, "
+                            "activo, creado_por) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                            (compania_destino, _text(codigo), _text(nombre),
+                             data["vigenciaDestino"], bool(activo), _usuario_id(cursor, user)),
+                        )
+                        destino_id = int(cursor.fetchone()[0])
+                    else:
+                        destino_id = int(destino[0])
+                        reemplazados += 1
+                        cursor.execute(
+                            "DELETE FROM formato_conceptos WHERE formato_id = %s", (destino_id,)
+                        )
+                        cursor.execute(
+                            "DELETE FROM formato_asignaciones WHERE formato_id = %s", (destino_id,)
+                        )
+                        cursor.execute(
+                            "UPDATE formatos_exogenos SET nombre = %s, activo = %s, "
+                            "actualizado_por = %s WHERE id = %s",
+                            (_text(nombre), bool(activo), _usuario_id(cursor, user), destino_id),
+                        )
+                    copiados += 1
+                    cursor.execute(
+                        "SELECT fc.codigo, fc.nombre, fc.tarifa, cu.codigo FROM formato_conceptos fc "
+                        "LEFT JOIN cuentas cu ON cu.id = fc.cuenta_id WHERE fc.formato_id = %s",
+                        (int(formato_id),),
+                    )
+                    for cod, nom, tarifa, cuenta in cursor.fetchall():
+                        cuenta_id = None
+                        if _text(cuenta):
+                            encontrada = _cuentas_del_plan(
+                                cursor, compania_destino, [_text(cuenta)]
+                            ).get(_text(cuenta))
+                            if encontrada is None:
+                                cuentas_no_encontradas.append(_text(cuenta))
+                            else:
+                                cuenta_id = encontrada
+                        cursor.execute(
+                            "INSERT INTO formato_conceptos (formato_id, codigo, nombre, tarifa, "
+                            "cuenta_id) VALUES (%s, %s, %s, %s, %s)",
+                            (destino_id, _text(cod), _text(nom), tarifa, cuenta_id),
+                        )
+                        total_conceptos += 1
+                    cursor.execute(
+                        "SELECT cu.codigo FROM formato_asignaciones fa "
+                        "JOIN cuentas cu ON cu.id = fa.cuenta_id WHERE fa.formato_id = %s",
+                        (int(formato_id),),
+                    )
+                    for (cuenta,) in cursor.fetchall():
+                        disponibles = _cuentas_del_plan(cursor, compania_destino, [_text(cuenta)])
+                        if _text(cuenta) not in disponibles:
+                            cuentas_no_encontradas.append(_text(cuenta))
+                            continue
+                        cursor.execute(
+                            "INSERT INTO formato_asignaciones (formato_id, cuenta_id, activo) "
+                            "VALUES (%s, %s, true) ON CONFLICT (formato_id, cuenta_id) "
+                            "DO UPDATE SET activo = true",
+                            (destino_id, disponibles[_text(cuenta)]),
+                        )
+                        total_asignaciones += 1
+            if not dry_run:
+                _auditar(
+                    cursor, compania_destino, _usuario_id(cursor, user),
+                    "Copia de definiciones de exógena", "Impuestos",
+                    f"{codigo_origen}->{codigo_destino} {data['vigenciaDestino']}",
+                    data["motivo"],
+                    {"formatos": copiados, "conceptos": total_conceptos,
+                     "asignaciones": total_asignaciones},
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    item = {
+        "ciaOrigen": codigo_origen,
+        "ciaDestino": codigo_destino,
+        "formatos": copiados,
+        "conceptos": total_conceptos,
+        "asignaciones": total_asignaciones,
+        "reemplazados": reemplazados,
+        "dryRun": dry_run,
+        "cuentasNoEncontradas": sorted(set(cuentas_no_encontradas)),
+    }
+    return {"item": item, "source": "formatos_exogenos"}
+
+
+def create_medio(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Genera el medio magnético del año a partir del libro (3.2).
+
+    Las filas salen de la asignación cuenta→formato (``formato_asignaciones``,
+    ruta 2.6): cada cuenta no asignada queda como exclusión, no como error. El
+    concepto del formato no se puede atribuir sin una relación tarifa→concepto, así
+    que la fila se genera sin concepto y se declara; el período de cada renglón se
+    conserva en ``medio_filas.detalle``.
+    """
+    from .impuestos_repository import normalize_medium_generation
+
+    data = normalize_medium_generation(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            usuario_id = _usuario_id(cursor, user)
+            cursor.execute(
+                "SELECT COALESCE(MAX(numero_generacion), 0) + 1 FROM generaciones_medios "
+                "WHERE compania_id = %s AND anio = %s",
+                (compania_id, data["anio"]),
+            )
+            numero = int(cursor.fetchone()[0])
+            if data["formatos"]:
+                cursor.execute(
+                    "SELECT id, codigo FROM formatos_exogenos WHERE compania_id = %s "
+                    "AND vigencia = %s AND eliminado_en IS NULL AND activo AND codigo = ANY(%s)",
+                    (compania_id, data["vigencia"], data["formatos"]),
+                )
+            else:
+                cursor.execute(
+                    "SELECT id, codigo FROM formatos_exogenos WHERE compania_id = %s "
+                    "AND vigencia = %s AND eliminado_en IS NULL AND activo ORDER BY codigo",
+                    (compania_id, data["vigencia"]),
+                )
+            formatos = [(int(fila[0]), _text(fila[1])) for fila in cursor.fetchall()]
+            formato_ids = [identidad for identidad, _ in formatos]
+            asignaciones: dict[int, int] = {}
+            if formato_ids:
+                cursor.execute(
+                    "SELECT fa.cuenta_id, fa.formato_id FROM formato_asignaciones fa "
+                    "WHERE fa.formato_id = ANY(%s) AND fa.activo",
+                    (formato_ids,),
+                )
+                for cuenta_id, formato_id in cursor.fetchall():
+                    asignaciones.setdefault(int(cuenta_id), int(formato_id))
+            cursor.execute(
+                "SELECT d.periodo, dl.tercero_id, dl.cuenta_id, SUM(dl.base), "
+                "SUM(dl.debito + dl.credito) FROM documento_lineas dl "
+                "JOIN documentos d ON d.id = dl.documento_id "
+                "WHERE dl.compania_id = %s AND d.anio = %s AND d.estado = 'Contabilizado' "
+                "AND dl.tercero_id IS NOT NULL "
+                "GROUP BY d.periodo, dl.tercero_id, dl.cuenta_id",
+                (compania_id, data["anio"]),
+            )
+            total_contable = 0.0
+            reportado = 0.0
+            filas: dict[tuple[int, int, int], dict[str, Any]] = {}
+            for periodo, tercero, cuenta, base, valor in cursor.fetchall():
+                valor = float(valor or 0)
+                base = float(base or 0)
+                total_contable += valor
+                formato_id = asignaciones.get(int(cuenta)) if cuenta is not None else None
+                if formato_id is None:
+                    continue
+                clave = (formato_id, int(tercero), int(cuenta))
+                fila = filas.setdefault(
+                    clave, {"base": 0.0, "valor": 0.0, "periodos": []}
+                )
+                fila["base"] += base
+                fila["valor"] += valor
+                fila["periodos"].append(_text(periodo))
+                reportado += valor
+            cursor.execute(
+                "SELECT mt.formato_id, mt.concepto_id, mt.tope FROM medio_topes mt "
+                "WHERE mt.compania_id = %s AND mt.anio = %s",
+                (compania_id, data["anio"]),
+            )
+            por_formato: dict[int, float] = {}
+            for (formato_id, _tercero, _cuenta), fila in filas.items():
+                por_formato[formato_id] = por_formato.get(formato_id, 0.0) + fila["valor"]
+            topes = 0.0
+            for formato_id, concepto_id, tope in cursor.fetchall():
+                # El tope con concepto no se puede aplicar: la fila se genera sin
+                # concepto. Solo se aplica el tope por formato y se declara el resto.
+                if concepto_id is not None:
+                    continue
+                total = por_formato.get(int(formato_id), 0.0)
+                topes += max(0.0, total - float(tope or 0))
+            exclusiones = total_contable - reportado
+            total_reportado = reportado - topes
+            cuadrado = abs((total_contable - exclusiones - topes) - total_reportado) <= 0.01
+            generacion_id = 0
+            if not dry_run:
+                cursor.execute(
+                    "INSERT INTO generaciones_medios (compania_id, anio, numero_generacion, "
+                    "parametros, estado, generado_por, generado_en) "
+                    "VALUES (%s, %s, %s, %s::jsonb, 'Generado', %s, now()) RETURNING id",
+                    (compania_id, data["anio"], numero,
+                     json.dumps({"vigencia": data["vigencia"],
+                                 "formatos": [codigo for _, codigo in formatos]}),
+                     usuario_id),
+                )
+                generacion_id = int(cursor.fetchone()[0])
+                for (formato_id, tercero, cuenta), fila in filas.items():
+                    cursor.execute(
+                        "INSERT INTO medio_filas (generacion_id, formato_id, tercero_id, "
+                        "cuenta_id, valor, base, ajustado, detalle) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, false, %s::jsonb)",
+                        (generacion_id, formato_id, tercero, cuenta,
+                         round(fila["valor"], 2), round(fila["base"], 2),
+                         json.dumps({"periodos": sorted(set(fila["periodos"]))})),
+                    )
+                cursor.execute(
+                    "INSERT INTO medio_conciliaciones (generacion_id, total_contable, "
+                    "exclusiones, topes, ajustes, total_reportado, cuadrado) "
+                    "VALUES (%s, %s, %s, %s, 0, %s, %s)",
+                    (generacion_id, round(total_contable, 2), round(exclusiones, 2),
+                     round(topes, 2), round(total_reportado, 2), cuadrado),
+                )
+                _auditar(
+                    cursor, compania_id, usuario_id,
+                    "Generación de medio magnético", "Impuestos",
+                    f"{data['anio']}/{numero}", data["motivo"],
+                    {"registros": len(filas), "formatos": len(formatos),
+                     "cuadrado": cuadrado},
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    item = {
+        "id": generacion_id,
+        "numeroGeneracion": numero,
+        "anio": data["anio"],
+        "estado": "Generado",
+        "formatos": len(formatos),
+        "registros": len(filas),
+        "totalContable": round(total_contable, 2),
+        "exclusiones": round(exclusiones, 2),
+        "topes": round(topes, 2),
+        "totalReportado": round(total_reportado, 2),
+        "cuadrado": cuadrado,
+        "dryRun": dry_run,
+    }
+    item["advertencia"] = (
+        "Las filas se generan sin concepto: no hay relación directa entre la tarifa o "
+        "concepto del renglón y el concepto del formato "
+        "(db/old_db/MATRIZ_TABLAS_Y_BRECHAS.md P19/P20)."
+    )
+    return {"item": item, "source": "generaciones_medios"}
+
+
+def update_medio_fila(
+    company_code: str, medio_id: int, fila_id: int, payload: dict[str, Any],
+    *, user: str = "WEB",
+) -> dict[str, Any]:
+    """Ajusta una fila revisada del medio (3.4); no se ajusta un medio exportado."""
+    from .impuestos_repository import (
+        MediumConflict, MediumNotFound, MediumValidationError, normalize_medium_row,
+    )
+
+    data = normalize_medium_row(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            cursor.execute(
+                "SELECT estado FROM generaciones_medios WHERE id = %s AND compania_id = %s",
+                (medio_id, compania_id),
+            )
+            generacion = cursor.fetchone()
+            if generacion is None:
+                raise MediumNotFound(
+                    f"No existe la generación de medios {medio_id} en esta compañía."
+                )
+            if _text(generacion[0]) == "Exportado":
+                raise MediumConflict(
+                    "La generación está exportada: un medio presentado no se edita, se "
+                    "genera una versión nueva."
+                )
+            cursor.execute(
+                "SELECT formato_id, valor, base, concepto_id FROM medio_filas "
+                "WHERE id = %s AND generacion_id = %s",
+                (fila_id, medio_id),
+            )
+            fila = cursor.fetchone()
+            if fila is None:
+                raise MediumNotFound(f"No existe la fila {fila_id} en el medio {medio_id}.")
+            formato_id = int(fila[0])
+            valor_actual = float(fila[1] or 0)
+            base_actual = float(fila[2] or 0)
+            concepto_id = fila[3]
+            nuevo_valor = float(data["valor"]) if "valor" in data else valor_actual
+            nueva_base = float(data["base"]) if "base" in data else base_actual
+            if "concepto" in data:
+                cursor.execute(
+                    "SELECT fc.id FROM formato_conceptos fc WHERE fc.formato_id = %s "
+                    "AND fc.codigo = %s",
+                    (formato_id, data["concepto"]),
+                )
+                concepto = cursor.fetchone()
+                if concepto is None:
+                    raise MediumValidationError(
+                        f"El formato no tiene el concepto {data['concepto']}."
+                    )
+                concepto_id = int(concepto[0])
+            cursor.execute(
+                "UPDATE medio_filas SET valor = %s, base = %s, concepto_id = %s, "
+                "ajustado = true WHERE id = %s",
+                (nuevo_valor, nueva_base, concepto_id, fila_id),
+            )
+            delta = nuevo_valor - valor_actual
+            cursor.execute(
+                "UPDATE medio_conciliaciones SET ajustes = ajustes + %s, "
+                "total_reportado = total_contable - exclusiones - topes - (ajustes + %s) "
+                "WHERE generacion_id = %s",
+                (delta, delta, medio_id),
+            )
+            _auditar(
+                cursor, compania_id, _usuario_id(cursor, user),
+                "Ajuste de fila de medio", "Impuestos", f"{medio_id}/{fila_id}",
+                data["motivo"], {"valor": nuevo_valor, "base": nueva_base},
+            )
+        _commit(connection, False)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "item": {"id": fila_id, "valor": round(nuevo_valor, 2),
+                 "base": round(nueva_base, 2), "ajustado": True},
+        "source": "medio_filas",
+    }
+
+
+def replace_topes(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reemplaza los topes por formato y concepto del año (3.6).
+
+    El modelo usa ``ON CONFLICT`` sobre la clave, pero como ``concepto_id`` es
+    opcional y PostgreSQL trata los nulos distintos, el alta y la actualización se
+    resuelven explícitamente para no duplicar el tope sin concepto.
+    """
+    from .impuestos_repository import MediumValidationError, normalize_medium_topes
+
+    data = normalize_medium_topes(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            preparados: list[tuple[int, int | None, Decimal]] = []
+            for tope in data["topes"]:
+                cursor.execute(
+                    "SELECT id FROM formatos_exogenos WHERE compania_id = %s AND codigo = %s "
+                    "AND eliminado_en IS NULL ORDER BY vigencia DESC LIMIT 1",
+                    (compania_id, tope["formato"]),
+                )
+                formato = cursor.fetchone()
+                if formato is None:
+                    raise MediumValidationError(
+                        f"No existe el formato {tope['formato']} en la compañía."
+                    )
+                formato_id = int(formato[0])
+                concepto_id = None
+                if tope["concepto"]:
+                    cursor.execute(
+                        "SELECT id FROM formato_conceptos WHERE formato_id = %s AND codigo = %s",
+                        (formato_id, tope["concepto"]),
+                    )
+                    concepto = cursor.fetchone()
+                    if concepto is None:
+                        raise MediumValidationError(
+                            f"El formato {tope['formato']} no tiene el concepto "
+                            f"{tope['concepto']}."
+                        )
+                    concepto_id = int(concepto[0])
+                preparados.append((formato_id, concepto_id, tope["tope"]))
+            cursor.execute(
+                "SELECT id, formato_id, concepto_id FROM medio_topes WHERE compania_id = %s "
+                "AND anio = %s",
+                (compania_id, data["anio"]),
+            )
+            existentes = {
+                (int(formato), None if concepto is None else int(concepto)): int(identidad)
+                for identidad, formato, concepto in cursor.fetchall()
+            }
+            entrantes = {(formato, concepto) for formato, concepto, _ in preparados}
+            if not dry_run:
+                for clave, identidad in existentes.items():
+                    if clave not in entrantes:
+                        cursor.execute("DELETE FROM medio_topes WHERE id = %s", (identidad,))
+                for formato_id, concepto_id, tope in preparados:
+                    clave = (formato_id, concepto_id)
+                    if clave in existentes:
+                        cursor.execute(
+                            "UPDATE medio_topes SET tope = %s WHERE id = %s",
+                            (tope, existentes[clave]),
+                        )
+                    else:
+                        cursor.execute(
+                            "INSERT INTO medio_topes (compania_id, anio, formato_id, "
+                            "concepto_id, tope) VALUES (%s, %s, %s, %s, %s)",
+                            (compania_id, data["anio"], formato_id, concepto_id, tope),
+                        )
+                cursor.execute(
+                    "SELECT 1 FROM generaciones_medios WHERE compania_id = %s AND anio = %s "
+                    "AND estado = 'Exportado' LIMIT 1",
+                    (compania_id, data["anio"]),
+                )
+                exportada = cursor.fetchone() is not None
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Reemplazo de topes de medios", "Impuestos", str(data["anio"]),
+                    data["motivo"], {"topes": len(preparados)},
+                )
+            else:
+                exportada = False
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    item = {
+        "anio": data["anio"],
+        "creados": len(entrantes - set(existentes)),
+        "actualizados": len(entrantes & set(existentes)),
+        "retirados": len(set(existentes) - entrantes),
+        "dryRun": dry_run,
+    }
+    if exportada:
+        item["advertencia"] = (
+            "La compañía tiene una generación exportada en este año: los topes rigen la "
+            "próxima generación y la que esté en estado Generado; una exportada exige una "
+            "generación nueva."
+        )
+    return {"item": item, "source": "medio_topes"}
+
+
+def export_medio(
+    company_code: str, medio_id: int, *, formato: str, formato_exogeno: str = "",
+    user: str = "WEB",
+) -> dict[str, Any]:
+    """Exporta el medio y marca la generación como ``Exportado`` (3.7).
+
+    La reexportación del mismo id es un ``GET``: no cambia el estado y no vuelve a
+    ``Generado``. El cuadre no tiene que estar en verde; su valor viaja en la
+    cabecera ``X-Conciliacion-Cuadrado`` para que la interfaz lo advierta.
+    """
+    from .impuestos_repository import MediumNotFound, build_medio_export
+
+    condiciones = ""
+    parametros: list[Any] = []
+    if formato_exogeno.strip():
+        condiciones = "AND f.codigo = %s "
+        parametros.append(formato_exogeno.strip().upper())
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            cursor.execute(
+                "SELECT id, anio, numero_generacion, estado FROM generaciones_medios "
+                "WHERE id = %s AND compania_id = %s",
+                (medio_id, compania_id),
+            )
+            generacion = cursor.fetchone()
+            if generacion is None:
+                raise MediumNotFound(
+                    f"No existe la generación de medios {medio_id} en esta compañía."
+                )
+            cursor.execute(
+                "SELECT COALESCE(cuadrado, true) FROM medio_conciliaciones WHERE "
+                "generacion_id = %s",
+                (medio_id,),
+            )
+            cuadre = cursor.fetchone()
+            cuadrado = bool(cuadre[0]) if cuadre is not None else True
+            cursor.execute(
+                'SELECT f.codigo AS "FORMATO", t.nit AS "NIT", t.nombre AS "NOMBRE", '
+                'c.codigo AS "CONCEPTO", cu.codigo AS "CUENTA", mf.base AS "BASE", '
+                'c.tarifa AS "TARIFA", mf.valor AS "VALOR", mf.ajustado AS "AJUSTADO" '
+                "FROM medio_filas mf JOIN formatos_exogenos f ON f.id = mf.formato_id "
+                "LEFT JOIN terceros t ON t.id = mf.tercero_id "
+                "LEFT JOIN formato_conceptos c ON c.id = mf.concepto_id "
+                "LEFT JOIN cuentas cu ON cu.id = mf.cuenta_id "
+                "WHERE mf.generacion_id = %s " + condiciones + "ORDER BY f.codigo, t.nit, mf.id",
+                [medio_id, *parametros],
+            )
+            filas = [
+                {
+                    "formato": _text(fila["FORMATO"]),
+                    "nit": _text(fila["NIT"]),
+                    "nombre": _text(fila["NOMBRE"]),
+                    "concepto": _text(fila["CONCEPTO"]),
+                    "cuenta": _text(fila["CUENTA"]),
+                    "base": round(float(fila["BASE"] or 0), 2),
+                    "tarifa": None if fila["TARIFA"] is None else round(float(fila["TARIFA"]), 6),
+                    "valor": round(float(fila["VALOR"] or 0), 2),
+                    "ajustado": bool(fila["AJUSTADO"]),
+                }
+                for fila in _filas(cursor)
+            ]
+            if _text(generacion[3]) != "Exportado":
+                cursor.execute(
+                    "UPDATE generaciones_medios SET estado = 'Exportado', actualizado_por = %s "
+                    "WHERE id = %s",
+                    (_usuario_id(cursor, user), medio_id),
+                )
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Exportación de medio magnético", "Impuestos",
+                    str(medio_id), "", {"registros": len(filas), "formato": formato},
+                )
+        _commit(connection, False)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    medio = {
+        "anio": int(generacion[1]),
+        "numeroGeneracion": int(generacion[2]),
+        "estado": "Exportado",
+        "cuadrado": cuadrado,
+    }
+    media_type = {
+        "xml": "application/xml",
+        "csv": "text/csv; charset=utf-8",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }[formato]
+    return {
+        "content": build_medio_export(medio, filas, formato),
+        "media_type": media_type,
+        "filename": f"medio_magnetico_{int(generacion[1])}_{int(generacion[2]):03d}.{formato}",
+        "cuadrado": cuadrado,
+        "estado": "Exportado",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bloque D3 · Consolidación (escrituras)
+#
+# Las homologaciones viven en ``consolidacion_cuentas`` y
+# ``consolidacion_centros``; ``compania_destino_id`` es la compañía destino de la
+# consolidación (denormalizada) porque la FK compuesta del destino debe comparar
+# contra esa compañía y no contra la de origen
+# (db/postgresql/schema/16_consolidacion_homologacion.sql L10-15).
+# ---------------------------------------------------------------------------
+def _origen_declarado(origenes: list[tuple[dict[str, Any], int]], cia: str) -> int:
+    """Identidad del origen declarado; 422 si la homologación apunta a otro."""
+    from .consolidacion_repository import ConsolidacionValidationError
+
+    for origen, compania_id in origenes:
+        if int(origen["cia"]) == int(cia):
+            return compania_id
+    raise ConsolidacionValidationError(
+        f"La homologación referencia la compañía {cia}, que no está entre los orígenes "
+        "declarados de la consolidación."
+    )
+
+
+def _cuenta_de(cursor: Any, compania_id: int, codigo: str, lado: str, cia: str) -> int:
+    """Identidad de una cuenta en la compañía que corresponde (origen o destino)."""
+    from .consolidacion_repository import ConsolidacionValidationError
+
+    cursor.execute(
+        "SELECT id FROM cuentas WHERE compania_id = %s AND codigo = %s", (compania_id, codigo)
+    )
+    fila = cursor.fetchone()
+    if fila is None:
+        raise ConsolidacionValidationError(
+            f"La cuenta {lado} {codigo} no existe en la compañía {cia}."
+        )
+    return int(fila[0])
+
+
+def _centro_de(cursor: Any, compania_id: int, codigo: str, lado: str, cia: str) -> int:
+    """Identidad de un centro de costo en la compañía que corresponde."""
+    from .consolidacion_repository import ConsolidacionValidationError
+
+    cursor.execute(
+        "SELECT id FROM centros_costos WHERE compania_id = %s AND codigo = %s",
+        (compania_id, codigo),
+    )
+    fila = cursor.fetchone()
+    if fila is None:
+        raise ConsolidacionValidationError(
+            f"El centro de costo {lado} {codigo} no existe en la compañía {cia}."
+        )
+    return int(fila[0])
+
+
+def create_consolidation(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Configura una consolidación en una transacción (2.2).
+
+    Valida el destino ``solo_consolidacion`` (422), que cada cuenta/centro exista
+    en la compañía que le toca (origen en el origen, destino en el destino; el
+    cruce al revés es 422) y que ningún origen esté ya en otra consolidación del
+    mismo destino y año (409).
+
+    **Un origen por año.** La restricción ``UNIQUE (consolidacion_id,
+    compania_origen_id)`` de ``consolidacion_origenes`` (07_procesos.sql L93) no
+    cubre esta regla: se comprueba con una consulta explícita contra las demás
+    consolidaciones de la misma compañía destino y año.
+    """
+    from .consolidacion_repository import (
+        ConsolidacionConflict, ConsolidacionValidationError, es_compatible,
+        normalize_consolidation,
+    )
+
+    data = normalize_consolidation(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_destino = _compania(cursor, company_code)
+            destino_id = _compania_id(cursor, codigo_destino)
+            cursor.execute(
+                "SELECT solo_consolidacion FROM companias WHERE id = %s", (destino_id,)
+            )
+            if not bool(cursor.fetchone()[0]):
+                raise ConsolidacionValidationError(
+                    f"La compañía {company_code} no está marcada solo consolidación: consolidar "
+                    "hacia una compañía operativa mezcla libros."
+                )
+
+            origenes: list[tuple[dict[str, Any], int]] = []
+            for origen in data["origenes"]:
+                codigo_origen = _compania(cursor, origen["cia"])
+                origen_id = _compania_id(cursor, codigo_origen)
+                if origen_id == destino_id:
+                    raise ConsolidacionValidationError(
+                        f"La compañía destino {company_code} no puede ser origen de su propia "
+                        "consolidación."
+                    )
+                cursor.execute(
+                    "SELECT 1 FROM consolidacion_origenes o "
+                    "JOIN consolidaciones c ON c.id = o.consolidacion_id "
+                    "WHERE o.compania_origen_id = %s AND c.anio = %s "
+                    "AND c.compania_destino_id = %s LIMIT 1",
+                    (origen_id, data["anio"], destino_id),
+                )
+                if cursor.fetchone() is not None:
+                    raise ConsolidacionConflict(
+                        f"La compañía {origen['cia']} ya está en una consolidación del año "
+                        f"{data['anio']} hacia {company_code}."
+                    )
+                origenes.append((origen, origen_id))
+
+            cuentas: list[tuple[int, int, int, int]] = []
+            for equivalencia in data["cuentas"]:
+                origen_id = _origen_declarado(origenes, equivalencia["ciaOrigen"])
+                cuenta_origen = _cuenta_de(
+                    cursor, origen_id, equivalencia["cuentaOrigen"], "de origen",
+                    equivalencia["ciaOrigen"],
+                )
+                cuenta_destino = _cuenta_de(
+                    cursor, destino_id, equivalencia["cuentaDestino"], "de destino", company_code
+                )
+                cuentas.append((origen_id, cuenta_origen, cuenta_destino, equivalencia["signo"]))
+
+            centros: list[tuple[int, int, int]] = []
+            for equivalencia in data["centros"]:
+                origen_id = _origen_declarado(origenes, equivalencia["ciaOrigen"])
+                centro_origen = _centro_de(
+                    cursor, origen_id, equivalencia["centroOrigen"], "de origen",
+                    equivalencia["ciaOrigen"],
+                )
+                centro_destino = _centro_de(
+                    cursor, destino_id, equivalencia["centroDestino"], "de destino", company_code
+                )
+                centros.append((origen_id, centro_origen, centro_destino))
+
+            usuario_id = _usuario_id(cursor, data["usuario"])
+            cursor.execute(
+                "INSERT INTO consolidaciones (compania_destino_id, anio, creado_por, "
+                "actualizado_por) VALUES (%s, %s, %s, %s) RETURNING id",
+                (destino_id, data["anio"], usuario_id, usuario_id),
+            )
+            consolidacion_id = int(cursor.fetchone()[0])
+            for origen, origen_id in origenes:
+                cursor.execute(
+                    "INSERT INTO consolidacion_origenes (consolidacion_id, compania_origen_id, "
+                    "incluida) VALUES (%s, %s, %s)",
+                    (consolidacion_id, origen_id, origen["incluida"]),
+                )
+            for origen_id, cuenta_origen, cuenta_destino, signo in cuentas:
+                cursor.execute(
+                    "INSERT INTO consolidacion_cuentas (consolidacion_id, compania_origen_id, "
+                    "compania_destino_id, cuenta_origen_id, cuenta_destino_id, signo) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (consolidacion_id, origen_id, destino_id, cuenta_origen, cuenta_destino, signo),
+                )
+            for origen_id, centro_origen, centro_destino in centros:
+                cursor.execute(
+                    "INSERT INTO consolidacion_centros (consolidacion_id, compania_origen_id, "
+                    "compania_destino_id, centro_origen_id, centro_destino_id) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (consolidacion_id, origen_id, destino_id, centro_origen, centro_destino),
+                )
+            # La compatibilidad sale del mismo conteo que reporta ``cuentasSinHomologar``
+            # en 2.1 y 2.3: ninguna cuenta con saldo sin homologar en los orígenes
+            # incluidos. Se calcula después de insertar el grafo para reutilizar la
+            # única consulta de conteo.
+            conteo = _origenes_de_consolidacion(cursor, consolidacion_id, data["anio"])
+            compatible = es_compatible(conteo)
+            compatibilidad = {
+                "compatible": compatible,
+                "origenes": len(origenes),
+                "cuentasHomologadas": len(cuentas),
+                "centrosHomologados": len(centros),
+                "cuentasSinHomologar": sum(origen["sinHomologar"] for origen in conteo),
+            }
+            cursor.execute(
+                "UPDATE consolidaciones SET compatibilidad = %s::jsonb WHERE id = %s",
+                (json.dumps(compatibilidad), consolidacion_id),
+            )
+            _auditar(
+                cursor, destino_id, usuario_id, "Configuración de consolidación",
+                "Consolidación", f"{data['anio']}", data["motivo"],
+                {
+                    "origenes": len(origenes), "cuentas": len(cuentas),
+                    "centros": len(centros), "compatible": compatible,
+                },
+            )
+        _commit(connection, False)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "item": {
+            "id": consolidacion_id,
+            "anio": data["anio"],
+            "estado": "Configurado",
+            "origenes": len(origenes),
+            "cuentasHomologadas": len(cuentas),
+            "centrosHomologados": len(centros),
+        },
+        "source": "consolidaciones",
+    }
+
+
+def simulate_consolidation(
+    company_code: str, consolidacion_id: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = True,
+) -> dict[str, Any]:
+    """Simula la consolidación y la persiste en ``consolidaciones.simulacion`` (2.4).
+
+    Lee los saldos de cada origen incluido de ``saldos_cuenta``, los pasa por la
+    homologación y guarda el resultado en el jsonb ``simulacion`` con el estado
+    en ``Simulado``. No escribe asiento. Si no cuadra responde 200 con
+    ``cuadra: false``; no falla la ruta.
+
+    ``dryRun`` no gobierna la escritura: la simulación **es** el producto de la
+    operación y el contrato solo admite ``dryRun`` en verdadero (§2.4).
+    """
+    from .consolidacion_repository import (
+        ConsolidacionConflict, ConsolidacionNotFound, ConsolidacionValidationError,
+        calcular_simulacion, normalize_consolidation_action,
+    )
+
+    data = normalize_consolidation_action(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo = _compania(cursor, company_code)
+            destino_id = _compania_id(cursor, codigo)
+            cursor.execute(
+                "SELECT anio, estado FROM consolidaciones WHERE id = %s AND compania_destino_id = %s",
+                (consolidacion_id, destino_id),
+            )
+            fila = cursor.fetchone()
+            if fila is None:
+                raise ConsolidacionNotFound(
+                    f"No existe la consolidación {consolidacion_id} para la compañía {company_code}."
+                )
+            anio = int(fila[0])
+            estado = _text(fila[1])
+            if estado in ("Ejecutado", "Anulado"):
+                raise ConsolidacionConflict(
+                    f"La consolidación {consolidacion_id} está en estado {estado}: no se puede simular."
+                )
+            cursor.execute(
+                "SELECT compania_origen_id, incluida FROM consolidacion_origenes "
+                "WHERE consolidacion_id = %s ORDER BY compania_origen_id", (consolidacion_id,)
+            )
+            origenes = [(int(f[0]), bool(f[1])) for f in cursor.fetchall()]
+            incluidos = [origen_id for origen_id, incluida in origenes if incluida]
+            if not incluidos:
+                raise ConsolidacionValidationError(
+                    "La consolidación no tiene orígenes incluidos que consolidar."
+                )
+
+            cursor.execute(
+                "SELECT compania_origen_id, cuenta_origen_id, cuenta_destino_id, signo "
+                "FROM consolidacion_cuentas WHERE consolidacion_id = %s", (consolidacion_id,)
+            )
+            hom_crudas = {
+                (int(a), int(b)): (int(c), int(d)) for a, b, c, d in cursor.fetchall()
+            }
+            cursor.execute(
+                "SELECT id, codigo FROM cuentas WHERE compania_id = %s", (destino_id,)
+            )
+            codigo_destino = {int(i): _text(c) for i, c in cursor.fetchall()}
+            cursor.execute(
+                "SELECT codigo, nombre FROM cuentas WHERE compania_id = %s AND length(codigo) = 1",
+                (destino_id,),
+            )
+            nombres_grupo = {_text(c): _text(n) for c, n in cursor.fetchall()}
+            homologaciones = {
+                clave: (destino_cta, signo, codigo_destino.get(destino_cta, ""))
+                for clave, (destino_cta, signo) in hom_crudas.items()
+            }
+
+            movimientos: list[dict[str, Any]] = []
+            for origen_id in incluidos:
+                cursor.execute(
+                    "SELECT p.codigo FROM companias p WHERE p.id = %s", (origen_id,)
+                )
+                codigo_origen = _text(cursor.fetchone()[0])
+                cursor.execute(
+                    "SELECT s.cuenta_id, cu.codigo, "
+                    "COALESCE(SUM(s.saldo_inicial), 0) + COALESCE(SUM(s.debito), 0) "
+                    "+ COALESCE(SUM(s.credito), 0) AS saldo "
+                    "FROM saldos_cuenta s "
+                    "JOIN cuentas cu ON cu.id = s.cuenta_id AND cu.compania_id = s.compania_id "
+                    "WHERE s.compania_id = %s AND s.anio = %s AND cu.afectable "
+                    "GROUP BY s.cuenta_id, cu.codigo",
+                    (origen_id, anio),
+                )
+                movimientos.append(
+                    {
+                        "cia": f"{int(codigo_origen):03d}",
+                        "companiaId": origen_id,
+                        "cuentas": [
+                            (int(a), _text(b), float(c or 0)) for a, b, c in cursor.fetchall()
+                        ],
+                    }
+                )
+
+            simulacion = calcular_simulacion(movimientos, homologaciones, nombres_grupo)
+            usuario_id = _usuario_id(cursor, data["usuario"])
+            cursor.execute(
+                "UPDATE consolidaciones SET simulacion = %s::jsonb, estado = 'Simulado', "
+                "actualizado_por = %s, actualizado_en = now() WHERE id = %s",
+                (json.dumps(simulacion), usuario_id, consolidacion_id),
+            )
+            _auditar(
+                cursor, destino_id, usuario_id, "Simulación de consolidación",
+                "Consolidación", f"{anio}", data["motivo"],
+                {
+                    "filas": simulacion["filas"], "cuadra": simulacion["cuadra"],
+                    "cuentasSinHomologar": simulacion["cuentasSinHomologar"],
+                },
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "item": {
+            "id": consolidacion_id,
+            "estado": "Simulado",
+            "filas": simulacion["filas"],
+            "debito": simulacion["debito"],
+            "credito": simulacion["credito"],
+            "cuentasSinHomologar": simulacion["cuentasSinHomologar"],
+            "cuadra": simulacion["cuadra"],
+        },
+        "source": "consolidaciones",
+    }
+
+
+def execute_consolidation(
+    company_code: str, consolidacion_id: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Ejecuta la consolidación: declarada pendiente de decisión (2.5).
+
+    Antes de declarar el 503 se comprueban las reglas que sí están decididas: el
+    respaldo y la confirmación de vaciado (422) y el estado previo ``Simulado``
+    (409). No escribe: el algoritmo de consolidación está pendiente de B13
+    (``db/migration/03_plan_de_carga.md`` L156-162) y no se presenta una
+    simulación como ejecución.
+    """
+    from .consolidacion_repository import (
+        ConsolidacionConflict, ConsolidacionNotFound, ConsolidacionPendiente,
+        EXECUTION_PENDING_MESSAGE, normalize_consolidation_execution,
+    )
+
+    normalize_consolidation_execution(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo = _compania(cursor, company_code)
+            destino_id = _compania_id(cursor, codigo)
+            cursor.execute(
+                "SELECT estado FROM consolidaciones WHERE id = %s AND compania_destino_id = %s",
+                (consolidacion_id, destino_id),
+            )
+            fila = cursor.fetchone()
+            if fila is None:
+                raise ConsolidacionNotFound(
+                    f"No existe la consolidación {consolidacion_id} para la compañía {company_code}."
+                )
+            estado = _text(fila[0])
+            if estado != "Simulado":
+                raise ConsolidacionConflict(
+                    f"La consolidación {consolidacion_id} está en estado {estado}: solo se ejecuta "
+                    "lo que se simuló."
+                )
+    finally:
+        connection.close()
+    raise ConsolidacionPendiente(EXECUTION_PENDING_MESSAGE)

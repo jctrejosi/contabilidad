@@ -14,7 +14,7 @@ bloques A–E, 5 tablas nuevas y el contrato por endpoint.
 
 | Documento | Contenido |
 |---|---|
-| `backend/PLAN_IMPLEMENTACION.md` | ficha, reglas R1–R10, inventario de endpoints por bloque, orden por dependencia y verificación |
+| `backend/PLAN_BACKEND.md` | ficha, reglas R1–R10, inventario de endpoints por bloque, orden por dependencia y verificación |
 | `backend/detalle/maestros.md` | terceros, centros, comprobantes y tipos de documento (bloque B1, B1b, B2) |
 | `backend/detalle/configuracion.md` | las seis pantallas de configuración por compañía (bloque B3) |
 | `backend/detalle/movimientos.md` | captura directa, generación de lote, reembolsos y reasignación de NIT (bloques C, E1, E2) |
@@ -31,7 +31,7 @@ funcionalidad).
 
 | Documento | Contenido |
 |---|---|
-| `bot/PLAN_ASISTENTE.md` | regla de no inventar, las fases 0 a 5, el inventario del aplicativo (el techo de lo que puede afirmar) y el estado de lo implementado |
+| `bot/PLAN_BOT.md` | regla de no inventar, las fases 0 a 5, el inventario del aplicativo (el techo de lo que puede afirmar) y el estado de lo implementado |
 | `bot/HERRAMIENTAS_PRIORIZADAS.md` | criterios de evaluación y el catálogo priorizado de herramientas (olas), con su dependencia de cada fase |
 
 ---
@@ -52,13 +52,13 @@ carpetas:
 ## Cómo se citan
 
 Los documentos se citan en el resto de `docs/` como `NOMBRE.md:línea` (por
-ejemplo `PLAN_IMPLEMENTACION.md:417-444`). Esa cita apunta al nombre de archivo, no
+ejemplo `PLAN_BACKEND.md:417-444`). Esa cita apunta al nombre de archivo, no
 a una ruta, así que esta tabla es la que resuelve la ubicación:
 
 | Se cita como | Vive en |
 |---|---|
-| `PLAN_IMPLEMENTACION.md` | `docs/plan/backend/PLAN_IMPLEMENTACION.md` |
-| `PLAN_ASISTENTE.md` | `docs/plan/bot/PLAN_ASISTENTE.md` |
+| `PLAN_BACKEND.md` | `docs/plan/backend/PLAN_BACKEND.md` |
+| `PLAN_BOT.md` | `docs/plan/bot/PLAN_BOT.md` |
 | `HERRAMIENTAS_PRIORIZADAS.md` | `docs/plan/bot/HERRAMIENTAS_PRIORIZADAS.md` |
 | `MAPA_FUNCIONALIDAD.md` | `docs/catalogo/MAPA_FUNCIONALIDAD.md` |
 | `AUDITORIA_FUNCIONALIDAD.md` | `docs/auditorias/AUDITORIA_FUNCIONALIDAD.md` |

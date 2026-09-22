@@ -698,3 +698,275 @@ def execute_monthly_reprocess(
     return implementation(
         cia, year, month_from, month_to, user=user, reason=reason, dry_run=dry_run
     )
+
+
+# ---------------------------------------------------------------------------
+# Bloque D1 · Impuestos — mismo contrato JSON en los dos motores (R1, R10)
+# ---------------------------------------------------------------------------
+def list_acumulados_iva(
+    cia: str, anio: int, mes_desde: int, mes_hasta: int,
+    *, nit: str = "", page: int = 1, page_size: int = 100,
+) -> dict[str, Any]:
+    """IVA acumulado por tercero y período (``acumulados_iva`` o ``CONIVA``)."""
+    if is_postgres():
+        from .postgres_repository import list_acumulados_iva as implementation
+    else:
+        from .impuestos_repository import list_acumulados_iva as implementation
+    return implementation(
+        cia, anio, mes_desde, mes_hasta, nit=nit, page=page, page_size=page_size
+    )
+
+
+def acumular_iva(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Recalcula el acumulado de IVA del período (1.2)."""
+    if is_postgres():
+        from .postgres_writes import acumular_iva as implementation
+    else:
+        from .impuestos_repository import acumular_iva as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def list_acumulados_retencion(
+    cia: str, anio: int, mes_desde: int, mes_hasta: int,
+    *, nit: str = "", concepto: str = "", page: int = 1, page_size: int = 100,
+) -> dict[str, Any]:
+    """Retenciones acumuladas por tercero, concepto y período (1.4)."""
+    if is_postgres():
+        from .postgres_repository import list_acumulados_retencion as implementation
+    else:
+        from .impuestos_repository import list_acumulados_retencion as implementation
+    return implementation(
+        cia, anio, mes_desde, mes_hasta,
+        nit=nit, concepto=concepto, page=page, page_size=page_size,
+    )
+
+
+def acumular_retencion(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Recalcula las retenciones acumuladas del período (1.5)."""
+    if is_postgres():
+        from .postgres_writes import acumular_retencion as implementation
+    else:
+        from .impuestos_repository import acumular_retencion as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def list_impuestos_formatos(cia: str, *, anio: int | None = None) -> dict[str, Any]:
+    """Formatos de exógena con sus conteos (``formatos_exogenos`` o ``CONMAG1``)."""
+    if is_postgres():
+        from .postgres_repository import list_impuestos_formatos as implementation
+    else:
+        from .impuestos_repository import list_formatos as implementation
+    return implementation(cia, anio=anio)
+
+
+def create_formato(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea un formato de exógena de la compañía (2.2)."""
+    if is_postgres():
+        from .postgres_writes import create_formato as implementation
+    else:
+        from .impuestos_repository import create_formato as implementation
+    return implementation(cia, payload, user=user)
+
+
+def update_formato(
+    cia: str, codigo: str, vigencia: int, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Modifica un formato; el código y la vigencia son su clave (2.3)."""
+    if is_postgres():
+        from .postgres_writes import update_formato as implementation
+    else:
+        from .impuestos_repository import update_formato as implementation
+    return implementation(cia, codigo, vigencia, payload, user=user)
+
+
+def delete_formato(
+    cia: str, codigo: str, vigencia: int, *, reason: str,
+    user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Da de baja lógica un formato (2.4)."""
+    if is_postgres():
+        from .postgres_writes import delete_formato as implementation
+    else:
+        from .impuestos_repository import delete_formato as implementation
+    return implementation(
+        cia, codigo, vigencia=vigencia, reason=reason, user=user, dry_run=dry_run
+    )
+
+
+def replace_formato_conceptos(
+    cia: str, codigo: str, vigencia: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reemplaza en bloque los conceptos de un formato (2.5)."""
+    if is_postgres():
+        from .postgres_writes import replace_formato_conceptos as implementation
+    else:
+        from .impuestos_repository import replace_formato_conceptos as implementation
+    return implementation(cia, codigo, vigencia, payload, user=user, dry_run=dry_run)
+
+
+def replace_formato_asignaciones(
+    cia: str, codigo: str, vigencia: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Reemplaza en bloque las cuentas asignadas a un formato (2.6)."""
+    if is_postgres():
+        from .postgres_writes import replace_formato_asignaciones as implementation
+    else:
+        from .impuestos_repository import replace_formato_asignaciones as implementation
+    return implementation(cia, codigo, vigencia, payload, user=user, dry_run=dry_run)
+
+
+def copy_formatos(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Copia las definiciones de exógena de otra compañía (2.7)."""
+    if is_postgres():
+        from .postgres_writes import copy_formatos as implementation
+    else:
+        from .impuestos_repository import copy_formatos as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def list_medios(cia: str, anio: int) -> dict[str, Any]:
+    """Generaciones de medios con su estado (3.1)."""
+    if is_postgres():
+        from .postgres_repository import list_medios as implementation
+    else:
+        from .impuestos_repository import list_medios as implementation
+    return implementation(cia, anio)
+
+
+def create_medio(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Genera el medio magnético del año (3.2)."""
+    if is_postgres():
+        from .postgres_writes import create_medio as implementation
+    else:
+        from .impuestos_repository import create_medio as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def get_medio(
+    cia: str, medio_id: int, *, formato: str = "", nit: str = "",
+    page: int = 1, page_size: int = 200,
+) -> dict[str, Any]:
+    """Filas de una generación del medio para revisión (3.3)."""
+    if is_postgres():
+        from .postgres_repository import get_medio as implementation
+    else:
+        from .impuestos_repository import get_medio as implementation
+    return implementation(
+        cia, medio_id, formato=formato, nit=nit, page=page, page_size=page_size
+    )
+
+
+def update_medio_fila(
+    cia: str, medio_id: int, fila_id: int, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Ajusta una fila revisada del medio (3.4)."""
+    if is_postgres():
+        from .postgres_writes import update_medio_fila as implementation
+    else:
+        from .impuestos_repository import update_medio_fila as implementation
+    return implementation(cia, medio_id, fila_id, payload, user=user)
+
+
+def get_medio_conciliacion(cia: str, medio_id: int) -> dict[str, Any]:
+    """Topes, exclusiones y cuadre del medio (3.5)."""
+    if is_postgres():
+        from .postgres_repository import get_medio_conciliacion as implementation
+    else:
+        from .impuestos_repository import get_medio_conciliacion as implementation
+    return implementation(cia, medio_id)
+
+
+def replace_topes(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reemplaza los topes por formato y concepto del año (3.6)."""
+    if is_postgres():
+        from .postgres_writes import replace_topes as implementation
+    else:
+        from .impuestos_repository import replace_topes as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def export_medio(
+    cia: str, medio_id: int, *, formato: str, formato_exogeno: str = "", user: str = "WEB"
+) -> dict[str, Any]:
+    """Exporta el medio magnético y marca la generación (3.7)."""
+    if is_postgres():
+        from .postgres_writes import export_medio as implementation
+    else:
+        from .impuestos_repository import export_medio as implementation
+    return implementation(
+        cia, medio_id, formato=formato, formato_exogeno=formato_exogeno, user=user
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bloque D3 · Consolidación — mismo contrato JSON en los dos motores (R1, R10)
+#
+# Las homologaciones solo existen en PostgreSQL; en Advantage la rama declara la
+# brecha (503), porque CONSOLID no tiene columnas para año, estado ni
+# correspondencias (db/old_db/MATRIZ_TABLAS_Y_BRECHAS.md, CONSOLID/P27).
+# ---------------------------------------------------------------------------
+def list_consolidaciones(cia: str, anio: int) -> dict[str, Any]:
+    """Consolidaciones del año destino (``consolidaciones`` o ``CONSOLID``)."""
+    if is_postgres():
+        from .postgres_repository import list_consolidaciones as implementation
+    else:
+        from .consolidacion_repository import list_consolidaciones as implementation
+    return implementation(cia, anio)
+
+
+def create_consolidation(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Configura destino, orígenes y homologaciones de una consolidación (2.2)."""
+    if is_postgres():
+        from .postgres_writes import create_consolidation as implementation
+    else:
+        from .consolidacion_repository import create_consolidation as implementation
+    return implementation(cia, payload, user=user)
+
+
+def get_consolidation(cia: str, consolidacion_id: int) -> dict[str, Any]:
+    """Orígenes, homologaciones, simulación y totales comparados (2.3)."""
+    if is_postgres():
+        from .postgres_repository import get_consolidation as implementation
+    else:
+        from .consolidacion_repository import get_consolidation as implementation
+    return implementation(cia, consolidacion_id)
+
+
+def simulate_consolidation(
+    cia: str, consolidacion_id: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = True,
+) -> dict[str, Any]:
+    """Simula la consolidación sin escribir en el libro (2.4)."""
+    if is_postgres():
+        from .postgres_writes import simulate_consolidation as implementation
+    else:
+        from .consolidacion_repository import simulate_consolidation as implementation
+    return implementation(cia, consolidacion_id, payload, user=user, dry_run=dry_run)
+
+
+def execute_consolidation(
+    cia: str, consolidacion_id: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Ejecuta la consolidación: 503 declarado hasta que se decida el algoritmo (2.5)."""
+    if is_postgres():
+        from .postgres_writes import execute_consolidation as implementation
+    else:
+        from .consolidacion_repository import execute_consolidation as implementation
+    return implementation(cia, consolidacion_id, payload, user=user, dry_run=dry_run)

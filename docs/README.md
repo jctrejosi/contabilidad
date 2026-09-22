@@ -13,3 +13,4 @@
 - `plan/`: los dos planes del proyecto, separados, con su índice en `plan/README.md`.
   - `plan/backend/`: plan de implementación de la funcionalidad que falta, con el inventario de endpoints nuevos por bloque, el orden por dependencia y el detalle de contrato por módulo.
   - `plan/bot/`: plan del asistente (Daisy), con sus fases, su fuente de conocimiento y las herramientas priorizadas.
+- `schemas/`: registro de los cambios al modelo de datos, con el DDL PostgreSQL y **la contraparte que debe implementarse en la base Advantage** (`schemas/advantage-pendiente.md` reúne el backlog).

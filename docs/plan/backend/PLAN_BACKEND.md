@@ -5,6 +5,10 @@ dependencia, todo lo que falta para que los controles que hoy simulan en
 `Interface_web/` operen contra el backend, con el detalle de contrato en
 `detalle/`.
 
+> Este es el **plan de backend** (`docs/plan/backend/`). El otro plan es el del
+> asistente (Daisy), en `../bot/PLAN_BOT.md`; el indice de los dos esta en
+> `../README.md`.
+
 Contenido del punto 3 en archivos aparte:
 
 - `detalle/maestros.md`: terceros, centros, comprobantes y tipos de documento

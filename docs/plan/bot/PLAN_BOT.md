@@ -6,6 +6,9 @@ que los procedimientos salgan de la documentación y no del modelo) y el
 afirmar. Nace de la pregunta concreta: *¿cómo puede explicar «los pasos para
 registrar un comprobante contable» si no tiene manual?*
 
+> Este es el **plan del bot** (`docs/plan/bot/`). El otro plan es el de backend,
+> en `../backend/PLAN_BACKEND.md`; el índice de los dos está en `../README.md`.
+
 ---
 
 ## 0. Regla que rige todo: no inventar

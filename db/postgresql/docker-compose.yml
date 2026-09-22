@@ -33,6 +33,8 @@ services:
       - ./schema/12_migracion.sql:/docker-entrypoint-initdb.d/12_migracion.sql:ro
       - ./schema/13_campos_contrato.sql:/docker-entrypoint-initdb.d/13_campos_contrato.sql:ro
       - ./schema/14_indices_libro.sql:/docker-entrypoint-initdb.d/14_indices_libro.sql:ro
+      - ./schema/15_flujo_caja_niif.sql:/docker-entrypoint-initdb.d/15_flujo_caja_niif.sql:ro
+      - ./schema/16_consolidacion_homologacion.sql:/docker-entrypoint-initdb.d/16_consolidacion_homologacion.sql:ro
       - ./funciones.sql:/docker-entrypoint-initdb.d/20_funciones.sql:ro
       - ./seed.sql:/docker-entrypoint-initdb.d/30_seed.sql:ro
     healthcheck:

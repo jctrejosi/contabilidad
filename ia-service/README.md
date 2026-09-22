@@ -17,7 +17,7 @@ cuentas, movimiento mensual, documentos y detalle de documento. Los datos los pi
 al backend por HTTP; el servicio **no** se conecta a la base de datos.
 
 El plan del asistente (fases, fuentes de conocimiento e inventario del
-aplicativo) está en [`docs/plan/bot/PLAN_ASISTENTE.md`](../docs/plan/bot/PLAN_ASISTENTE.md).
+aplicativo) está en [`docs/plan/bot/PLAN_BOT.md`](../docs/plan/bot/PLAN_BOT.md).
 
 ## Arquitectura
 

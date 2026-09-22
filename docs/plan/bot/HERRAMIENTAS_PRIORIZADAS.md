@@ -1,10 +1,10 @@
 # Herramientas priorizadas del asistente (Daisy)
 
 Que funcionalidades del aplicativo merece la pena pedirle al asistente y plan
-para implementar las que ya se pueden. Depende de `PLAN_ASISTENTE.md` (fases,
+para implementar las que ya se pueden. Depende de `PLAN_BOT.md` (fases,
 regla de no inventar, inventario), de `../../catalogo/MAPA_FUNCIONALIDAD.md` (estado
 control por control), de `../../auditorias/AUDITORIA_FUNCIONALIDAD.md` (que esta
-simulado y por que) y de `../backend/PLAN_IMPLEMENTACION.md` (los 86 endpoints
+simulado y por que) y de `../backend/PLAN_BACKEND.md` (los 86 endpoints
 que faltan).
 
 Metodo: solo entran candidatas cuyo endpoint exista en `backend/app.py`; toda
@@ -16,9 +16,9 @@ Datos de partida, tomados de los documentos (no recalculados):
 - 702 controles: 245 conectados, 442 locales o simulados, 15 inertes
   (`MAPA_FUNCIONALIDAD.md:123-130`).
 - 48 rutas en `backend/app.py`; una sola sin pantalla, `/api/health`
-  (`PLAN_ASISTENTE.md:117`).
+  (`PLAN_BOT.md:117`).
 - 86 rutas por construir; 17 filas reutilizan una ruta existente; 13 son solo
-  interfaz (`PLAN_IMPLEMENTACION.md:417-444`).
+  interfaz (`PLAN_BACKEND.md:417-444`).
 - `TOOLS = []` y `FUNCTION_MAP = {}` (`ia-service/app/tools.py:29-32`); el loop
   de function calling ya existe (`ia-service/app/deepseek.py:129-176`).
 - El widget pinta unicamente `reply`: en `Interface_web/src/components/BotChat.tsx`
@@ -48,8 +48,8 @@ Las cinco primeras por orden de entrega: `consultar_periodo_operacion`,
 ## 1. Criterios de evaluacion
 
 Peso total 10. El criterio (f) es el que mas pesa porque es el objetivo
-declarado del plan: `PLAN_ASISTENTE.md:11-28` (no inventar datos ni
-funcionalidad) y `PLAN_ASISTENTE.md:97-102` (fase 5).
+declarado del plan: `PLAN_BOT.md:11-28` (no inventar datos ni
+funcionalidad) y `PLAN_BOT.md:97-102` (fase 5).
 
 | Id | Criterio | Pregunta que responde | Peso |
 |---|---|---|---:|
@@ -171,7 +171,7 @@ que el endpoint lee. La columna *ruta* cita `archivo:linea` de la definicion.
 | C42 | Leer archivo de importacion | `POST /api/importaciones/leer` (`app.py:740`) | real | Bajo | Medio: exige `UploadFile` | No: la conversacion solo lleva texto (`main.py:41-48`) | - |
 | C43 | Crear lote desde importacion | `POST /api/importaciones/lote` (`app.py:756`) | real | Bajo | Alto | No: depende de C42 | - |
 | C44 | Modificar/crear cuenta maestra | `app.py:1062` y `app.py:1079` | real: CONMAE | Bajo | Alto: escritura de maestro | No hoy: fase 4; ningun control de la interfaz lo pide desde el chat | 4 |
-| C45 | Estado del servicio (`/api/health`) | `GET /api/health` (`app.py:272`) | real | Nulo | Bajo | No: no responde a ninguna pregunta contable (`PLAN_ASISTENTE.md:117`) | - |
+| C45 | Estado del servicio (`/api/health`) | `GET /api/health` (`app.py:272`) | real | Nulo | Bajo | No: no responde a ninguna pregunta contable (`PLAN_BOT.md:117`) | - |
 
 De las 45: 29 implementables ya (C01-C08, C10-C27, C37, C39, C40), 12 de
 escritura que necesitan el testigo de confirmacion de la fase 4 (C09, C28-C36,
@@ -185,7 +185,7 @@ C42, C43 y C45).
 Orden pensado para que ninguna herramienta dependa de otra que no exista aun.
 Las 8 primeras se pueden entregar **antes de la fase 2**, porque el modelo puede
 resumir su resultado en `reply` sin tabla. Las 21 siguientes necesitan que el
-widget pinte el `payload`, que es la fase 2 (`PLAN_ASISTENTE.md:79-81`).
+widget pinte el `payload`, que es la fase 2 (`PLAN_BOT.md:79-81`).
 
 ### 3.1 Ola 1: solo texto, antes de la fase 2 (8 herramientas)
 
@@ -203,7 +203,7 @@ widget pinte el `payload`, que es la fase 2 (`PLAN_ASISTENTE.md:79-81`).
 > **Notas de implementacion, sin cambiar el plan:** (1) las descripciones de T-07
 > y T-08 nombraban `consultar_saldos_cuenta_centro` y `consultar_lotes`, que no
 > existen en esta entrega, y se sustituyeron por la pantalla real para no anunciar
-> funciones inexistentes (regla 2 de `PLAN_ASISTENTE.md`); (2) el punto 3.4 ubica
+> funciones inexistentes (regla 2 de `PLAN_BOT.md`); (2) el punto 3.4 ubica
 > T-08 en el paso 6, despues de la fase 2, mientras que este apartado la lista en
 > la ola 1: se implemento por lo que dice este apartado, con el `payload` de tabla
 > solo cuando `errores` trae mas de 5 entradas, de modo que el caso normal viaja en
@@ -649,7 +649,7 @@ catalogo corto.
 Tienen endpoint real, de modo que no estan bloqueadas por el plan de 86 rutas,
 pero el plan del asistente las coloca despues: el handler no ejecuta, devuelve
 resumen mas testigo de confirmacion y la ejecucion es una segunda llamada
-(`PLAN_ASISTENTE.md:90-96`). Son C09, C28, C29, C30, C31, C32, C33, C34, C35,
+(`PLAN_BOT.md:90-96`). Son C09, C28, C29, C30, C31, C32, C33, C34, C35,
 C36, C38 y C44. Dos notas que condicionan su diseno:
 
 - Las destructivas ya traen red de seguridad: `dryRun` en anulacion
@@ -692,15 +692,15 @@ comprobante uso") y no necesitan ni una linea de interfaz nueva.
 
 Si se le pide al asistente una herramienta aqui, la unica salida posible es la
 invencion, que es justo lo que la seccion 0 del plan prohibe
-(`PLAN_ASISTENTE.md:11-28`).
+(`PLAN_BOT.md:11-28`).
 
 | Grupo | Por que no | Evidencia |
 |---|---|---|
 | Impuestos (69 controles) | simulacion declarada; falta todo el modulo y su cliente | `MAPA_FUNCIONALIDAD.md:233-239`, `AUDITORIA_FUNCIONALIDAD.md:391-423` |
 | Nomina, Reembolsos, Reclasificaciones | arman el lote en memoria y llaman `onCrearLote`, que solo hace `setState` | `MAPA_FUNCIONALIDAD.md:188-193`, `AUDITORIA_FUNCIONALIDAD.md:157-188` |
-| Cierres y Consolidacion | sin cliente ni rutas; los pasos avanzan por estado | `MAPA_FUNCIONALIDAD.md:221-229`, `PLAN_ASISTENTE.md:171-172` |
+| Cierres y Consolidacion | sin cliente ni rutas; los pasos avanzan por estado | `MAPA_FUNCIONALIDAD.md:221-229`, `PLAN_BOT.md:171-172` |
 | Usuarios y permisos | todo en estado local; sin tabla ni endpoint | `MAPA_FUNCIONALIDAD.md:243-244`, `AUDITORIA_FUNCIONALIDAD.md:305-330` |
-| Bitacora | el backend escribe trazas pero no las publica: no hay ruta | `MAPA_FUNCIONALIDAD.md:245-247`, `PLAN_ASISTENTE.md:173-174` |
+| Bitacora | el backend escribe trazas pero no las publica: no hay ruta | `MAPA_FUNCIONALIDAD.md:245-247`, `PLAN_BOT.md:173-174` |
 | Integraciones | `setTimeout` con aviso "(simulado)"; sin conectores | `MAPA_FUNCIONALIDAD.md:248-249` |
 | Configuracion: Companias, ConfigIVA, ConfigRetenciones, FormatosDocumentales, Plantillas, RenglonesRenta | persisten en `localStorage` con distintivo de demostracion | `MAPA_FUNCIONALIDAD.md:172-175` y `:262-266` |
 | Reorganizacion y Especiales | solo cambian estado; la ejecucion esta simulada | `MAPA_FUNCIONALIDAD.md:176-178` y `:230-231` |
@@ -723,18 +723,18 @@ justo despues de que el asistente prometiera el informe. Por eso quedan fuera de
 enum, y la descripcion de la herramienta obliga a responder que no se puede
 generar todavia. Entraran cuando se cree la configuracion de A5 (tablas
 `flujo_caja_renglones` y `rubros_niif`,
-`PLAN_IMPLEMENTACION.md:189-204`).
+`PLAN_BACKEND.md:189-204`).
 
 ### 4.3 Todo lo que dependa de los 86 endpoints por construir
 
 Ninguna herramienta de este documento los usa. Se dejan fuera, entre otros:
 los 30 endpoints del bloque B (Terceros PUT/DELETE/cupo/importar, POST de
 centros, comprobantes y tipos de documento, y la persistencia por compania,
-`PLAN_IMPLEMENTACION.md:211-274`), los 20 de Impuestos
-(`PLAN_IMPLEMENTACION.md:288-327`), los 4 de Cierres, 5 de Consolidacion, 5 de
+`PLAN_BACKEND.md:211-274`), los 20 de Impuestos
+(`PLAN_BACKEND.md:288-327`), los 4 de Cierres, 5 de Consolidacion, 5 de
 Reorganizacion, 8 de administracion, 2 de bitacora, 2 de integraciones, los 2 de
 Especiales y los 4 de configuracion de informes
-(`PLAN_IMPLEMENTACION.md:417-434`). Motivo comun: una herramienta que llame a una
+(`PLAN_BACKEND.md:417-434`). Motivo comun: una herramienta que llame a una
 ruta que no existe convierte el fallo tecnico en una respuesta inventada, o en un
 503 que el usuario lee como error del asistente.
 
@@ -746,13 +746,13 @@ En orden, sin huecos.
 
 **Paso 1. Transporte al backend (fase 0).** `ia-service` no tiene hoy ninguna
 referencia al backend ni variable de entorno para alcanzarlo
-(`ia-service/app/config.py:10-28`, `PLAN_ASISTENTE.md:36`). Hace falta:
+(`ia-service/app/config.py:10-28`, `PLAN_BOT.md:36`). Hace falta:
 
 - una variable `IA_SERVICE_BACKEND_URL` (valor por defecto `http://localhost:8001`)
   en `config.py`, junto a las existentes;
 - un cliente HTTP unico en el servicio, con tiempo de espera acotado y la regla
   de que las herramientas llaman al backend por HTTP y nunca a la base
-  (`PLAN_ASISTENTE.md:47-52`);
+  (`PLAN_BOT.md:47-52`);
 - el mapeo de errores del backend a `{"ok": false, "mensaje": ...}`: 422 y 404 se
   comunican con su texto, 503 se comunica como indisponibilidad del motor
   (`app.py:245-269`).
@@ -787,14 +787,14 @@ salida; `filtros` y `origen` permiten la verificacion del punto 6.
 **Paso 3. La herramienta inocua de prueba.** `consultar_periodo_operacion` (T-01):
 lectura, sin argumentos, un solo item y compania tomada del contexto. Sirve para
 probar el loop completo (el modelo la invoca, el handler llama al backend, el
-`payload` llega al frontend, `PLAN_ASISTENTE.md:53`) sin exponer ningun dato
+`payload` llega al frontend, `PLAN_BOT.md:53`) sin exponer ningun dato
 sensible y sin poder escribir nada. Si la compania no llega en el contexto, la
 herramienta debe devolver `ok: false`: ese es el primer caso que hay que ver
 funcionar, porque es el que evita que el asistente invente la compania.
 
 **Paso 4. Linea base de la bateria de preguntas trampa (fase 5).** Hay que
 grabar **hoy**, antes de la primera herramienta, las respuestas a estas preguntas
-(`PLAN_ASISTENTE.md:97-102`). Deben fallar hoy, en el sentido de que el asistente
+(`PLAN_BOT.md:97-102`). Deben fallar hoy, en el sentido de que el asistente
 no puede verificarlas; y deben seguir fallando despues si la pregunta cae fuera
 del alcance de las herramientas entregadas:
 
@@ -816,7 +816,7 @@ verificada o inventada). Sin esa linea base no se puede demostrar la mejora, y l
 fase 5 se queda sin criterio de aceptacion.
 
 **Paso 5. Nada de escritura antes del testigo.** El testigo de confirmacion es
-parte de la fase 4 (`PLAN_ASISTENTE.md:90-96`); hasta que exista, ninguna
+parte de la fase 4 (`PLAN_BOT.md:90-96`); hasta que exista, ninguna
 herramienta de C09 o C28 a C38 debe registrarse en `FUNCTION_MAP`, porque el loop
 las ejecutaria sin preguntar (`deepseek.py:147-176`).
 
@@ -888,7 +888,7 @@ en un script cuando existan las tres primeras herramientas.
   `store.py` (`store.py:189` solo despacha el balance). Eso condiciona T-28.
 - Si se mueve la validacion de terceros al backend antes de ofrecer C09 por el
   chat (`AUDITORIA_FUNCIONALIDAD.md:640-674`).
-- Si las 13 filas "solo interfaz" del plan (`PLAN_IMPLEMENTACION.md:443-444`)
+- Si las 13 filas "solo interfaz" del plan (`PLAN_BACKEND.md:443-444`)
   cambian alguna respuesta de la bateria de trampas. No se revisaron una por una.
 - Los nombres de las cinco primeras herramientas siguen el estilo de
   `tools.py:12-19` (verbo en infinitivo, snake_case, castellano sin tildes en el

@@ -805,7 +805,7 @@ cuando se toquen `api/*.ts`: es la clase de error que solo se descubre en
 produccion.
 
 **Recomendacion final, sobre el catalogo del asistente.** La fase 1.5 de
-`docs/plan/bot/PLAN_ASISTENTE.md` propone generar la fuente de conocimiento
+`docs/plan/bot/PLAN_BOT.md` propone generar la fuente de conocimiento
 leyendo las rutas de `src/App.tsx`, las llamadas de `src/api/*.ts` y las rutas de
 `backend/app.py`. Ese metodo produce un catalogo **a nivel de pantalla**, y esta
 auditoria demuestra que ese nivel es el equivocado por tres razones concretas:

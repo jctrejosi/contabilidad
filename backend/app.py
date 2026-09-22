@@ -110,6 +110,26 @@ from .reproceso_mensual_repository import (
 from .parametros_operacion_repository import (
     OperationParametersValidationError,
 )
+from .impuestos_repository import (
+    AccumulationConflict,
+    AccumulationValidationError,
+    MediumConflict,
+    MediumNotFound,
+    MediumValidationError,
+    TaxFormatAlreadyExists,
+    TaxFormatConflict,
+    TaxFormatNotFound,
+    TaxFormatValidationError,
+    TaxLegacyNotSupported,
+    build_acumulado_export,
+)
+from .consolidacion_repository import (
+    ConsolidacionConflict,
+    ConsolidacionLegacyNotSupported,
+    ConsolidacionNotFound,
+    ConsolidacionPendiente,
+    ConsolidacionValidationError,
+)
 
 
 logger = logging.getLogger("contabdsi.backend")
@@ -613,6 +633,236 @@ class OperationParametersWrite(BaseModel):
     periodosHabilitados: dict[str, bool]
 
 
+# ---------------------------------------------------------------------------
+# Bloque D1 · Impuestos (R6: extra="forbid", límites, alias camelCase)
+# ---------------------------------------------------------------------------
+class AccumulationRequest(BaseModel):
+    """Rango y trazabilidad de la acumulación de IVA o de retenciones (1.2 y 1.5).
+
+    ``motivo`` es obligatorio porque la acumulación reescribe la base de una
+    declaración (R7); ``dryRun`` viaja como consulta, no en el cuerpo.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    anio: int = Field(ge=1900, le=2100)
+    mesDesde: int = Field(ge=1, le=12)
+    mesHasta: int = Field(ge=1, le=12)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+    @model_validator(mode="after")
+    def _rango(self) -> "AccumulationRequest":
+        if self.mesDesde > self.mesHasta:
+            raise ValueError("El mes inicial no puede ser mayor que el mes final.")
+        return self
+
+
+class ExogenousFormatWrite(BaseModel):
+    """Nombre, vigencia y estado de un formato de exógena (2.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=60)
+    vigencia: int = Field(ge=1900, le=2100)
+    activo: bool = True
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+class ExogenousFormatCreate(ExogenousFormatWrite):
+    """Alta de un formato: agrega el código, que es la clave inmutable."""
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
+
+
+class ExogenousFormatUpdate(BaseModel):
+    """Modificación de un formato (2.3): el código y la vigencia son la clave.
+
+    ``vigencia`` es opcional; si llega y no coincide con la de la consulta, la
+    operación responde 409 (la vigencia no se puede cambiar desde esta ruta).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=60)
+    activo: bool = True
+    vigencia: int | None = Field(None, ge=1900, le=2100)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+class FormatConceptWrite(BaseModel):
+    """Un concepto de exógena con su tarifa (fracción) y su cuenta (2.5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
+    nombre: str = Field(min_length=1, max_length=60)
+    tarifa: Decimal = Field(Decimal("0"), ge=0, le=1, decimal_places=6)
+    cuenta: str = Field("", pattern=r"^[0-9]{0,12}$")
+
+
+class FormatConceptList(BaseModel):
+    """Reemplazo en bloque de los conceptos de un formato (2.5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    conceptos: list[FormatConceptWrite] = Field(max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class FormatAssignmentList(BaseModel):
+    """Reemplazo en bloque de las cuentas asignadas a un formato (2.6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cuentas: list[str] = Field(max_length=2000)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class FormatCopyRequest(BaseModel):
+    """Copia de definiciones de exógena de otra compañía (2.7)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ciaOrigen: str = Field(pattern=r"^[0-9]{1,3}$")
+    vigenciaOrigen: int = Field(ge=1900, le=2100)
+    vigenciaDestino: int = Field(ge=1900, le=2100)
+    formatos: list[str] | None = Field(None, max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+    reemplazar: bool = False
+
+
+class MediumGenerationRequest(BaseModel):
+    """Generación del medio magnético del año (3.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    anio: int = Field(ge=1900, le=2100)
+    vigencia: int = Field(ge=1900, le=2100)
+    formatos: list[str] | None = Field(None, max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class MediumRowWrite(BaseModel):
+    """Ajuste de una fila revisada del medio (3.4); el motivo es obligatorio."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    valor: Decimal | None = Field(None, ge=0, decimal_places=2)
+    base: Decimal | None = Field(None, ge=0, decimal_places=2)
+    concepto: str | None = Field(None, max_length=10)
+    motivo: str = Field(min_length=5, max_length=180)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+class MediumCapWrite(BaseModel):
+    """Un tope por formato y concepto (3.6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    formato: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
+    concepto: str = Field("", max_length=10)
+    tope: Decimal = Field(ge=0, decimal_places=2)
+
+
+class MediumCapList(BaseModel):
+    """Reemplazo en bloque de los topes del año (3.6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    anio: int = Field(ge=1900, le=2100)
+    topes: list[MediumCapWrite] = Field(max_length=500)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+# ---------------------------------------------------------------------------
+# Bloque D3 · Consolidación (R6: extra="forbid", límites, alias camelCase)
+# ---------------------------------------------------------------------------
+class CiaInclude(BaseModel):
+    """Compañía origen de una consolidación y si entra en ella (2.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cia: str = Field(pattern=r"^[0-9]{1,3}$", description="Código EMPCOD del origen.")
+    incluida: bool = Field(True, description="El origen entra en la consolidación.")
+
+
+class AccountEquivalence(BaseModel):
+    """Correspondencia cuenta origen → cuenta destino, con su signo (2.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ciaOrigen: str = Field(pattern=r"^[0-9]{1,3}$")
+    cuentaOrigen: str = Field(pattern=r"^[0-9]{1,12}$")
+    cuentaDestino: str = Field(pattern=r"^[0-9]{1,12}$")
+    signo: Literal[-1, 1] = Field(1, description="1 conserva el signo; -1 lo invierte.")
+
+
+class CenterEquivalence(BaseModel):
+    """Correspondencia centro de costo origen → destino (2.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ciaOrigen: str = Field(pattern=r"^[0-9]{1,3}$")
+    centroOrigen: str = Field(pattern=r"^[A-Za-z0-9]{1,7}$")
+    centroDestino: str = Field(pattern=r"^[A-Za-z0-9]{1,7}$")
+
+
+class ConsolidationWrite(BaseModel):
+    """Configuración de una consolidación: destino, orígenes y homologaciones (2.2).
+
+    ``destino`` es la compañía de la consulta (``cia``); el año y las listas van
+    en el cuerpo. ``origenes`` exige al menos uno (``min_length=1``) y ``motivo``
+    es obligatorio porque la configuración se audita (R7).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    anio: int = Field(ge=1900, le=2999)
+    origenes: list[CiaInclude] = Field(min_length=1, max_length=50)
+    cuentas: list[AccountEquivalence] = Field(default_factory=list, max_length=5000)
+    centros: list[CenterEquivalence] = Field(default_factory=list, max_length=2000)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+    @model_validator(mode="after")
+    def _origenes_sin_repetir(self) -> "ConsolidationWrite":
+        """Un origen repetido no es una consolidación válida: se rechaza antes de escribir."""
+        numeros = [int(origen.cia) for origen in self.origenes]
+        if len(numeros) != len(set(numeros)):
+            raise ValueError("Una compañía origen no puede aparecer dos veces.")
+        return self
+
+
+class ConsolidationAction(BaseModel):
+    """Usuario y motivo de una acción de proceso sobre la consolidación (2.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class ConsolidationExecution(BaseModel):
+    """Respaldo y confirmación de vaciado de la ejecución (2.5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+    respaldoRealizado: bool = Field(
+        description="El respaldo se realizó antes de ejecutar (07_procesos.sql:77)."
+    )
+    confirmacionVaciado: bool = Field(
+        False, description="Se confirma el vaciado del destino (07_procesos.sql:78)."
+    )
+
+
 def _service_error(exc: Exception) -> HTTPException:
     """Convierte errores de dominio/ADS en respuestas HTTP estables y seguras."""
     if isinstance(
@@ -629,6 +879,11 @@ def _service_error(exc: Exception) -> HTTPException:
             IncomeLineAlreadyExists,
             TemplateAlreadyExists,
             DocumentFormatAlreadyExists,
+            TaxFormatAlreadyExists,
+            MediumConflict,
+            TaxFormatConflict,
+            AccumulationConflict,
+            ConsolidacionConflict,
         ),
     ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -655,6 +910,9 @@ def _service_error(exc: Exception) -> HTTPException:
             IncomeLineNotFound,
             TemplateNotFound,
             DocumentFormatNotFound,
+            TaxFormatNotFound,
+            MediumNotFound,
+            ConsolidacionNotFound,
         ),
     ):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
@@ -677,11 +935,19 @@ def _service_error(exc: Exception) -> HTTPException:
             IncomeLineValidationError,
             TemplateValidationError,
             DocumentFormatValidationError,
+            TaxFormatValidationError,
+            MediumValidationError,
+            AccumulationValidationError,
+            ConsolidacionValidationError,
         ),
     ):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    if isinstance(exc, CompanyWriteNotImplemented):
-        # R5: rama no implementada declarada, con su causa y no con el mensaje
+    if isinstance(
+        exc,
+        (CompanyWriteNotImplemented, TaxLegacyNotSupported,
+         ConsolidacionLegacyNotSupported, ConsolidacionPendiente),
+    ):
+        # R5/R10: rama no implementada declarada, con su causa y no con el mensaje
         # genérico de motor no disponible.
         return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     if isinstance(exc, AdsConfigurationError):
@@ -2081,3 +2347,519 @@ def edit_account(
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item}
+
+
+# ===========================================================================
+# Bloque D1 · Impuestos: acumulados, formatos y medios magnéticos (20 rutas)
+# ===========================================================================
+_ACCUMULATED_MEDIA = {
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "csv": "text/csv; charset=utf-8",
+}
+_MEDIUM_MEDIA = {
+    "xml": "application/xml",
+    "csv": "text/csv; charset=utf-8",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+_CIA_QUERY = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$")
+
+
+def _validate_month_range(mes_desde: int, mes_hasta: int) -> None:
+    if mes_desde > mes_hasta:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El mes inicial no puede ser mayor que el mes final.",
+        )
+
+
+# --- 1. Acumulados ---------------------------------------------------------
+@app.get("/api/impuestos/acumulados-iva", summary="Consultar el IVA acumulado")
+def impuestos_acumulados_iva(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+    nit: str = Query("", max_length=15),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """Solo lectura: el acumulado por tercero y período, sin recalcular (1.1)."""
+    _validate_month_range(mes_desde, mes_hasta)
+    try:
+        return store.list_acumulados_iva(
+            cia, anio, mes_desde, mes_hasta, nit=nit, page=page, page_size=page_size
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/impuestos/acumulados-iva/acumular", summary="Recalcular el IVA acumulado")
+def impuestos_acumular_iva(
+    payload: AccumulationRequest,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Recalcula el período indicado; ``dryRun`` devuelve el informe sin escribir (1.2)."""
+    try:
+        return store.acumular_iva(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/impuestos/acumulados-iva/exportar", summary="Exportar el IVA acumulado")
+def impuestos_exportar_acumulados_iva(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+    nit: str = Query("", max_length=15),
+    formato: Literal["xlsx", "csv"] = Query(),
+) -> Response:
+    """Exporta exactamente las filas del ``GET``, con los mismos filtros (1.3)."""
+    _validate_month_range(mes_desde, mes_hasta)
+    try:
+        result = store.list_acumulados_iva(
+            cia, anio, mes_desde, mes_hasta, nit=nit, page=1, page_size=1_000_000
+        )
+        headers = ["NIT", "Nombre", "Periodo", "Base", "IVA generado", "IVA descontable", "Neto"]
+        rows = [
+            [item["nit"], item["nombre"], item["periodo"], item["base"],
+             item["ivaGenerado"], item["ivaDescontable"], item["neto"]]
+            for item in result["items"]
+        ]
+        content = build_acumulado_export(
+            titulo=f"Acumulado de IVA {anio}", headers=headers, rows=rows, cia=cia,
+            anio=anio, mes_desde=mes_desde, mes_hasta=mes_hasta,
+            source=str(result.get("source", "acumulados_iva")), formato=formato,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(
+        content=content, media_type=_ACCUMULATED_MEDIA[formato],
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="acumulado_iva_{int(cia):03d}_{anio}.{formato}"'
+        },
+    )
+
+
+@app.get("/api/impuestos/acumulados-retenciones", summary="Consultar las retenciones acumuladas")
+def impuestos_acumulados_retenciones(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+    nit: str = Query("", max_length=15),
+    concepto: str = Query("", max_length=10),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """Retenciones por tercero, concepto y período (1.4)."""
+    _validate_month_range(mes_desde, mes_hasta)
+    try:
+        return store.list_acumulados_retencion(
+            cia, anio, mes_desde, mes_hasta, nit=nit, concepto=concepto,
+            page=page, page_size=page_size,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/impuestos/acumulados-retenciones/acumular", summary="Recalcular las retenciones acumuladas")
+def impuestos_acumular_retenciones(
+    payload: AccumulationRequest,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Recalcula el período indicado dentro de una transacción (1.5)."""
+    try:
+        return store.acumular_retencion(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get(
+    "/api/impuestos/acumulados-retenciones/exportar",
+    summary="Exportar las retenciones acumuladas",
+)
+def impuestos_exportar_acumulados_retenciones(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+    nit: str = Query("", max_length=15),
+    concepto: str = Query("", max_length=10),
+    formato: Literal["xlsx", "csv"] = Query(),
+) -> Response:
+    """Exporta exactamente las filas del ``GET`` de retenciones (1.6)."""
+    _validate_month_range(mes_desde, mes_hasta)
+    try:
+        result = store.list_acumulados_retencion(
+            cia, anio, mes_desde, mes_hasta, nit=nit, concepto=concepto,
+            page=1, page_size=1_000_000,
+        )
+        headers = ["NIT", "Nombre", "Concepto", "Nombre concepto", "Periodo", "Base", "Tarifa", "Valor"]
+        rows = [
+            [item["nit"], item["nombre"], item["concepto"], item["nombreConcepto"],
+             item["periodo"], item["base"], item["tarifa"], item["valor"]]
+            for item in result["items"]
+        ]
+        content = build_acumulado_export(
+            titulo=f"Acumulado de retenciones {anio}", headers=headers, rows=rows, cia=cia,
+            anio=anio, mes_desde=mes_desde, mes_hasta=mes_hasta,
+            source=str(result.get("source", "acumulados_retencion")), formato=formato,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(
+        content=content, media_type=_ACCUMULATED_MEDIA[formato],
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="acumulado_retenciones_{int(cia):03d}_{anio}.{formato}"'
+        },
+    )
+
+
+# --- 2. Formatos, conceptos y asignaciones ---------------------------------
+@app.get("/api/impuestos/formatos", summary="Listar formatos de exógena")
+def impuestos_formatos(
+    cia: str = _CIA_QUERY,
+    anio: int | None = Query(None, ge=1900, le=2100, description="Filtra por vigencia."),
+) -> dict[str, object]:
+    """Formatos con su vigencia, su estado y sus conteos calculados (2.1)."""
+    try:
+        return store.list_impuestos_formatos(cia, anio=anio)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post(
+    "/api/impuestos/formatos",
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear un formato de exógena",
+)
+def impuestos_crear_formato(
+    payload: ExogenousFormatCreate,
+    cia: str = _CIA_QUERY,
+) -> dict[str, object]:
+    """Crea el formato; la unicidad es compañía, código y vigencia (2.2)."""
+    try:
+        return store.create_formato(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/impuestos/formatos/{codigo}", summary="Modificar un formato de exógena")
+def impuestos_actualizar_formato(
+    payload: ExogenousFormatUpdate,
+    codigo: str = Path(pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = _CIA_QUERY,
+    vigencia: int = Query(ge=1900, le=2100, description="Vigencia de la fila (clave)."),
+) -> dict[str, object]:
+    """Modifica nombre, estado o vigencia; la vigencia forma parte de la clave (2.3)."""
+    try:
+        return store.update_formato(
+            cia, codigo, vigencia, payload.model_dump(), user=payload.usuario
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete(
+    "/api/impuestos/formatos/{codigo}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Dar de baja un formato de exógena",
+)
+def impuestos_eliminar_formato(
+    response: Response,
+    codigo: str = Path(pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = _CIA_QUERY,
+    vigencia: int = Query(ge=1900, le=2100),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa la baja sin ejecutarla."),
+) -> dict[str, object] | Response:
+    """Baja lógica; con una generación exportada responde 409 (2.4)."""
+    try:
+        item = store.delete_formato(
+            cia, codigo, vigencia, reason=motivo, user=usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    if not dry_run:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_200_OK
+    return {"item": item, "source": "formatos_exogenos", "dryRun": True}
+
+
+@app.put(
+    "/api/impuestos/formatos/{codigo}/conceptos",
+    summary="Reemplazar los conceptos de un formato",
+)
+def impuestos_reemplazar_conceptos(
+    payload: FormatConceptList,
+    codigo: str = Path(pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = _CIA_QUERY,
+    vigencia: int = Query(ge=1900, le=2100),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Reemplazo en bloque, con conteos de creados, actualizados y retirados (2.5)."""
+    try:
+        return store.replace_formato_conceptos(
+            cia, codigo, vigencia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put(
+    "/api/impuestos/formatos/{codigo}/asignaciones",
+    summary="Reemplazar las cuentas asignadas a un formato",
+)
+def impuestos_reemplazar_asignaciones(
+    payload: FormatAssignmentList,
+    codigo: str = Path(pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = _CIA_QUERY,
+    vigencia: int = Query(ge=1900, le=2100),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """El árbol manda la lista completa, que evita interpretar altas y bajas (2.6)."""
+    try:
+        return store.replace_formato_asignaciones(
+            cia, codigo, vigencia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/impuestos/formatos/copiar", summary="Copiar definiciones de otra compañía")
+def impuestos_copiar_formatos(
+    payload: FormatCopyRequest,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Copia definiciones (no datos) traduciendo las cuentas por código (2.7)."""
+    try:
+        return store.copy_formatos(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# --- 3. Generación y revisión del medio magnético --------------------------
+@app.get("/api/impuestos/medios", summary="Listar las generaciones de medios")
+def impuestos_medios(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2100),
+) -> dict[str, object]:
+    """Generaciones del año con su número, su estado y su cuadre (3.1)."""
+    try:
+        return store.list_medios(cia, anio)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post(
+    "/api/impuestos/medios",
+    status_code=status.HTTP_201_CREATED,
+    summary="Generar el medio magnético del año",
+)
+def impuestos_generar_medio(
+    payload: MediumGenerationRequest,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Genera las filas y el cuadre en una transacción (3.2)."""
+    try:
+        return store.create_medio(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/impuestos/medios/{id}", summary="Filas del medio para revisión")
+def impuestos_medio_detalle(
+    id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+    formato: str = Query("", max_length=10),
+    nit: str = Query("", max_length=15),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(200, alias="pageSize", ge=1, le=500),
+) -> dict[str, object]:
+    """Filas paginadas de una generación; ``ajustado`` marca la corregida (3.3)."""
+    try:
+        return store.get_medio(
+            cia, id, formato=formato, nit=nit, page=page, page_size=page_size
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put(
+    "/api/impuestos/medios/{id}/filas/{fila_id}",
+    summary="Ajustar una fila revisada del medio",
+)
+def impuestos_ajustar_fila(
+    payload: MediumRowWrite,
+    id: int = Path(ge=1),
+    fila_id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+) -> dict[str, object]:
+    """Solo se ajusta mientras la generación no esté exportada (3.4)."""
+    try:
+        return store.update_medio_fila(
+            cia, id, fila_id, payload.model_dump(), user=payload.usuario
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get(
+    "/api/impuestos/medios/{id}/conciliacion",
+    summary="Cuadre del medio magnético",
+)
+def impuestos_medio_conciliacion(
+    id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+) -> dict[str, object]:
+    """Los cinco valores del cuadre, calculados al generar y no recalculados (3.5)."""
+    try:
+        return store.get_medio_conciliacion(cia, id)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/impuestos/topes", summary="Reemplazar los topes del año")
+def impuestos_reemplazar_topes(
+    payload: MediumCapList,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Reemplazo en bloque de los topes por formato y concepto (3.6)."""
+    try:
+        return store.replace_topes(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/impuestos/medios/{id}/exportar", summary="Exportar el medio magnético")
+def impuestos_exportar_medio(
+    id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+    formato: Literal["xml", "csv", "xlsx"] = Query(),
+    formato_exogeno: str = Query("", alias="formatoExogeno", max_length=10),
+) -> Response:
+    """Exporta el medio; marca la generación como ``Exportado`` y avisa el cuadre (3.7)."""
+    try:
+        result = store.export_medio(
+            cia, id, formato=formato, formato_exogeno=formato_exogeno
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(
+        content=result["content"], media_type=result["media_type"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{result["filename"]}"',
+            "X-Conciliacion-Cuadrado": "true" if result["cuadrado"] else "false",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bloque D3 · Consolidación
+# ---------------------------------------------------------------------------
+@app.get("/api/consolidaciones", summary="Listar las consolidaciones del año")
+def consolidaciones(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2999),
+) -> dict[str, object]:
+    """Consolidaciones del año destino con el conteo de orígenes (2.1)."""
+    try:
+        return store.list_consolidaciones(cia, anio)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post(
+    "/api/consolidaciones",
+    status_code=status.HTTP_201_CREATED,
+    summary="Configurar una consolidación",
+)
+def crear_consolidacion(
+    payload: ConsolidationWrite,
+    cia: str = _CIA_QUERY,
+) -> dict[str, object]:
+    """Configura destino, orígenes y homologaciones en una transacción (2.2)."""
+    try:
+        return store.create_consolidation(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/consolidaciones/{id}", summary="Ver una consolidación")
+def consolidacion_detalle(
+    id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+) -> dict[str, object]:
+    """Orígenes, homologaciones, simulación y comparación por grupo (2.3)."""
+    try:
+        return store.get_consolidation(cia, id)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/consolidaciones/{id}/simular", summary="Simular una consolidación")
+def consolidacion_simular(
+    payload: ConsolidationAction,
+    id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(
+        True, alias="dryRun", description="La simulación ya es una simulación."
+    ),
+) -> dict[str, object]:
+    """Simula sin escribir el asiento; persiste el resultado y pasa a ``Simulado`` (2.4).
+
+    ``dryRun`` solo admite verdadero: forzarlo a falso sería incoherente y se
+    rechaza con 422.
+    """
+    if not dry_run:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La simulación ya es una simulación: dryRun=false es incoherente.",
+        )
+    try:
+        return store.simulate_consolidation(
+            cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/consolidaciones/{id}/ejecutar", summary="Ejecutar una consolidación")
+def consolidacion_ejecutar(
+    payload: ConsolidationExecution,
+    id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Exige respaldo y confirmación (422) y simulación previa (409); hoy responde 503.
+
+    El algoritmo de consolidación está pendiente de decisión
+    (``db/migration/03_plan_de_carga.md`` L156-162): la ruta queda especificada y
+    devuelve 503 con esa causa, no una simulación presentada como ejecución (2.5).
+    """
+    try:
+        return store.execute_consolidation(
+            cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
