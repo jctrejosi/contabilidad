@@ -10,14 +10,14 @@ erramientas registradas en `app/tools.py` —agregar una nueva no requiere tocar
 nada más—, y lo que las herramientas dejan en el `payload` se renderiza en el
 widget (botón «Ver tabla»). Cubre las ocho herramientas de solo texto del
 apartado 3.1 de
-[`docs/catalogo/HERRAMIENTAS_PRIORIZADAS.md`](../docs/catalogo/HERRAMIENTAS_PRIORIZADAS.md)
+[`docs/plan/bot/HERRAMIENTAS_PRIORIZADAS.md`](../docs/plan/bot/HERRAMIENTAS_PRIORIZADAS.md)
 (período y parámetros de operación, compañías, búsqueda de tercero, comprobantes,
 tipos de documento, centros de costo y verificación de lote) más las del libro:
 cuentas, movimiento mensual, documentos y detalle de documento. Los datos los pide
 al backend por HTTP; el servicio **no** se conecta a la base de datos.
 
 El plan del asistente (fases, fuentes de conocimiento e inventario del
-aplicativo) está en [`docs/catalogo/PLAN_ASISTENTE.md`](../docs/catalogo/PLAN_ASISTENTE.md).
+aplicativo) está en [`docs/plan/bot/PLAN_ASISTENTE.md`](../docs/plan/bot/PLAN_ASISTENTE.md).
 
 ## Arquitectura
 

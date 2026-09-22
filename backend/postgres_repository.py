@@ -53,17 +53,25 @@ def list_companies() -> list[dict[str, Any]]:
     nuevo está separado del dígito de verificación, así que se vuelven a
     componer para no cambiar la interfaz. El orden imita al de ``CONEMP``:
     primero la compañía vigente y después por código descendente.
+
+    B3 (R2): la respuesta conserva sus claves y **añade** ``soloConsolidacion`` y
+    ``anios``. Los años salen de ``compania_anios``, que es la tabla que crea
+    ``POST /api/companias``; el legado no tiene ninguna de las dos columnas.
     """
     sql = (
-        "SELECT codigo, nombre, nit, digito, estado FROM companias "
-        "ORDER BY (estado = 'Activa') DESC, codigo DESC"
+        "SELECT c.codigo, c.nombre, c.nit, c.digito, c.estado, c.solo_consolidacion, "
+        "COALESCE(array_agg(ca.anio ORDER BY ca.anio) FILTER (WHERE ca.anio IS NOT NULL), "
+        "'{}') AS anios "
+        "FROM companias c LEFT JOIN compania_anios ca ON ca.compania_id = c.id "
+        "GROUP BY c.id, c.codigo, c.nombre, c.nit, c.digito, c.estado, c.solo_consolidacion "
+        "ORDER BY (c.estado = 'Activa') DESC, c.codigo DESC"
     )
     with _connect() as connection, connection.cursor() as cursor:
         cursor.execute(sql)
         rows = cursor.fetchall()
 
     companies: list[dict[str, Any]] = []
-    for codigo, nombre, nit, digito, estado in rows:
+    for codigo, nombre, nit, digito, estado, solo_consolidacion, anios in rows:
         check_digit = str(digito or "").strip()
         companies.append(
             {
@@ -74,6 +82,8 @@ def list_companies() -> list[dict[str, Any]]:
                 "nombre": str(nombre),
                 "nit": f"{nit}-{check_digit}" if check_digit else str(nit),
                 "habilitada": str(estado) == "Activa",
+                "soloConsolidacion": bool(solo_consolidacion),
+                "anios": sorted(int(anio) for anio in (anios or [])),
             }
         )
     return companies
@@ -250,6 +260,217 @@ def list_document_types() -> list[dict[str, Any]]:
     return [_document_type_from_row(fila) for fila in filas]
 
 
+# ---------------------------------------------------------------------------
+# Configuración por compañía (bloque B3)
+# ---------------------------------------------------------------------------
+# Las tres tablas de configuración son por compañía en el modelo nuevo y globales
+# en el legado (``CONTIIVA``, ``CONTIRET`` y ``CONDECLA`` no tienen ``CIA``), así
+# que la lectura PG siempre filtra por compañía y excluye las filas con
+# ``eliminado_en`` (baja lógica).
+_CUENTA_JOIN = (
+    "LEFT JOIN cuentas cu ON cu.id = {tabla}.cuenta_id AND cu.compania_id = {tabla}.compania_id"
+)
+
+
+def _tarifa_iva_item(fila: dict[str, Any]) -> dict[str, Any]:
+    """Contrato del ``GET`` de tarifas de IVA (mismas claves que en Advantage)."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        # ``tarifas_iva.tarifa`` es ``porcentaje``: numeric(9,6) en fracción.
+        "tarifa": round(float(fila.get("TARIFA") or 0), 6),
+        "cuenta": _text(fila.get("CUENTA")),
+        "nombreCuenta": _text(fila.get("NOMBRE_CUENTA")),
+    }
+
+
+def _concepto_retencion_item(fila: dict[str, Any]) -> dict[str, Any]:
+    """Contrato del ``GET`` de conceptos de retención."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        "tarifa": round(float(fila.get("TARIFA") or 0), 6),
+        "baseMinima": round(float(fila.get("BASE_MINIMA") or 0), 2),
+        "cuenta": _text(fila.get("CUENTA")),
+        "nombreCuenta": _text(fila.get("NOMBRE_CUENTA")),
+    }
+
+
+def _renglon_renta_item(fila: dict[str, Any]) -> dict[str, Any]:
+    """Contrato del ``GET`` de renglones de renta (``signo`` viaja como entero)."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        "cuenta": _text(fila.get("CUENTA")),
+        "nombreCuenta": _text(fila.get("NOMBRE_CUENTA")),
+        "signo": int(fila.get("SIGNO") or 1),
+    }
+
+
+def list_tarifas_iva(company_code: str) -> list[dict[str, Any]]:
+    """Tarifas de IVA de la compañía, con el contrato de ``tarifas_iva``."""
+    sql = (
+        'SELECT t.codigo AS "CODIGO", t.nombre AS "NOMBRE", t.tarifa AS "TARIFA", '
+        'cu.codigo AS "CUENTA", cu.nombre AS "NOMBRE_CUENTA" '
+        "FROM tarifas_iva t " + _CUENTA_JOIN.format(tabla="t") + " "
+        "WHERE t.compania_id = %s AND t.eliminado_en IS NULL ORDER BY t.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        cursor.execute(sql, (_compania_id(cursor, codigo),))
+        filas = _filas(cursor)
+    return [_tarifa_iva_item(fila) for fila in filas]
+
+
+def list_conceptos_retencion(company_code: str) -> list[dict[str, Any]]:
+    """Conceptos de retención de la compañía, con el contrato de ``conceptos_retencion``."""
+    sql = (
+        'SELECT c.codigo AS "CODIGO", c.nombre AS "NOMBRE", c.tarifa AS "TARIFA", '
+        'c.base_minima AS "BASE_MINIMA", '
+        'cu.codigo AS "CUENTA", cu.nombre AS "NOMBRE_CUENTA" '
+        "FROM conceptos_retencion c " + _CUENTA_JOIN.format(tabla="c") + " "
+        "WHERE c.compania_id = %s AND c.eliminado_en IS NULL ORDER BY c.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        cursor.execute(sql, (_compania_id(cursor, codigo),))
+        filas = _filas(cursor)
+    return [_concepto_retencion_item(fila) for fila in filas]
+
+
+def list_renglones_renta(company_code: str) -> list[dict[str, Any]]:
+    """Renglones de renta de la compañía, con el contrato de ``renglones_renta``."""
+    sql = (
+        'SELECT r.codigo AS "CODIGO", r.nombre AS "NOMBRE", r.signo AS "SIGNO", '
+        'cu.codigo AS "CUENTA", cu.nombre AS "NOMBRE_CUENTA" '
+        "FROM renglones_renta r " + _CUENTA_JOIN.format(tabla="r") + " "
+        "WHERE r.compania_id = %s AND r.eliminado_en IS NULL ORDER BY r.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        cursor.execute(sql, (_compania_id(cursor, codigo),))
+        filas = _filas(cursor)
+    return [_renglon_renta_item(fila) for fila in filas]
+
+
+# Colecciones hijas anidadas (B3): la cabecera lleva sus líneas/elementos en el
+# cuerpo, como ya hace la importación de lotes, así que la lectura las agrupa aquí
+# en vez de proponer rutas para la colección hija.
+_PLANTILLA_LINEAS_SQL = (
+    'SELECT p.codigo AS "PLANTILLA", l.orden AS "ORDEN", '
+    'cd.codigo AS "CUENTA_DEBITO", cc.codigo AS "CUENTA_CREDITO", l.concepto AS "CONCEPTO" '
+    "FROM plantilla_lineas l "
+    "JOIN plantillas_contables p ON p.id = l.plantilla_id "
+    "LEFT JOIN cuentas cd ON cd.id = l.cuenta_debito_id "
+    "LEFT JOIN cuentas cc ON cc.id = l.cuenta_credito_id "
+    "WHERE p.compania_id = %s AND p.eliminado_en IS NULL "
+    "ORDER BY p.codigo, l.orden, l.id"
+)
+_FORMATO_ELEMENTOS_SQL = (
+    'SELECT f.codigo AS "FORMATO", e.tipo AS "TIPO", e.contenido AS "CONTENIDO", '
+    'e.x AS "X", e.y AS "Y", e.ancho AS "ANCHO", e.alto AS "ALTO", '
+    'e.fuente AS "FUENTE", e.orden AS "ORDEN" '
+    "FROM formato_elementos e "
+    "JOIN formatos_documentales f ON f.id = e.formato_id "
+    "WHERE f.compania_id = %s AND f.eliminado_en IS NULL "
+    "ORDER BY f.codigo, e.orden, e.id"
+)
+
+
+def _por_codigo(filas: list[dict[str, Any]], clave: str) -> dict[str, list[dict[str, Any]]]:
+    """Agrupa las líneas o elementos hijos por el código de su cabecera."""
+    agrupado: dict[str, list[dict[str, Any]]] = {}
+    for fila in filas:
+        agrupado.setdefault(_text(fila.get(clave)), []).append(fila)
+    return agrupado
+
+
+def _plantilla_contable_item(
+    fila: dict[str, Any], lineas: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Contrato del ``GET`` de plantillas contables (parejas de cuentas, no importes)."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        "tipoDocumento": _text(fila.get("TIPO_DOCUMENTO")),
+        "lineas": [
+            {
+                "orden": int(linea.get("ORDEN") or 0),
+                "cuentaDebito": _text(linea.get("CUENTA_DEBITO")),
+                "cuentaCredito": _text(linea.get("CUENTA_CREDITO")),
+                "concepto": _text(linea.get("CONCEPTO")),
+            }
+            for linea in lineas
+        ],
+    }
+
+
+def _formato_documental_item(
+    fila: dict[str, Any], elementos: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Contrato del ``GET`` de formatos documentales, con la geometría del editor."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        "comprobante": _text(fila.get("COMPROBANTE")),
+        "elementos": [
+            {
+                "tipo": _text(elemento.get("TIPO")),
+                "contenido": _text(elemento.get("CONTENIDO")),
+                "x": round(float(elemento.get("X") or 0), 2),
+                "y": round(float(elemento.get("Y") or 0), 2),
+                "ancho": None if elemento.get("ANCHO") is None else round(float(elemento["ANCHO"]), 2),
+                "alto": None if elemento.get("ALTO") is None else round(float(elemento["ALTO"]), 2),
+                "fuente": _text(elemento.get("FUENTE")),
+                "orden": int(elemento.get("ORDEN") or 0),
+            }
+            for elemento in elementos
+        ],
+    }
+
+
+def list_plantillas_contables(company_code: str) -> list[dict[str, Any]]:
+    """Plantillas de la compañía con sus parejas de cuentas ordenadas por ``orden``."""
+    sql = (
+        'SELECT p.codigo AS "CODIGO", p.nombre AS "NOMBRE", td.codigo AS "TIPO_DOCUMENTO" '
+        "FROM plantillas_contables p "
+        "LEFT JOIN tipos_documento td ON td.id = p.tipo_documento_id "
+        "WHERE p.compania_id = %s AND p.eliminado_en IS NULL ORDER BY p.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        compania_id = _compania_id(cursor, codigo)
+        cursor.execute(sql, (compania_id,))
+        cabeceras = _filas(cursor)
+        cursor.execute(_PLANTILLA_LINEAS_SQL, (compania_id,))
+        lineas = _por_codigo(_filas(cursor), "PLANTILLA")
+    return [
+        _plantilla_contable_item(fila, lineas.get(_text(fila.get("CODIGO")), []))
+        for fila in cabeceras
+    ]
+
+
+def list_formatos_documentales(company_code: str) -> list[dict[str, Any]]:
+    """Formatos de la compañía con sus elementos ordenados por ``orden``."""
+    sql = (
+        'SELECT f.codigo AS "CODIGO", f.nombre AS "NOMBRE", cb.codigo AS "COMPROBANTE" '
+        "FROM formatos_documentales f "
+        "LEFT JOIN comprobantes cb ON cb.id = f.comprobante_id "
+        "WHERE f.compania_id = %s AND f.eliminado_en IS NULL ORDER BY f.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        compania_id = _compania_id(cursor, codigo)
+        cursor.execute(sql, (compania_id,))
+        cabeceras = _filas(cursor)
+        cursor.execute(_FORMATO_ELEMENTOS_SQL, (compania_id,))
+        elementos = _por_codigo(_filas(cursor), "FORMATO")
+    return [
+        _formato_documental_item(fila, elementos.get(_text(fila.get("CODIGO")), []))
+        for fila in cabeceras
+    ]
+
+
 def _compania_id(cursor: Any, codigo: str) -> int:
     """`id` numérico de la compañía a partir de su código (ya validado)."""
     cursor.execute("SELECT id FROM companias WHERE codigo = %s", (codigo,))
@@ -346,7 +567,7 @@ def list_third_parties(
     if state not in {"todos", "activo", "bloqueado"}:
         raise ValueError("El estado solicitado no es válido.")
 
-    condiciones: list[str] = []
+    condiciones: list[str] = ["eliminado_en IS NULL"]
     parametros: list[Any] = []
     if search:
         condiciones.append(

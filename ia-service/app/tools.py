@@ -992,7 +992,7 @@ async def consultar_documento_detalle(args: dict, ctx: dict) -> dict:
 
 # ─── Catálogos y parámetros de operación ───
 #
-# Herramientas de «Ola 1» (``docs/catalogo/HERRAMIENTAS_PRIORIZADAS.md``, 3.1)
+# Herramientas de «Ola 1» (``docs/plan/bot/HERRAMIENTAS_PRIORIZADAS.md``, 3.1)
 # sobre la arquitectura de ``backend.py``. Salvo las de alcance global
 # (compañías y tipos de documento), todas exigen la compañía activa.
 

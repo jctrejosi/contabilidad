@@ -4,7 +4,7 @@
 
 **Objeto.** Comprobar si el asistente responde de verdad, desde la perspectiva
 del usuario, para las ocho herramientas de solo texto declaradas en
-`catalogo/HERRAMIENTAS_PRIORIZADAS.md` apartado 3.1 e implementadas en
+`plan/bot/HERRAMIENTAS_PRIORIZADAS.md` apartado 3.1 e implementadas en
 `ia-service/app/tools.py`: `consultar_periodo_operacion`,
 `consultar_parametros_operacion`, `listar_companias`, `buscar_tercero`,
 `consultar_comprobantes`, `consultar_tipos_documento`, `consultar_centros` y

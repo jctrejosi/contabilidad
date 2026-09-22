@@ -237,6 +237,333 @@ def create_third_party(payload: dict[str, Any], *, cia: str = "") -> dict[str, A
     return implementation(payload)
 
 
+def update_third_party(
+    nit: str, payload: dict[str, Any], *, cia: str = "", user: str = "WEB"
+) -> dict[str, Any]:
+    """Modifica la ficha de un tercero. El NIT es la clave y no se modifica."""
+    if is_postgres():
+        from .postgres_writes import update_third_party as implementation
+        return implementation(nit, payload, cia=cia, user=user)
+    from .terceros_repository import update_third_party as implementation
+    return implementation(nit, payload, user=user)
+
+
+def delete_third_party(
+    nit: str, *, reason: str, user: str = "WEB", cia: str = "", dry_run: bool = False
+) -> dict[str, Any]:
+    """Retira un tercero del directorio. En PostgreSQL es baja lógica."""
+    if is_postgres():
+        from .postgres_writes import delete_third_party as implementation
+        return implementation(nit, reason=reason, user=user, cia=cia, dry_run=dry_run)
+    from .terceros_repository import delete_third_party as implementation
+    return implementation(nit, reason=reason, user=user, dry_run=dry_run)
+
+
+def update_third_party_credit_limit(
+    nit: str, payload: dict[str, Any], *, cia: str = "", user: str = "WEB"
+) -> dict[str, Any]:
+    """Fija el cupo de cartera de un tercero sin tocar el resto de la ficha."""
+    if is_postgres():
+        from .postgres_writes import update_third_party_credit_limit as implementation
+        return implementation(nit, payload, cia=cia, user=user)
+    from .terceros_repository import update_third_party_credit_limit as implementation
+    return implementation(nit, payload, user=user)
+
+
+def import_third_parties(
+    payload: dict[str, Any], *, cia: str = "", user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Alta masiva de terceros desde filas ya leídas y mapeadas."""
+    if is_postgres():
+        from .postgres_writes import import_third_parties as implementation
+        return implementation(payload, cia=cia, user=user, dry_run=dry_run)
+    from .terceros_repository import import_third_parties as implementation
+    return implementation(payload, user=user, dry_run=dry_run)
+
+
+def create_cost_center(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea un centro de costo de la compañía en el motor activo."""
+    if is_postgres():
+        from .postgres_writes import create_cost_center as implementation
+    else:
+        from .centros_repository import create_cost_center as implementation
+    return implementation(company_code, payload, user=user)
+
+
+def create_voucher(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea un comprobante de la compañía en el motor activo."""
+    if is_postgres():
+        from .postgres_writes import create_voucher as implementation
+    else:
+        from .comprobantes_repository import create_voucher as implementation
+    return implementation(company_code, payload, user=user)
+
+
+def create_document_type(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea un tipo de documento en el motor activo.
+
+    El catálogo es global en el legado (``VISDOCUM``) y por compañía en
+    PostgreSQL; ambos reciben la compañía activa para validar el comprobante.
+    """
+    if is_postgres():
+        from .postgres_writes import create_document_type as implementation
+    else:
+        from .tipos_documento_repository import create_document_type as implementation
+    return implementation(company_code, payload, user=user)
+
+
+def list_tarifas_iva(cia: str) -> list[dict[str, Any]]:
+    """Tarifas de IVA de la compañía, con el mismo contrato JSON."""
+    if is_postgres():
+        from .postgres_repository import list_tarifas_iva as implementation
+    else:
+        from .tarifas_iva_repository import list_tarifas_iva as implementation
+    return implementation(cia)
+
+
+def create_tarifa_iva(cia: str, payload: dict[str, Any], *, user: str = "WEB") -> dict[str, Any]:
+    """Crea una tarifa de IVA.
+
+    ``CONTIIVA`` es global en el legado y ``tarifas_iva`` es por compañía en
+    PostgreSQL: ambos reciben la compañía activa para validarla y para resolver
+    la cuenta de la tarifa.
+    """
+    if is_postgres():
+        from .postgres_writes import create_tarifa_iva as implementation
+    else:
+        from .tarifas_iva_repository import create_tarifa_iva as implementation
+    return implementation(cia, payload, user=user)
+
+
+def update_tarifa_iva(
+    cia: str, codigo: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Modifica una tarifa de IVA; el código es la clave y no se cambia."""
+    if is_postgres():
+        from .postgres_writes import update_tarifa_iva as implementation
+    else:
+        from .tarifas_iva_repository import update_tarifa_iva as implementation
+    return implementation(cia, codigo, payload, user=user)
+
+
+def delete_tarifa_iva(
+    cia: str, codigo: str, *, reason: str, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Da de baja una tarifa de IVA (lógica en PostgreSQL)."""
+    if is_postgres():
+        from .postgres_writes import delete_tarifa_iva as implementation
+    else:
+        from .tarifas_iva_repository import delete_tarifa_iva as implementation
+    return implementation(cia, codigo, reason=reason, user=user, dry_run=dry_run)
+
+
+def list_conceptos_retencion(cia: str) -> list[dict[str, Any]]:
+    """Conceptos de retención de la compañía, con el mismo contrato JSON."""
+    if is_postgres():
+        from .postgres_repository import list_conceptos_retencion as implementation
+    else:
+        from .conceptos_retencion_repository import list_conceptos_retencion as implementation
+    return implementation(cia)
+
+
+def create_concepto_retencion(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea un concepto de retención (``CONTIRET`` global; por compañía en PG)."""
+    if is_postgres():
+        from .postgres_writes import create_concepto_retencion as implementation
+    else:
+        from .conceptos_retencion_repository import create_concepto_retencion as implementation
+    return implementation(cia, payload, user=user)
+
+
+def update_concepto_retencion(
+    cia: str, codigo: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Modifica un concepto de retención; el código es la clave y no se cambia."""
+    if is_postgres():
+        from .postgres_writes import update_concepto_retencion as implementation
+    else:
+        from .conceptos_retencion_repository import update_concepto_retencion as implementation
+    return implementation(cia, codigo, payload, user=user)
+
+
+def delete_concepto_retencion(
+    cia: str, codigo: str, *, reason: str, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Da de baja un concepto de retención (lógica en PostgreSQL)."""
+    if is_postgres():
+        from .postgres_writes import delete_concepto_retencion as implementation
+    else:
+        from .conceptos_retencion_repository import delete_concepto_retencion as implementation
+    return implementation(cia, codigo, reason=reason, user=user, dry_run=dry_run)
+
+
+def list_renglones_renta(cia: str) -> list[dict[str, Any]]:
+    """Renglones de renta de la compañía, con el mismo contrato JSON."""
+    if is_postgres():
+        from .postgres_repository import list_renglones_renta as implementation
+    else:
+        from .renglones_renta_repository import list_renglones_renta as implementation
+    return implementation(cia)
+
+
+def create_renglon_renta(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea un renglón de renta (``CONDECLA`` global; por compañía en PG)."""
+    if is_postgres():
+        from .postgres_writes import create_renglon_renta as implementation
+    else:
+        from .renglones_renta_repository import create_renglon_renta as implementation
+    return implementation(cia, payload, user=user)
+
+
+def update_renglon_renta(
+    cia: str, codigo: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Modifica un renglón de renta; el código es la clave y no se cambia."""
+    if is_postgres():
+        from .postgres_writes import update_renglon_renta as implementation
+    else:
+        from .renglones_renta_repository import update_renglon_renta as implementation
+    return implementation(cia, codigo, payload, user=user)
+
+
+def delete_renglon_renta(
+    cia: str, codigo: str, *, reason: str, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Da de baja un renglón de renta (lógica en PostgreSQL)."""
+    if is_postgres():
+        from .postgres_writes import delete_renglon_renta as implementation
+    else:
+        from .renglones_renta_repository import delete_renglon_renta as implementation
+    return implementation(cia, codigo, reason=reason, user=user, dry_run=dry_run)
+
+
+def list_plantillas_contables(cia: str) -> list[dict[str, Any]]:
+    """Plantillas contables con sus parejas de cuentas, mismo contrato JSON."""
+    if is_postgres():
+        from .postgres_repository import list_plantillas_contables as implementation
+    else:
+        from .plantillas_contables_repository import list_plantillas_contables as implementation
+    return implementation(cia)
+
+
+def create_plantilla_contable(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea una plantilla con sus líneas (``VISDOCUM`` global; por compañía en PG)."""
+    if is_postgres():
+        from .postgres_writes import create_plantilla_contable as implementation
+    else:
+        from .plantillas_contables_repository import create_plantilla_contable as implementation
+    return implementation(cia, payload, user=user)
+
+
+def update_plantilla_contable(
+    cia: str, codigo: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Modifica una plantilla y reemplaza sus líneas en bloque; el código es la clave."""
+    if is_postgres():
+        from .postgres_writes import update_plantilla_contable as implementation
+    else:
+        from .plantillas_contables_repository import update_plantilla_contable as implementation
+    return implementation(cia, codigo, payload, user=user)
+
+
+def delete_plantilla_contable(
+    cia: str, codigo: str, *, reason: str, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Da de baja una plantilla (lógica en PostgreSQL)."""
+    if is_postgres():
+        from .postgres_writes import delete_plantilla_contable as implementation
+    else:
+        from .plantillas_contables_repository import delete_plantilla_contable as implementation
+    return implementation(cia, codigo, reason=reason, user=user, dry_run=dry_run)
+
+
+def list_formatos_documentales(cia: str) -> list[dict[str, Any]]:
+    """Formatos documentales con sus elementos, mismo contrato JSON."""
+    if is_postgres():
+        from .postgres_repository import list_formatos_documentales as implementation
+    else:
+        from .formatos_documentales_repository import list_formatos_documentales as implementation
+    return implementation(cia)
+
+
+def create_formato_documental(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Crea un formato con sus elementos (``CONGENF`` global; por compañía en PG)."""
+    if is_postgres():
+        from .postgres_writes import create_formato_documental as implementation
+    else:
+        from .formatos_documentales_repository import create_formato_documental as implementation
+    return implementation(cia, payload, user=user)
+
+
+def update_formato_documental(
+    cia: str, codigo: str, payload: dict[str, Any], *, user: str = "WEB"
+) -> dict[str, Any]:
+    """Modifica un formato y reemplaza sus elementos en bloque; el código es la clave."""
+    if is_postgres():
+        from .postgres_writes import update_formato_documental as implementation
+    else:
+        from .formatos_documentales_repository import update_formato_documental as implementation
+    return implementation(cia, codigo, payload, user=user)
+
+
+def delete_formato_documental(
+    cia: str, codigo: str, *, reason: str, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Da de baja un formato (lógica en PostgreSQL)."""
+    if is_postgres():
+        from .postgres_writes import delete_formato_documental as implementation
+    else:
+        from .formatos_documentales_repository import delete_formato_documental as implementation
+    return implementation(cia, codigo, reason=reason, user=user, dry_run=dry_run)
+
+
+def create_company(payload: dict[str, Any], *, user: str = "WEB") -> dict[str, Any]:
+    """Crea una compañía con su primer año (solo PostgreSQL; 503 en Advantage).
+
+    El legado no tiene fila de compañía: en Advantage la rama declarada lanza
+    ``CompanyWriteNotImplemented``, que la capa HTTP traduce a 503 con su causa.
+    """
+    if is_postgres():
+        from .postgres_writes import create_company as implementation
+    else:
+        from .companias_repository import create_company as implementation
+    return implementation(payload, user=user)
+
+
+def update_company(codigo: str, payload: dict[str, Any], *, user: str = "WEB") -> dict[str, Any]:
+    """Modifica la ficha de una compañía (solo PostgreSQL; 503 en Advantage)."""
+    if is_postgres():
+        from .postgres_writes import update_company as implementation
+    else:
+        from .companias_repository import update_company as implementation
+    return implementation(codigo, payload, user=user)
+
+
+def delete_company(
+    codigo: str, *, reason: str, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Da de baja una compañía sin movimiento (solo PostgreSQL; 503 en Advantage)."""
+    if is_postgres():
+        from .postgres_writes import delete_company as implementation
+    else:
+        from .companias_repository import delete_company as implementation
+    return implementation(codigo, reason=reason, user=user, dry_run=dry_run)
+
+
 def create_account(cia: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Crea una cuenta maestra en el motor activo."""
     if is_postgres():

@@ -4,7 +4,7 @@ Auditoría de esta misma materia, con severidades y plan por dependencia: [AUDIT
 
 Auditoria de la capa de interaccion de `Interface_web/src/` contra el backend
 (`backend/app.py`). Complementa el inventario pantalla-cliente-ruta de
-`PLAN_ASISTENTE.md` (seccion 3): aqui se baja al nivel de cada input y cada
+`../plan/bot/PLAN_ASISTENTE.md` (seccion 3): aqui se baja al nivel de cada input y cada
 boton.
 
 Criterio de conteo y abreviatura de metodo:

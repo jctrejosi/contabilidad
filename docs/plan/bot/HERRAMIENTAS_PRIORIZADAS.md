@@ -2,9 +2,10 @@
 
 Que funcionalidades del aplicativo merece la pena pedirle al asistente y plan
 para implementar las que ya se pueden. Depende de `PLAN_ASISTENTE.md` (fases,
-regla de no inventar, inventario), de `MAPA_FUNCIONALIDAD.md` (estado control por
-control), de `AUDITORIA_FUNCIONALIDAD.md` (que esta simulado y por que) y de
-`../plan/PLAN_IMPLEMENTACION.md` (los 86 endpoints que faltan).
+regla de no inventar, inventario), de `../../catalogo/MAPA_FUNCIONALIDAD.md` (estado
+control por control), de `../../auditorias/AUDITORIA_FUNCIONALIDAD.md` (que esta
+simulado y por que) y de `../backend/PLAN_IMPLEMENTACION.md` (los 86 endpoints
+que faltan).
 
 Metodo: solo entran candidatas cuyo endpoint exista en `backend/app.py`; toda
 cifra y toda ruta se cita con `archivo:linea`. No se proponen herramientas que

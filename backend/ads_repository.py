@@ -324,13 +324,21 @@ def normalize_company_code(code: str) -> int:
 
 
 def _company_from_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Mapea CONEMP al contrato usado durante la selección de compañía."""
+    """Mapea CONEMP al contrato usado durante la selección de compañía.
+
+    B3 (R2): se conservan las claves y se **añaden** ``soloConsolidacion`` y
+    ``anios``. ``CONEMP`` no tiene columna de consolidación ni tabla de años
+    (la compañía es una carpeta de tablas): viajan en su valor por defecto para
+    que la forma del JSON no dependa del motor.
+    """
     company_id = int(_number(row.get("EMPCOD")))
     return {
         "codigo": f"{company_id:03d}",
         "nombre": _text(row.get("EMPNOM")),
         "nit": _text(row.get("EMPNIT")),
         "habilitada": _boolean(row.get("HABILITA")),
+        "soloConsolidacion": False,
+        "anios": [],
     }
 
 

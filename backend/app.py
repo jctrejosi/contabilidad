@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Response, UploadFile, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import store
 from .ads_repository import (
@@ -25,7 +25,59 @@ from .ads_repository import (
 from .postgres_repository import PostgresConfigurationError
 from .terceros_repository import (
     ThirdPartyAlreadyExists,
+    ThirdPartyConflict,
+    ThirdPartyNotFound,
     ThirdPartyValidationError,
+)
+from .centros_repository import (
+    CostCenterAlreadyExists,
+    CostCenterNotFound,
+    CostCenterValidationError,
+)
+from .comprobantes_repository import (
+    VoucherAlreadyExists,
+    VoucherNotFound,
+    VoucherValidationError,
+)
+from .tipos_documento_repository import (
+    DocumentTypeAlreadyExists,
+    DocumentTypeNotFound,
+    DocumentTypeValidationError,
+)
+from .companias_repository import (
+    CompanyAlreadyExists,
+    CompanyConflict,
+    CompanyValidationError,
+    CompanyWriteNotImplemented,
+)
+from .tarifas_iva_repository import (
+    VatRateAlreadyExists,
+    VatRateConflict,
+    VatRateNotFound,
+    VatRateValidationError,
+)
+from .conceptos_retencion_repository import (
+    RetentionConceptAlreadyExists,
+    RetentionConceptConflict,
+    RetentionConceptNotFound,
+    RetentionConceptValidationError,
+)
+from .renglones_renta_repository import (
+    IncomeLineAlreadyExists,
+    IncomeLineConflict,
+    IncomeLineNotFound,
+    IncomeLineValidationError,
+)
+from .plantillas_contables_repository import (
+    TemplateAlreadyExists,
+    TemplateConflict,
+    TemplateNotFound,
+    TemplateValidationError,
+)
+from .formatos_documentales_repository import (
+    DocumentFormatAlreadyExists,
+    DocumentFormatNotFound,
+    DocumentFormatValidationError,
 )
 from .anulacion_repository import (
     AnnulmentConflict,
@@ -114,6 +166,325 @@ class ThirdPartyCreate(BaseModel):
     correo: str = Field("", max_length=60)
     zona: str = Field("", max_length=2)
     cupo: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+
+
+class ThirdPartyWrite(BaseModel):
+    """Campos de la ficha del tercero autorizados a modificar (B1.1).
+
+    Son los mismos de ``ThirdPartyCreate`` menos ``nit`` —que es la clave y llega
+    por la ruta, no por el cuerpo—, más ``estado`` y ``motivoBloqueo``. El NIT
+    inmutable se garantiza con ``extra="forbid"``: enviarlo devuelve 422.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    digito: str = Field("", pattern=r"^[0-9]?$", max_length=1)
+    tipoDocumento: Literal["13", "31"]
+    nombre: str = Field(min_length=1, max_length=60)
+    nombreComercial: str = Field("", max_length=60)
+    primerNombre: str = Field("", max_length=20)
+    segundoNombre: str = Field("", max_length=20)
+    primerApellido: str = Field("", max_length=20)
+    segundoApellido: str = Field("", max_length=20)
+    direccion: str = Field("", max_length=25)
+    codigoCiudad: str = Field("", max_length=5)
+    ciudad: str = Field("", max_length=12)
+    telefono: str = Field("", max_length=15)
+    correo: str = Field("", max_length=60)
+    zona: str = Field("", max_length=2)
+    cupo: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    estado: Literal["Activo", "Bloqueado"] = Field(
+        "Activo", description="Bloqueado exige motivoBloqueo (FADCLI.CESTADO/CMOTIVO)."
+    )
+    motivoBloqueo: str = Field("", max_length=30, description="FADCLI.CMOTIVO.")
+
+    @model_validator(mode="after")
+    def _blocked_requires_reason(self) -> "ThirdPartyWrite":
+        """Un bloqueo sin causa no es auditable: se rechaza antes de escribir."""
+        if self.estado == "Bloqueado" and not self.motivoBloqueo.strip():
+            raise ValueError("Indique el motivo del bloqueo.")
+        return self
+
+
+class ThirdPartyImportRow(ThirdPartyWrite):
+    """Fila de la importación: el contrato de escritura más la identificación.
+
+    B1.4 nombra ``ThirdPartyWrite`` para ``filas``, pero ese modelo excluye
+    ``nit`` por definición (es el cuerpo del ``PUT``, donde la clave va en la
+    ruta) y ``normalize_third_party`` lo exige para poder dar el alta, así que la
+    fila vuelve a traerlo.
+    """
+
+    nit: str = Field(pattern=r"^[0-9]{1,10}$")
+
+
+class ThirdPartyCreditLimit(BaseModel):
+    """Cupo de cartera del tercero y motivo opcional del cambio (B1.3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cupo: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    motivo: str = Field("", max_length=180)
+
+
+class ThirdPartyImportRequest(BaseModel):
+    """Archivo ya leído, mapeo confirmado y filas interpretadas (B1.4).
+
+    Reproduce la forma de ``ImportLotRequest``: la interfaz lee el archivo con
+    `POST /api/importaciones/leer`, el usuario confirma el mapeo y este contrato
+    recibe las filas ya normalizadas más el mapeo usado, para la bitácora.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    archivo: str = Field(min_length=1, max_length=255)
+    hoja: str = Field("", max_length=100)
+    mapeo: dict[str, str] = Field(min_length=1, description="Columna del archivo contra campo del contrato.")
+    filas: list[ThirdPartyImportRow] = Field(min_length=1, max_length=5000)
+
+
+class CostCenterCreate(BaseModel):
+    """Alta de un centro de costo de la compañía activa (B2.1).
+
+    ``codigo`` respeta el ancho de ``CONCECOS.CODIGO`` y ``centroPadre`` la
+    jerarquía derivada del prefijo de dos caracteres. La parametrización
+    reproduce los campos que la pantalla ``CentroJerarquico`` ya declara.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,7}$")
+    nombre: str = Field(min_length=1, max_length=40)
+    centroPadre: str = Field("", pattern=r"^[A-Za-z0-9]{1,7}$|^$")
+    hist: str = Field("", max_length=10)
+    tipo: int = Field(0, ge=0, le=99)
+    valor: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    porcentaje: Decimal = Field(Decimal("0"), ge=0, decimal_places=6)
+    codigoItem: str = Field("", max_length=20)
+    cuenta: str = Field("", pattern=r"^[0-9]{0,12}$")
+    concepto: str = Field("", max_length=60)
+
+
+class VoucherCreate(BaseModel):
+    """Alta de un comprobante de la compañía activa (B2.2).
+
+    ``codigo`` usa el ancho real de ``CONTICOM`` (dos caracteres) y
+    ``descripcionAuxiliar`` es ``CONTICOM.CTABDES``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,2}$")
+    nombre: str = Field(min_length=1, max_length=40)
+    descripcionAuxiliar: str = Field("", max_length=40)
+
+
+class DocumentTypeCreate(BaseModel):
+    """Alta de un tipo de documento de la compañía activa (B2.3).
+
+    ``numeracion`` es la única llave de estado que afecta la contabilización;
+    el resto reproduce los atributos que ``13_campos_contrato.sql`` modela sobre
+    ``VISDOCUM``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,2}$")
+    nombre: str = Field(min_length=1, max_length=40)
+    numeracion: Literal["Manual", "Automatica"] = "Manual"
+    terceroObligatorio: bool = False
+    centroObligatorio: bool = False
+    modulo: int | None = Field(None, ge=0, le=99)
+    naturaleza: str = Field("", max_length=10)
+    prefijo: str = Field("", max_length=10)
+    comprobante: str = Field("", pattern=r"^[A-Za-z0-9]{0,2}$")
+    generaContabilizacion: bool = True
+    permiteConversion: bool = False
+    conversionCodigo: str = Field("", max_length=10)
+
+
+class CompanyCreate(BaseModel):
+    """Alta de una compañía con su primer año de operación (B3.1).
+
+    ``codigo`` usa las 3 posiciones de ``EMPCOD`` y ``anio`` el rango de
+    ``compania_anios``. El código viaja sin ceros: el modelo lo guarda así y el
+    ``GET`` lo vuelve a presentar con 3 posiciones.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(pattern=r"^[0-9]{1,3}$", description="EMPCOD de 3 posiciones.")
+    nombre: str = Field(min_length=1, max_length=40)
+    nit: str = Field(min_length=1, max_length=15)
+    digito: str = Field("", pattern=r"^[0-9]?$", max_length=1)
+    soloConsolidacion: bool = Field(False, description="Destino de consolidación.")
+    anio: int = Field(ge=1900, le=2999, description="Primer año de operación.")
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class CompanyWrite(BaseModel):
+    """Modificación de la ficha de la compañía (B3.3).
+
+    El código no forma parte del cuerpo: es la clave inmutable de la ruta, y
+    ``extra="forbid"`` hace que enviarlo devuelva 422.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=40)
+    nit: str = Field(min_length=1, max_length=15)
+    digito: str = Field("", pattern=r"^[0-9]?$", max_length=1)
+    estado: Literal["Activa", "Inactiva"] = "Activa"
+    soloConsolidacion: bool = False
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class VatRateWrite(BaseModel):
+    """Campos de ``tarifas_iva`` que comparten el alta y la modificación (B3).
+
+    ``tarifa`` viaja como **fracción** con los límites del dominio ``porcentaje``:
+    19 % es ``0.19``. Enviar ``19`` devuelve 422.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=40)
+    tarifa: Decimal = Field(ge=0, le=1, decimal_places=6)
+    cuenta: str = Field("", pattern=r"^[0-9]{0,12}$")
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class VatRateCreate(VatRateWrite):
+    """Alta de una tarifa; agrega el código, que es la clave inmutable."""
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
+
+
+class RetentionConceptWrite(BaseModel):
+    """Campos de ``conceptos_retencion`` comunes al alta y a la modificación (B3).
+
+    ``cuenta`` llega opcional, como en la tabla, pero la pantalla la exige al
+    confirmar: sin cuenta la operación responde 422 (regla de B3, sección 3.2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=40)
+    tarifa: Decimal = Field(ge=0, le=1, decimal_places=6)
+    cuenta: str = Field("", pattern=r"^[0-9]{0,12}$")
+    baseMinima: Decimal = Field(Decimal("0"), ge=0, decimal_places=2)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class RetentionConceptCreate(RetentionConceptWrite):
+    """Alta de un concepto de retención; agrega el código inmutable."""
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
+
+
+class IncomeLineWrite(BaseModel):
+    """Campos de ``renglones_renta`` comunes al alta y a la modificación (B3).
+
+    ``signo`` es 1 o -1 y ``cuenta`` es obligatoria: sin cuenta el renglón no se
+    puede calcular.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=60)
+    cuenta: str = Field(pattern=r"^[0-9]{1,12}$")
+    signo: Literal[1, -1] = 1
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class IncomeLineCreate(IncomeLineWrite):
+    """Alta de un renglón de renta; agrega el código inmutable."""
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
+
+
+class TemplateLineWrite(BaseModel):
+    """Pareja de cuentas de una plantilla contable (B3, sección 5).
+
+    Cada línea son **dos cuentas** (débito y crédito), no un importe fijo: es la
+    corrección B09 del modelo y lo que guarda cada posición de ``VISDOCUM``
+    (``db/postgresql/schema/03_maestros.sql:234-237``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    orden: int = Field(1, ge=1, le=999)
+    cuentaDebito: str = Field(pattern=r"^[0-9]{1,12}$")
+    cuentaCredito: str = Field(pattern=r"^[0-9]{1,12}$")
+    concepto: str = Field("", max_length=60)
+
+
+class TemplateWrite(BaseModel):
+    """Campos de ``plantillas_contables`` comunes al alta y a la modificación (B3).
+
+    ``lineas`` exige **dos** como mínimo: una plantilla de una sola línea no puede
+    cuadrar (regla de B3, sección 5.2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=40)
+    tipoDocumento: str = Field(pattern=r"^[A-Za-z0-9]{1,2}$")
+    lineas: list[TemplateLineWrite] = Field(min_length=2, max_length=80)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class TemplateCreate(TemplateWrite):
+    """Alta de una plantilla; agrega el código, que es la clave inmutable."""
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
+
+
+class FormatElementWrite(BaseModel):
+    """Elemento del editor visual de impresión (B3, sección 6).
+
+    ``tipo`` es uno de los ocho del ``CHECK`` de ``formato_elementos`` y ``x``/``y``
+    van en la unidad del editor, decimal de dos posiciones
+    (``db/postgresql/schema/03_maestros.sql:280-293``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    tipo: Literal[
+        "Leyenda", "Imagen", "Rectangulo", "Linea",
+        "CampoComprobante", "CampoDocumento", "CampoFecha", "CampoTotal",
+    ]
+    contenido: str = Field("", max_length=200)
+    x: Decimal = Field(Decimal("0"), ge=0, le=Decimal("99999999.99"), decimal_places=2)
+    y: Decimal = Field(Decimal("0"), ge=0, le=Decimal("99999999.99"), decimal_places=2)
+    ancho: Decimal | None = Field(None, ge=0, le=Decimal("99999999.99"), decimal_places=2)
+    alto: Decimal | None = Field(None, ge=0, le=Decimal("99999999.99"), decimal_places=2)
+    fuente: str = Field("", max_length=40)
+    orden: int = Field(0, ge=0, le=9999)
+
+
+class DocumentFormatWrite(BaseModel):
+    """Campos de ``formatos_documentales`` comunes al alta y a la modificación (B3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=40)
+    comprobante: str = Field("", pattern=r"^[A-Za-z0-9]{0,2}$")
+    elementos: list[FormatElementWrite] = Field(min_length=1, max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class DocumentFormatCreate(DocumentFormatWrite):
+    """Alta de un formato; agrega el código, que es la clave inmutable."""
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
 
 
 class DirectMovementLine(BaseModel):
@@ -244,16 +615,75 @@ class OperationParametersWrite(BaseModel):
 
 def _service_error(exc: Exception) -> HTTPException:
     """Convierte errores de dominio/ADS en respuestas HTTP estables y seguras."""
-    if isinstance(exc, AccountAlreadyExists):
+    if isinstance(
+        exc,
+        (
+            AccountAlreadyExists,
+            ThirdPartyAlreadyExists,
+            CostCenterAlreadyExists,
+            VoucherAlreadyExists,
+            DocumentTypeAlreadyExists,
+            CompanyAlreadyExists,
+            VatRateAlreadyExists,
+            RetentionConceptAlreadyExists,
+            IncomeLineAlreadyExists,
+            TemplateAlreadyExists,
+            DocumentFormatAlreadyExists,
+        ),
+    ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-    if isinstance(exc, ThirdPartyAlreadyExists):
+    if isinstance(
+        exc,
+        (
+            PostingConflict, LotConflict, AnnulmentConflict, ThirdPartyConflict,
+            CompanyConflict, VatRateConflict, RetentionConceptConflict, IncomeLineConflict,
+            TemplateConflict,
+        ),
+    ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-    if isinstance(exc, (PostingConflict, LotConflict, AnnulmentConflict)):
-        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-    if isinstance(exc, (AccountNotFound, CompanyNotFound)):
+    if isinstance(
+        exc,
+        (
+            AccountNotFound,
+            CompanyNotFound,
+            ThirdPartyNotFound,
+            CostCenterNotFound,
+            VoucherNotFound,
+            DocumentTypeNotFound,
+            VatRateNotFound,
+            RetentionConceptNotFound,
+            IncomeLineNotFound,
+            TemplateNotFound,
+            DocumentFormatNotFound,
+        ),
+    ):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    if isinstance(exc, (ValueError, PostingValidationError, LotValidationError, OperationParametersValidationError, ThirdPartyValidationError, AnnulmentValidationError, MonthlyReprocessValidationError)):
+    if isinstance(
+        exc,
+        (
+            ValueError,
+            PostingValidationError,
+            LotValidationError,
+            OperationParametersValidationError,
+            ThirdPartyValidationError,
+            AnnulmentValidationError,
+            MonthlyReprocessValidationError,
+            CostCenterValidationError,
+            VoucherValidationError,
+            DocumentTypeValidationError,
+            CompanyValidationError,
+            VatRateValidationError,
+            RetentionConceptValidationError,
+            IncomeLineValidationError,
+            TemplateValidationError,
+            DocumentFormatValidationError,
+        ),
+    ):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    if isinstance(exc, CompanyWriteNotImplemented):
+        # R5: rama no implementada declarada, con su causa y no con el mensaje
+        # genérico de motor no disponible.
+        return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
     if isinstance(exc, AdsConfigurationError):
         logger.error("Configuracion ADS no disponible: %s", exc)
         detail = "No fue posible comunicarse con Advantage Data Server."
@@ -286,12 +716,14 @@ def health() -> dict[str, str]:
 
 # Compañías de ejemplo para poder entrar a la interfaz cuando Advantage no está
 # configurado (ver ADS_DEV_FALLBACK). No sustituyen a CONEMP de forma silenciosa:
-# la respuesta se marca con source="DEMO" y queda un aviso en el log.
+# la respuesta se marca con source="DEMO" y queda un aviso en el log. Con la
+# extensión aditiva de B3 llevan también las dos claves nuevas, en su valor por
+# defecto: ``CONEMP`` no tiene consolidación ni años contables.
 DEMO_COMPANIES: tuple[dict[str, object], ...] = (
-    {"codigo": "001", "nombre": "Compañía Demo S.A.S.", "nit": "900.123.456-7", "habilitada": True},
-    {"codigo": "002", "nombre": "Inversiones Beta Ltda.", "nit": "800.200.300-1", "habilitada": False},
-    {"codigo": "003", "nombre": "Comercial Gamma S.A.", "nit": "830.400.500-2", "habilitada": True},
-    {"codigo": "004", "nombre": "Servicios Delta S.A.S.", "nit": "901.600.700-3", "habilitada": False},
+    {"codigo": "001", "nombre": "Compañía Demo S.A.S.", "nit": "900.123.456-7", "habilitada": True, "soloConsolidacion": False, "anios": []},
+    {"codigo": "002", "nombre": "Inversiones Beta Ltda.", "nit": "800.200.300-1", "habilitada": False, "soloConsolidacion": False, "anios": []},
+    {"codigo": "003", "nombre": "Comercial Gamma S.A.", "nit": "830.400.500-2", "habilitada": True, "soloConsolidacion": False, "anios": []},
+    {"codigo": "004", "nombre": "Servicios Delta S.A.S.", "nit": "901.600.700-3", "habilitada": False, "soloConsolidacion": False, "anios": []},
 )
 
 
@@ -319,6 +751,67 @@ def companies() -> dict[str, object]:
             return {"items": list(DEMO_COMPANIES), "count": len(DEMO_COMPANIES), "source": "DEMO"}
         raise _service_error(exc) from exc
     return {"items": items, "count": len(items), "source": store.source_label()}
+
+
+def _config_catalog(table_postgres: str, table_ads: str) -> dict[str, object]:
+    """Origen y alcance de un catálogo de configuración (R10).
+
+    En el legado ``CONTIIVA``, ``CONTIRET`` y ``CONDECLA`` son globales (no tienen
+    ``CIA``) mientras en el modelo nuevo son por compañía; la diferencia se declara
+    en la respuesta, como en ``POST /api/tipos-documento``.
+    """
+    postgres = store.is_postgres()
+    return {
+        "source": table_postgres if postgres else table_ads,
+        "sharedAcrossCompanies": not postgres,
+    }
+
+
+@app.post("/api/companias", status_code=status.HTTP_201_CREATED, summary="Crear compañía")
+def create_company_endpoint(payload: CompanyCreate) -> dict[str, object]:
+    """Crea la compañía con su primer año; en Advantage devuelve 503 declarado."""
+    try:
+        item = store.create_company(payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "companias"}
+
+
+@app.put("/api/companias/{codigo}", summary="Modificar compañía")
+def update_company_endpoint(
+    payload: CompanyWrite,
+    codigo: str = Path(description="Código EMPCOD de la compañía.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Modifica nombre, NIT, dígito y estado; el código llega por la ruta."""
+    try:
+        item = store.update_company(codigo, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "companias"}
+
+
+@app.delete(
+    "/api/companias/{codigo}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Dar de baja una compañía",
+)
+def delete_company_endpoint(
+    response: Response,
+    codigo: str = Path(description="Código EMPCOD de la compañía.", pattern=r"^[0-9]{1,3}$"),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa la baja sin ejecutarla."),
+) -> dict[str, object] | Response:
+    """Retira la compañía del selector si no tiene documentos, lotes ni saldos."""
+    try:
+        item = store.delete_company(codigo, reason=motivo, user=usuario, dry_run=dry_run)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    if not dry_run:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_200_OK
+    return {"item": item, "source": "companias", "dryRun": True}
 
 
 @app.get("/api/terceros", summary="Consultar el directorio global de terceros")
@@ -349,6 +842,85 @@ def create_third(
     return {"item": item, "source": "FADCLI", "sharedAcrossCompanies": True}
 
 
+@app.put("/api/terceros/{nit}", summary="Modificar los datos de un tercero")
+def update_third(
+    payload: ThirdPartyWrite,
+    nit: str = Path(description="NIT del tercero.", pattern=r"^[0-9]{1,10}$"),
+    cia: str = Query("", description="Compañía activa (requerida en PostgreSQL).", pattern=r"^[0-9]{0,3}$"),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+) -> dict[str, object]:
+    """Modifica la ficha del tercero: el NIT viaja en la ruta y es inmutable."""
+    try:
+        item = store.update_third_party(nit, payload.model_dump(), cia=cia, user=usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "FADCLI", "sharedAcrossCompanies": True}
+
+
+@app.delete("/api/terceros/{nit}", summary="Retirar un tercero del directorio")
+def delete_third(
+    nit: str = Path(description="NIT del tercero.", pattern=r"^[0-9]{1,10}$"),
+    motivo: str = Query(min_length=5, max_length=180),
+    cia: str = Query("", description="Compañía activa (requerida en PostgreSQL).", pattern=r"^[0-9]{0,3}$"),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa la baja sin ejecutarla."),
+) -> dict[str, object]:
+    """Da de baja un tercero sin historia contable; con movimientos, 409."""
+    try:
+        item = store.delete_third_party(
+            nit, reason=motivo, user=usuario, cia=cia, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "item": item,
+        "source": "FADCLI",
+        "sharedAcrossCompanies": True,
+        "dryRun": dry_run,
+    }
+
+
+@app.put("/api/terceros/{nit}/cupo", summary="Fijar el cupo de cartera de un tercero")
+def update_third_credit_limit(
+    payload: ThirdPartyCreditLimit,
+    nit: str = Path(description="NIT del tercero.", pattern=r"^[0-9]{1,10}$"),
+    cia: str = Query("", description="Compañía activa (requerida en PostgreSQL).", pattern=r"^[0-9]{0,3}$"),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+) -> dict[str, object]:
+    """Cambia sólo el cupo: la ventana de cupos encadena una llamada por tercero."""
+    try:
+        item = store.update_third_party_credit_limit(
+            nit, payload.model_dump(), cia=cia, user=usuario
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "FADCLI"}
+
+
+@app.post(
+    "/api/terceros/importar",
+    status_code=status.HTTP_201_CREATED,
+    summary="Importar terceros desde un archivo ya leído",
+)
+def import_third_parties_endpoint(
+    request: ThirdPartyImportRequest,
+    response: Response,
+    cia: str = Query("", description="Compañía activa (requerida en PostgreSQL).", pattern=r"^[0-9]{0,3}$"),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Valida y devuelve el informe sin escribir."),
+) -> dict[str, object]:
+    """Da de alta varias filas; el `dryRun` responde 200 con el mismo informe."""
+    try:
+        item = store.import_third_parties(
+            request.model_dump(), cia=cia, user=usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    if dry_run:
+        response.status_code = status.HTTP_200_OK
+    return {"item": item, "source": "FADCLI", "dryRun": dry_run}
+
+
 @app.get("/api/centros", summary="Consultar centros de costo por compañía")
 def cost_centers(
     cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
@@ -366,6 +938,20 @@ def cost_centers(
     }
 
 
+@app.post("/api/centros", status_code=status.HTTP_201_CREATED, summary="Crear centro de costo")
+def create_cost_center_endpoint(
+    payload: CostCenterCreate,
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+) -> dict[str, object]:
+    """Crea un centro de la compañía activa; el padre, si viene, debe existir."""
+    try:
+        item = store.create_cost_center(cia, payload.model_dump(), user=usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONCECOS", "sharedAcrossCompanies": False}
+
+
 @app.get("/api/tipos-documento", summary="Consultar tipos de documento globales")
 def document_types() -> dict[str, object]:
     """Lee VISDOCUM sin CIA porque el catálogo se comparte entre compañías."""
@@ -378,6 +964,29 @@ def document_types() -> dict[str, object]:
         "count": len(items),
         "source": "VISDOCUM",
         "sharedAcrossCompanies": True,
+    }
+
+
+@app.post(
+    "/api/tipos-documento",
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear tipo de documento",
+)
+def create_document_type_endpoint(
+    payload: DocumentTypeCreate,
+    cia: str = Query(description="Compañía activa para validar el comprobante.", pattern=r"^[0-9]{1,3}$"),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+) -> dict[str, object]:
+    """Crea un tipo de documento; en PostgreSQL es por compañía, en ADS global."""
+    try:
+        item = store.create_document_type(cia, payload.model_dump(), user=usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "item": item,
+        "source": "VISDOCUM",
+        # R10: VISDOCUM no tiene CIA (global); tipos_documento sí es por compañía.
+        "sharedAcrossCompanies": not store.is_postgres(),
     }
 
 
@@ -396,6 +1005,390 @@ def vouchers(
         "source": "CONTICOM",
         "sharedAcrossCompanies": False,
     }
+
+
+@app.post("/api/comprobantes", status_code=status.HTTP_201_CREATED, summary="Crear comprobante")
+def create_voucher_endpoint(
+    payload: VoucherCreate,
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+) -> dict[str, object]:
+    """Crea un comprobante de la compañía activa; no crea consecutivo."""
+    try:
+        item = store.create_voucher(cia, payload.model_dump(), user=usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "CONTICOM", "sharedAcrossCompanies": False}
+
+
+@app.get("/api/tarifas-iva", summary="Consultar tarifas de IVA por compañía")
+def vat_rates(
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lee ``tarifas_iva`` (o ``CONTIIVA`` en el legado), sin las filas dadas de baja."""
+    try:
+        items = store.list_tarifas_iva(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "items": items,
+        "count": len(items),
+        **_config_catalog("tarifas_iva", "CONTIIVA"),
+    }
+
+
+@app.post("/api/tarifas-iva", status_code=status.HTTP_201_CREATED, summary="Crear tarifa de IVA")
+def create_vat_rate(
+    payload: VatRateCreate,
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Crea la tarifa; la cuenta, si viene, debe existir en el plan de la compañía."""
+    try:
+        item = store.create_tarifa_iva(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("tarifas_iva", "CONTIIVA")}
+
+
+@app.put("/api/tarifas-iva/{codigo}", summary="Modificar tarifa de IVA")
+def update_vat_rate(
+    payload: VatRateWrite,
+    codigo: str = Path(description="Código de la tarifa.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Modifica la tarifa vigente sin reescribir lo contabilizado."""
+    try:
+        item = store.update_tarifa_iva(cia, codigo, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("tarifas_iva", "CONTIIVA")}
+
+
+@app.delete(
+    "/api/tarifas-iva/{codigo}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Dar de baja una tarifa de IVA",
+)
+def delete_vat_rate(
+    response: Response,
+    codigo: str = Path(description="Código de la tarifa.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa la baja sin ejecutarla."),
+) -> dict[str, object] | Response:
+    """Da de baja la tarifa; con renglones contabilizados que la usan, 409."""
+    try:
+        item = store.delete_tarifa_iva(
+            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    if not dry_run:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_200_OK
+    return {"item": item, **_config_catalog("tarifas_iva", "CONTIIVA"), "dryRun": True}
+
+
+@app.get("/api/conceptos-retencion", summary="Consultar conceptos de retención")
+def retention_concepts(
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lee ``conceptos_retencion`` (o ``CONTIRET``), sin las filas dadas de baja."""
+    try:
+        items = store.list_conceptos_retencion(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "items": items,
+        "count": len(items),
+        **_config_catalog("conceptos_retencion", "CONTIRET"),
+    }
+
+
+@app.post(
+    "/api/conceptos-retencion",
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear concepto de retención",
+)
+def create_retention_concept(
+    payload: RetentionConceptCreate,
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Crea el concepto; sin cuenta responde 422 (regla de la pantalla)."""
+    try:
+        item = store.create_concepto_retencion(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("conceptos_retencion", "CONTIRET")}
+
+
+@app.put("/api/conceptos-retencion/{codigo}", summary="Modificar concepto de retención")
+def update_retention_concept(
+    payload: RetentionConceptWrite,
+    codigo: str = Path(description="Código del concepto.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Modifica el concepto; el cambio de tarifa aplica a lo que se capture."""
+    try:
+        item = store.update_concepto_retencion(
+            cia, codigo, payload.model_dump(), user=payload.usuario
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("conceptos_retencion", "CONTIRET")}
+
+
+@app.delete(
+    "/api/conceptos-retencion/{codigo}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Dar de baja un concepto de retención",
+)
+def delete_retention_concept(
+    response: Response,
+    codigo: str = Path(description="Código del concepto.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa la baja sin ejecutarla."),
+) -> dict[str, object] | Response:
+    """Da de baja el concepto; con acumulados o renglones que lo usan, 409."""
+    try:
+        item = store.delete_concepto_retencion(
+            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    if not dry_run:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_200_OK
+    return {"item": item, **_config_catalog("conceptos_retencion", "CONTIRET"), "dryRun": True}
+
+
+@app.get("/api/renglones-renta", summary="Consultar renglones de renta")
+def income_lines(
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lee ``renglones_renta`` (o ``CONDECLA``), sin las filas dadas de baja."""
+    try:
+        items = store.list_renglones_renta(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "items": items,
+        "count": len(items),
+        **_config_catalog("renglones_renta", "CONDECLA"),
+    }
+
+
+@app.post(
+    "/api/renglones-renta", status_code=status.HTTP_201_CREATED, summary="Crear renglón de renta"
+)
+def create_income_line(
+    payload: IncomeLineCreate,
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Crea el renglón; la cuenta es obligatoria y debe existir en el plan."""
+    try:
+        item = store.create_renglon_renta(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("renglones_renta", "CONDECLA")}
+
+
+@app.put("/api/renglones-renta/{codigo}", summary="Modificar renglón de renta")
+def update_income_line(
+    payload: IncomeLineWrite,
+    codigo: str = Path(description="Código del renglón.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Modifica el renglón vigente; no reescribe declaraciones anteriores."""
+    try:
+        item = store.update_renglon_renta(cia, codigo, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("renglones_renta", "CONDECLA")}
+
+
+@app.delete(
+    "/api/renglones-renta/{codigo}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Dar de baja un renglón de renta",
+)
+def delete_income_line(
+    response: Response,
+    codigo: str = Path(description="Código del renglón.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa la baja sin ejecutarla."),
+) -> dict[str, object] | Response:
+    """Da de baja el renglón; si su cuenta tiene declaraciones, 409."""
+    try:
+        item = store.delete_renglon_renta(
+            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    if not dry_run:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_200_OK
+    return {"item": item, **_config_catalog("renglones_renta", "CONDECLA"), "dryRun": True}
+
+
+@app.get("/api/plantillas-contables", summary="Consultar plantillas contables")
+def templates(
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lee ``plantillas_contables`` (o el bloque de parejas de ``VISDOCUM``)."""
+    try:
+        items = store.list_plantillas_contables(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "items": items,
+        "count": len(items),
+        **_config_catalog("plantillas_contables", "VISDOCUM"),
+    }
+
+
+@app.post(
+    "/api/plantillas-contables",
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear plantilla contable",
+)
+def create_template(
+    payload: TemplateCreate,
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Crea la plantilla; cada cuenta de cada pareja debe existir y ser afectable."""
+    try:
+        item = store.create_plantilla_contable(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("plantillas_contables", "VISDOCUM")}
+
+
+@app.put("/api/plantillas-contables/{codigo}", summary="Modificar plantilla contable")
+def update_template(
+    payload: TemplateWrite,
+    codigo: str = Path(description="Código de la plantilla.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Modifica la plantilla y reemplaza sus parejas de cuentas en bloque."""
+    try:
+        item = store.update_plantilla_contable(
+            cia, codigo, payload.model_dump(), user=payload.usuario
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("plantillas_contables", "VISDOCUM")}
+
+
+@app.delete(
+    "/api/plantillas-contables/{codigo}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Dar de baja una plantilla contable",
+)
+def delete_template(
+    response: Response,
+    codigo: str = Path(description="Código de la plantilla.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa la baja sin ejecutarla."),
+) -> dict[str, object] | Response:
+    """Da de baja la plantilla; sus líneas se conservan y los lotes no se tocan."""
+    try:
+        item = store.delete_plantilla_contable(
+            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    if not dry_run:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_200_OK
+    return {"item": item, **_config_catalog("plantillas_contables", "VISDOCUM"), "dryRun": True}
+
+
+@app.get("/api/formatos-documentales", summary="Consultar formatos documentales")
+def document_formats(
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lee ``formatos_documentales`` (o ``CONGENF`` con las posiciones de ``CONFORMA``)."""
+    try:
+        items = store.list_formatos_documentales(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {
+        "items": items,
+        "count": len(items),
+        **_config_catalog("formatos_documentales", "CONGENF"),
+    }
+
+
+@app.post(
+    "/api/formatos-documentales",
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear formato documental",
+)
+def create_document_format(
+    payload: DocumentFormatCreate,
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Crea el formato; el ``tipo`` debe ser una de las ocho clases del editor."""
+    try:
+        item = store.create_formato_documental(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("formatos_documentales", "CONGENF")}
+
+
+@app.put("/api/formatos-documentales/{codigo}", summary="Modificar formato documental")
+def update_document_format(
+    payload: DocumentFormatWrite,
+    codigo: str = Path(description="Código del formato.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Modifica el formato y reemplaza sus elementos en bloque."""
+    try:
+        item = store.update_formato_documental(
+            cia, codigo, payload.model_dump(), user=payload.usuario
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, **_config_catalog("formatos_documentales", "CONGENF")}
+
+
+@app.delete(
+    "/api/formatos-documentales/{codigo}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Dar de baja un formato documental",
+)
+def delete_document_format(
+    response: Response,
+    codigo: str = Path(description="Código del formato.", pattern=r"^[A-Za-z0-9]{1,10}$"),
+    cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa la baja sin ejecutarla."),
+) -> dict[str, object] | Response:
+    """Da de baja el formato; sus elementos se conservan para reimprimir."""
+    try:
+        item = store.delete_formato_documental(
+            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    if not dry_run:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    response.status_code = status.HTTP_200_OK
+    return {"item": item, **_config_catalog("formatos_documentales", "CONGENF"), "dryRun": True}
 
 
 @app.get("/api/periodo-operacion", summary="Consultar el período contable habilitado")

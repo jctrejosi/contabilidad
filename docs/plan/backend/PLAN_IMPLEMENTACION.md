@@ -39,7 +39,7 @@ Contenido del punto 3 en archivos aparte:
 | Fuera de alcance | Conectores externos reales, generador de informes personalizado, certificados y anexos en portal, edicion y baja de los tres catalogos del bloque B2 (seccion 6) |
 | Fecha | 2026-09-21 |
 
-### 1.1 Por que este plan vive en `docs/plan/`
+### 1.1 Por que este plan vive en `docs/plan/backend/`
 
 `docs/maestros/` es especificacion de materia: contrato de datos de un maestro
 contra Advantage Data Server (`docs/README.md:5`). Este documento no especifica
@@ -47,8 +47,13 @@ un maestro: cruza maestros, movimientos, informes, procesos y administracion, y
 su contenido util no es el contrato de datos sino **el orden de implementacion y
 los criterios de aceptacion**. Eso es lo mismo que hace `docs/auditorias/`, que
 es la fuente de la que este plan desciende. Por eso se crea `docs/plan/` como
-carpeta hermana, con un archivo principal y el detalle por modulo en
-`docs/plan/detalle/`, y se anade una linea de indice en `docs/README.md`.
+carpeta hermana, y dentro de ella esta **este plan de backend** en
+`docs/plan/backend/`, con un archivo principal y el detalle por modulo en
+`docs/plan/backend/detalle/`. El otro plan de `docs/plan/` es el del asistente
+(Daisy), en `docs/plan/bot/`; los dos comparten las mismas fuentes
+(`docs/catalogo/MAPA_FUNCIONALIDAD.md` y `docs/auditorias/`) y se separan porque
+uno ordena el trabajo de backend y el otro el del bot. Se anade su linea de
+indice en `docs/README.md`.
 
 ### 1.2 Fuentes obligatorias y como se usaron
 
