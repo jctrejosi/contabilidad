@@ -19,9 +19,9 @@ se serializan con ``ensure_ascii``.
 
 Uso::
 
-    .venv/Scripts/python.exe scripts/verificar_herramientas.py
-    .venv/Scripts/python.exe scripts/verificar_herramientas.py --simular
-    .venv/Scripts/python.exe scripts/verificar_herramientas.py --compania 001
+    .venv/bin/python scripts/verificar_herramientas.py
+    .venv/bin/python scripts/verificar_herramientas.py --simular
+    .venv/bin/python scripts/verificar_herramientas.py --compania 001
 
 La compania del contexto es un argumento del guion porque el backend valida que
 la compania exista; en la bateria real hay que pasar un codigo que exista.
@@ -41,16 +41,26 @@ if str(RAIZ) not in sys.path:
 
 import httpx  # noqa: E402
 
-from app import backend_client, config, tools  # noqa: E402
+from app import backend, config, tools  # noqa: E402
 
 # Casos con argumentos válidos. La compania viaja en el contexto de sesion, que
 # se construye en principal() con el codigo recibido en --compania.
 CONTEXTO_BASE = {"companiaNombre": "DSI S.A.", "usuario": "Verificacion"}
 CASOS_VALIDOS: list[tuple[str, dict]] = [
+    ("buscar_cuenta", {"texto": "41"}),
+    ("consultar_periodo", {}),
+    ("buscar_tercero", {"texto": "Clientes"}),
+    ("consultar_movimiento_mensual", {}),
+    ("consultar_movimiento_mensual", {"anio": 2026, "mes": 2, "cuentaDesde": "41"}),
+    ("consultar_documentos", {}),
+    ("consultar_documentos", {"periodo": "2026-02"}),
+    (
+        "consultar_documento_detalle",
+        {"documento": "1", "comprobante": "01", "tipoDocumento": "13", "fecha": "2026-02-01"},
+    ),
     ("consultar_periodo_operacion", {}),
     ("consultar_parametros_operacion", {}),
     ("listar_companias", {}),
-    ("buscar_tercero", {"buscar": "Clientes"}),
     ("consultar_comprobantes", {}),
     ("consultar_tipos_documento", {}),
     ("consultar_centros", {}),
@@ -60,56 +70,73 @@ CASOS_VALIDOS: list[tuple[str, dict]] = [
 
 # Casos con argumentos invalidos: el handler debe rechazarlos antes de llamar.
 CASOS_INVALIDOS: list[tuple[str, dict, str]] = [
-    ("buscar_tercero", {}, "falta buscar"),
-    ("buscar_tercero", {"buscar": "x" * 61}, "buscar de 61 caracteres"),
-    ("buscar_tercero", {"buscar": "Cliente", "estado": "activo2"}, "estado fuera del enum"),
-    ("buscar_tercero", {"buscar": ""}, "buscar vacio"),
+    ("buscar_cuenta", {}, "falta texto"),
+    ("buscar_cuenta", {"texto": ""}, "texto vacio"),
+    ("buscar_tercero", {}, "falta texto"),
+    ("buscar_tercero", {"texto": "x" * 61}, "texto de 61 caracteres"),
+    ("buscar_tercero", {"texto": ""}, "texto vacio"),
+    ("consultar_movimiento_mensual", {"anio": 1800, "mes": 5}, "anio fuera de 1900-2100"),
+    ("consultar_movimiento_mensual", {"anio": 2026, "mes": 13}, "mes fuera de 1-12"),
+    ("consultar_documento_detalle", {}, "falta la clave del documento"),
+    (
+        "consultar_documento_detalle",
+        {"documento": "1", "comprobante": "01", "tipoDocumento": "13"},
+        "falta la fecha",
+    ),
     ("verificar_lote", {}, "falta lote"),
     ("verificar_lote", {"lote": ""}, "lote vacio"),
     ("verificar_lote", {"lote": "A" * 11}, "lote de 11 caracteres"),
     ("verificar_lote", {"lote": "*"}, "lote con comodin"),
 ]
 
-# Herramientas que exigen la compania del contexto de sesion (punto 1.1.1).
-CON_COMPANIA = [
+# Herramientas que exigen la compania del contexto de sesion, con los argumentos
+# minimos que pasan su propia validacion para llegar a ``require_company()``.
+CON_COMPANIA: list[tuple[str, dict]] = [
+    ("buscar_cuenta", {"texto": "41"}),
+    ("consultar_periodo", {}),
+    ("consultar_movimiento_mensual", {}),
+    ("consultar_documentos", {}),
+    (
+        "consultar_documento_detalle",
+        {"documento": "1", "comprobante": "01", "tipoDocumento": "13", "fecha": "2026-02-01"},
+    ),
+    ("consultar_periodo_operacion", {}),
+    ("consultar_parametros_operacion", {}),
+    ("consultar_comprobantes", {}),
+    ("consultar_centros", {}),
+    ("verificar_lote", {"lote": "L001"}),
+]
+
+# Herramientas que con argumentos validos siempre dejan payload para el visor.
+CON_PAYLOAD = [
+    "buscar_cuenta",
+    "consultar_periodo",
+    "buscar_tercero",
+    "consultar_movimiento_mensual",
+    "consultar_documentos",
+    "consultar_documento_detalle",
     "consultar_periodo_operacion",
     "consultar_parametros_operacion",
+    "listar_companias",
     "consultar_comprobantes",
+    "consultar_tipos_documento",
     "consultar_centros",
     "verificar_lote",
 ]
 
-# Herramientas que siempre dejan payload. T-08 solo lo deja cuando la verificacion
-# trae mas de TOPE_ERRORES_TABLA inconsistencias (apartado 3.1 del documento).
-CON_PAYLOAD = [
-    "consultar_periodo_operacion",
-    "consultar_parametros_operacion",
-    "listar_companias",
-    "buscar_tercero",
-    "consultar_comprobantes",
-    "consultar_tipos_documento",
-    "consultar_centros",
-]
+# Contrato del visor del widget (BotPayloadTabla): el payload trae ``bloques`` y
+# cada bloque es una tabla con columnas tipadas y filas indexadas por la ``key``.
+TIPOS_COLUMNA = ("texto", "fecha", "moneda", "entero", "estado")
+TIPOS_BLOQUE = ("tabla",)
+CLAVES_BLOQUE = ("titulo", "subtitulo", "columnas", "filas")
 
-CLAVES_PAYLOAD = (
-    "tipo",
-    "titulo",
-    "columnas",
-    "filas",
-    "totales",
-    "count",
-    "hasMore",
-    "truncado",
-    "origen",
-    "filtros",
-    "nota",
-)
-
+# Marcas de que un rechazo vino de una falla de entorno (backend) y no de la
+# validacion local del handler. Deben seguir el texto de ``app/backend.py``.
 MARCAS_ENTORNO = (
-    "no fue posible comunicarse",
-    "no respondio a tiempo",
+    "no se pudo contactar",
+    "la api respondio",
+    "la api devolvio",
     "no respondio",
-    "motor de datos no esta disponible",
 )
 
 
@@ -132,7 +159,7 @@ def linea(etiqueta: str, texto: str = "") -> None:
 # Capa HTTP simulada: replica las respuestas reales del backend
 # ---------------------------------------------------------------------------
 def transporte_simulado() -> httpx.MockTransport:
-    """Respuestas con los mismos campos que devuelve ``backend/app.py``."""
+    """Respuestas con los mismos campos que devuelve la API del backend."""
 
     def responder(peticion: httpx.Request) -> httpx.Response:
         ruta = peticion.url.path
@@ -296,6 +323,107 @@ def transporte_simulado() -> httpx.MockTransport:
                     "sharedAcrossCompanies": False,
                 },
             )
+        if ruta == "/api/cuentas":
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {"codigo": "1105", "nombre": "Bancos", "nivel": 4, "afectable": True},
+                        {"codigo": "4105", "nombre": "Ingresos operacionales", "nivel": 4, "afectable": True},
+                        {"codigo": "4135", "nombre": "Comercio al por mayor", "nivel": 4, "afectable": True},
+                        {"codigo": "41", "nombre": "Ingresos", "nivel": 2, "afectable": False},
+                    ],
+                    "source": "CONMAE",
+                },
+            )
+        if ruta == "/api/movimiento-mensual":
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "fecha": "2026-02-10",
+                            "comprobante": "01",
+                            "documento": "1",
+                            "cuenta": "1105",
+                            "nit": "800200300",
+                            "concepto": "Venta de contado",
+                            "debito": 1500.0,
+                            "credito": 0.0,
+                        },
+                        {
+                            "fecha": "2026-02-10",
+                            "comprobante": "01",
+                            "documento": "1",
+                            "cuenta": "4135",
+                            "nit": "800200300",
+                            "concepto": "Venta de contado",
+                            "debito": 0.0,
+                            "credito": 1500.0,
+                        },
+                    ],
+                    "page": 1,
+                    "pageSize": 50,
+                    "hasMore": False,
+                    "periodDebit": 1500.0,
+                    "periodCredit": 1500.0,
+                    "periodSaldo": 0.0,
+                    "source": "CONMOVI",
+                },
+            )
+        if ruta == "/api/documentos/detalle":
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "cuenta": "1105",
+                            "nombreCuenta": "Bancos",
+                            "nit": "800200300",
+                            "centro": "01",
+                            "concepto": "Venta de contado",
+                            "base": 1500.0,
+                            "debito": 1500.0,
+                            "credito": 0.0,
+                        },
+                        {
+                            "cuenta": "4135",
+                            "nombreCuenta": "Comercio al por mayor",
+                            "nit": "800200300",
+                            "centro": "01",
+                            "concepto": "Venta de contado",
+                            "base": 1500.0,
+                            "debito": 0.0,
+                            "credito": 1500.0,
+                        },
+                    ],
+                    "source": "CONMOVI",
+                },
+            )
+        if ruta == "/api/documentos":
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "fecha": "2026-02-10",
+                            "comprobante": "01",
+                            "tipoDocumento": "13",
+                            "documento": "1",
+                            "nit": "800200300",
+                            "tercero": "Clientes Varios",
+                            "detalle": "Venta de contado",
+                            "valor": 1500.0,
+                        }
+                    ],
+                    "page": 1,
+                    "pageSize": 50,
+                    "hasMore": False,
+                    "totalDocumentos": 1,
+                    "totalValor": 1500.0,
+                    "source": "CONMOVI",
+                },
+            )
         if ruta.endswith("/verificar"):
             con_error = "ERRLOTE" in ruta
             errores = [
@@ -333,9 +461,15 @@ def transporte_simulado() -> httpx.MockTransport:
 # ---------------------------------------------------------------------------
 # Comprobaciones
 # ---------------------------------------------------------------------------
-def verificar_coherencia() -> list[str]:
-    """Coherencia entre TOOLS y FUNCTION_MAP. Devuelve la lista de fallos."""
+def verificar_coherencia() -> tuple[list[str], list[str]]:
+    """Coherencia entre TOOLS y FUNCTION_MAP.
+
+    Devuelve ``(fallos, advertencias)``. Las advertencias son inconsistencias de
+    estilo que no impiden el function calling (p. ej. esquemas que no fijan
+    ``additionalProperties`` en false): se reportan sin romper la ejecucion.
+    """
     fallos: list[str] = []
+    advertencias: list[str] = []
     nombres_tools = [entrada.get("function", {}).get("name") for entrada in tools.TOOLS]
     nombres_map = list(tools.FUNCTION_MAP)
 
@@ -365,7 +499,7 @@ def verificar_coherencia() -> list[str]:
             fallos.append(f"{nombre}: el esquema de parametros no es un objeto")
             continue
         if esquema.get("additionalProperties") is not False:
-            fallos.append(f"{nombre}: el esquema no fija additionalProperties en false")
+            advertencias.append(f"{nombre}: el esquema no fija additionalProperties en false")
         propiedades = set(esquema.get("properties") or {})
         for requerido in esquema.get("required") or []:
             if requerido not in propiedades:
@@ -376,28 +510,79 @@ def verificar_coherencia() -> list[str]:
         elif not inspect.iscoroutinefunction(handler):
             fallos.append(f"{nombre}: el handler no es una corrutina")
 
-    return fallos
+    return fallos, advertencias
 
 
 def revisar_payload(ctx: dict, obligatorio: bool) -> list[str]:
-    """Comprueba que el payload guardado cumple el contrato acordado."""
+    """Comprueba que el payload guardado cumple el contrato del visor del widget."""
     problemas: list[str] = []
     contenido = ctx.get("payload") or {}
     if not contenido:
         return [] if not obligatorio else ["no dejo payload"]
     if not isinstance(contenido, dict):
         return ["el payload guardado no es un diccionario"]
-    faltan = [clave for clave in CLAVES_PAYLOAD if clave not in contenido]
-    if faltan:
-        problemas.append(f"al payload le faltan claves: {faltan}")
-    if contenido.get("tipo") not in ("tabla", "item"):
-        problemas.append(f"tipo de payload inesperado: {contenido.get('tipo')}")
-    for columna in contenido.get("columnas") or []:
-        if not isinstance(columna, dict) or "label" not in columna or "money" not in columna:
-            problemas.append("una columna no tiene la forma {label, money}")
-            break
-    if not isinstance(contenido.get("filas"), list):
-        problemas.append("filas no es una lista")
+
+    bloques = contenido.get("bloques")
+    if not isinstance(bloques, list) or not bloques:
+        return ["el payload no trae 'bloques' como lista no vacia"]
+
+    for indice, bloque in enumerate(bloques):
+        etiqueta = f"bloque {indice}"
+        if not isinstance(bloque, dict):
+            problemas.append(f"{etiqueta}: no es un diccionario")
+            continue
+        faltan = [clave for clave in CLAVES_BLOQUE if clave not in bloque]
+        if faltan:
+            problemas.append(f"{etiqueta}: le faltan claves {faltan}")
+        if bloque.get("tipo") not in TIPOS_BLOQUE:
+            problemas.append(f"{etiqueta}: tipo de bloque inesperado {bloque.get('tipo')!r}")
+
+        columnas = bloque.get("columnas")
+        if not isinstance(columnas, list) or not columnas:
+            problemas.append(f"{etiqueta}: 'columnas' no es una lista no vacia")
+            continue
+        claves: list[str] = []
+        columna_valida = True
+        for columna in columnas:
+            if not isinstance(columna, dict) or "label" not in columna or not columna.get("key"):
+                problemas.append(f"{etiqueta}: una columna no tiene la forma {{key, label, tipo}}")
+                columna_valida = False
+                break
+            if columna.get("tipo") not in TIPOS_COLUMNA:
+                problemas.append(
+                    f"{etiqueta}: la columna '{columna.get('key')}' tiene tipo invalido "
+                    f"{columna.get('tipo')!r}"
+                )
+                columna_valida = False
+                break
+            claves.append(str(columna["key"]))
+        if not columna_valida:
+            continue
+
+        filas = bloque.get("filas")
+        if not isinstance(filas, list):
+            problemas.append(f"{etiqueta}: 'filas' no es una lista")
+            continue
+        for fila in filas:
+            if not isinstance(fila, dict):
+                problemas.append(f"{etiqueta}: una fila no es un diccionario indexado por key")
+                break
+            if set(fila) != set(claves):
+                problemas.append(
+                    f"{etiqueta}: una fila no calza con las columnas (claves {sorted(fila)})"
+                )
+                break
+
+        for total in bloque.get("totales") or []:
+            if (
+                not isinstance(total, dict)
+                or "label" not in total
+                or "valor" not in total
+                or total.get("tipo") not in TIPOS_COLUMNA
+            ):
+                problemas.append(f"{etiqueta}: un total no tiene la forma {{label, valor, tipo}}")
+                break
+
     return problemas
 
 
@@ -425,11 +610,12 @@ async def ejecutar_casos(simulado: bool, compania: str) -> tuple[list[str], int,
                 linea(f"  {nombre}", f"FALLO payload: {problemas}")
                 continue
             correctos += 1
+            bloques = ctx["payload"].get("bloques") or []
+            primero = bloques[0] if bloques else {}
             resumen = {
-                "tipo": ctx["payload"].get("tipo"),
-                "count": ctx["payload"].get("count"),
-                "origen": ctx["payload"].get("origen"),
-                "filtros": ctx["payload"].get("filtros"),
+                "bloques": len(bloques),
+                "titulo": primero.get("titulo"),
+                "filas": len(primero.get("filas") or []),
             }
             linea(f"  {nombre}", f"ok=True  payload={recorte(resumen, 150)}")
         else:
@@ -468,9 +654,9 @@ async def ejecutar_casos(simulado: bool, compania: str) -> tuple[list[str], int,
         correctos += 1
         linea(linea_caso, f"rechazado: {ascii_seguro(mensaje)[:90]}")
 
-    for nombre in CON_COMPANIA:
+    for nombre, argumentos in CON_COMPANIA:
         ctx = {"context": {}, "payload": {}}
-        resultado = await tools.FUNCTION_MAP[nombre]({}, ctx)
+        resultado = await tools.FUNCTION_MAP[nombre](argumentos, ctx)
         ejecutados += 1
         mensaje = str(resultado.get("mensaje") or "")
         if resultado.get("ok") is not False or "compa" not in mensaje.lower():
@@ -487,17 +673,19 @@ async def ejecutar_casos(simulado: bool, compania: str) -> tuple[list[str], int,
         ctx = {"context": dict(contexto), "payload": {}}
         resultado = await tools.FUNCTION_MAP["verificar_lote"]({"lote": "ERRLOTE"}, ctx)
         ejecutados += 1
-        filas = len(ctx["payload"].get("filas") or [])
+        bloques = ctx["payload"].get("bloques") or []
+        filas = len(bloques[0].get("filas") or []) if bloques else 0
         if (
             resultado.get("ok") is True
             and resultado.get("erroresTruncados") is True
+            and resultado.get("erroresTotales") == 7
             and len(resultado.get("errores") or []) == tools.TOPE_ERRORES_TABLA
-            and filas == 7
+            and filas == tools.TOPE_ERRORES_TABLA
         ):
             correctos += 1
             linea(
                 "  verificar_lote con 7 errores",
-                f"resumen con {tools.TOPE_ERRORES_TABLA} y payload con {filas} filas",
+                f"resumen y payload truncados a {tools.TOPE_ERRORES_TABLA} de 7",
             )
         else:
             fallos.append("verificar_lote con errores: no se trunco el resumen ni el payload")
@@ -526,17 +714,17 @@ async def principal() -> int:
     modo = (
         "SIMULADA (httpx.MockTransport)"
         if opciones.simular
-        else f"REAL contra {config.BACKEND_URL}"
+        else f"REAL contra {config.BACKEND_API_URL}"
     )
     linea("modo de la prueba", modo)
     linea("compania del contexto", compania)
 
     if opciones.simular:
-        backend_client.TRANSPORTE_SIMULADO = transporte_simulado()
+        backend.TRANSPORT = transporte_simulado()
     else:
-        estado = await backend_client.estado_backend()
+        estado = await backend.check_health()
         linea("backend /api/health", recorte(estado, 200))
-        if not estado.get("disponible"):
+        if not estado.get("ok"):
             linea(
                 "aviso",
                 "el backend no respondio: los casos validos fallan con causa informada",
@@ -544,10 +732,12 @@ async def principal() -> int:
 
     print()
     linea("== Coherencia TOOLS / FUNCTION_MAP ==")
-    fallos_coherencia = verificar_coherencia()
+    fallos_coherencia, advertencias_coherencia = verificar_coherencia()
     linea("herramientas en TOOLS", str(len(tools.TOOLS)))
     linea("handlers en FUNCTION_MAP", str(len(tools.FUNCTION_MAP)))
     linea("nombres", ", ".join(sorted(tools.FUNCTION_MAP)))
+    for advertencia in advertencias_coherencia:
+        linea("  AVISO", ascii_seguro(advertencia))
     if fallos_coherencia:
         for fallo in fallos_coherencia:
             linea("  FALLO", ascii_seguro(fallo))

@@ -1,0 +1,17 @@
+{
+  "archivo": "contabdsi_datos_20260921.dump",
+  "creado": "2026-09-21",
+  "base": "contabdsi_datos",
+  "postgres": "18",
+  "bytes": 126962562,
+  "sha256": "a7a3912ee041d92d07f10743f8108885ee99475a2a833e87448c95eaa5716632",
+  "partes": [
+    "contabdsi_datos_20260921.dump.part00",
+    "contabdsi_datos_20260921.dump.part01"
+  ],
+  "conteos": {
+    "documentos": 740689,
+    "documento_lineas": 5043942,
+    "terceros": 125993
+  }
+}
