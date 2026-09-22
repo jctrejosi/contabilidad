@@ -141,9 +141,11 @@ interface DatosInforme {
   filas: Celda[][];
   totales?: Celda[];
   nota?: string;
+  tipos?: Array<string | undefined>;
 }
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MESES_BALANCE = [...MESES, '13 · Enero', '14 · Febrero', '15 · Marzo', '16 · Abril', '17 · Mayo', '18 · Junio'];
 const BALANCE_IDS = new Set(['balance-comp', 'balance-comp-lib']);
 const ACCOUNT_BALANCE_IDS = new Set([
   'balance-mensual', 'inventario-bal', 'mayor-bal', 'saldos-cuenta', 'bal-gral-resultados',
@@ -157,6 +159,7 @@ const THIRD_SUMMARY_IDS = new Set([
   'tercero-acumulacion', 'tercero-cuenta-tercero', 'comp-cta-tercero', 'resumen-tipo-contribuyente',
 ]);
 const THIRD_DIRECTORY_IDS = new Set(['tercero-general', 'tercero-cumpleanos', 'tercero-etiquetas']);
+const NO_PERIOD_REPORT_IDS = new Set(['listado-cuentas', ...THIRD_DIRECTORY_IDS]);
 const PENDING_REPORTS: Record<string, string> = {
   'acum-corriente': 'Falta la clasificación corriente/no corriente de los saldos por tercero.',
   'def-cuentas-flujo': 'Pendiente de incorporar la definición vigente de flujo de caja.',
@@ -170,7 +173,8 @@ function mostrarFiltro(id: string, key: string): boolean {
   const account = ['cuentaDesde', 'cuentaHasta', 'buscar'].includes(key);
   const third = ['cuentaDesde', 'cuentaHasta', 'nit', 'buscar'].includes(key);
   const center = ['cuentaDesde', 'cuentaHasta', 'nit', 'centro', 'buscar'].includes(key);
-  if (id === 'listado-cuentas' || ACCOUNT_BALANCE_IDS.has(id)) return account;
+  if (id === 'listado-cuentas') return ['cuentaDesde', 'cuentaHasta'].includes(key);
+  if (ACCOUNT_BALANCE_IDS.has(id)) return account;
   if (THIRD_DIRECTORY_IDS.has(id)) return ['nit', 'buscar'].includes(key);
   if (THIRD_SUMMARY_IDS.has(id)) return third;
   if (CENTER_REPORT_IDS.has(id)) return center;
@@ -252,6 +256,19 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
       nota: preview.report.nota,
     };
     if (!preview.balance) return { columnas: [], filas: [] };
+    if (preview.balance.version === 2) return {
+      columnas: [
+        { label: 'Código' }, { label: 'NIT' }, { label: 'Cuenta' },
+        { label: 'Saldo anterior', money: true }, { label: 'Débitos', money: true },
+        { label: 'Créditos', money: true }, { label: 'Saldo actual', money: true },
+      ],
+      filas: preview.balance.items.map(item => [
+        item.cuenta, item.nit ?? '', item.nombre,
+        item.saldoAnterior, item.debito, item.credito, item.saldoActual,
+      ]),
+      tipos: preview.balance.items.map(item => item.tipo),
+      nota: `Activo: ${fmtMonto(preview.balance.totales.activo ?? 0)} · Pasivo y patrimonio: ${fmtMonto(preview.balance.totales.pasivoPatrimonio ?? 0)} · Diferencia: ${fmtMonto(preview.balance.totales.diferencia)}.`,
+    };
     return {
       columnas: [
         { label: 'Cuenta' }, { label: 'Nombre' }, { label: 'Saldo anterior', money: true },
@@ -274,9 +291,10 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
   const [aviso, setAviso] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
-  const paginas = Math.max(1, Math.ceil(datos.filas.length / PAGE_SIZE));
-  const inicio = pagina * PAGE_SIZE;
-  const visibles = datos.filas.slice(inicio, inicio + PAGE_SIZE);
+  const pageSize = preview.balance?.version === 2 ? 40 : PAGE_SIZE;
+  const paginas = Math.max(1, Math.ceil(datos.filas.length / pageSize));
+  const inicio = pagina * pageSize;
+  const visibles = datos.filas.slice(inicio, inicio + pageSize);
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
 
@@ -324,8 +342,8 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
     title.textContent = preview.inf.nombre;
     doc.body.appendChild(title);
     const subtitle = doc.createElement('p');
-    subtitle.textContent = THIRD_DIRECTORY_IDS.has(preview.inf.id)
-      ? 'Directorio compartido por todas las compañías'
+    subtitle.textContent = NO_PERIOD_REPORT_IDS.has(preview.inf.id)
+      ? preview.inf.id === 'listado-cuentas' ? `${preview.report?.compania.nombre} · Catálogo de cuentas` : 'Directorio compartido por todas las compañías'
       : `${preview.report?.compania.nombre ?? preview.balance?.compania.nombre} · Año ${preview.anio} · ${preview.mesDesde} a ${preview.mesHasta}`;
     doc.body.appendChild(subtitle);
     const table = doc.createElement('table');
@@ -336,9 +354,21 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
       header.appendChild(cell);
     }
     const body = table.createTBody();
-    for (const row of datos.filas) {
+    for (const [index, row] of datos.filas.entries()) {
       const tr = body.insertRow();
-      for (const value of row) tr.insertCell().textContent = String(value ?? '');
+      const kind = datos.tipos?.[index];
+      if (kind === 'seccion') {
+        const cell = tr.insertCell();
+        cell.colSpan = datos.columnas.length;
+        cell.textContent = String(row[2] ?? '');
+        cell.style.cssText = 'background:#dcebee;font-weight:bold';
+        continue;
+      }
+      if (kind === 'resultado' || kind?.startsWith('total')) tr.style.cssText = 'background:#eaf1f2;font-weight:bold';
+      for (const [column, value] of row.entries()) {
+        tr.insertCell().textContent = datos.columnas[column]?.money && typeof value === 'number'
+          ? fmtMonto(value) : String(value ?? '');
+      }
     }
     if (datos.totales) {
       const tr = table.createTFoot().insertRow();
@@ -362,7 +392,8 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
                 : `${preview.balance?.compania.nombre ?? preview.report?.compania.nombre} — NIT ${preview.balance?.compania.nit ?? preview.report?.compania.nit}`}
             </div>
             <div className="text-xs text-gray-500">
-              {THIRD_DIRECTORY_IDS.has(preview.inf.id) ? 'Datos generales, sin filtro de período'
+              {preview.inf.id === 'listado-cuentas' ? 'Catálogo de cuentas · sin filtro de período'
+                : THIRD_DIRECTORY_IDS.has(preview.inf.id) ? 'Datos generales, sin filtro de período'
                 : preview.balance ? `${preview.balance.periodo} · Nivel ${preview.balance.nombreNivel}`
                   : `Año ${preview.anio} · ${preview.mesDesde} a ${preview.mesHasta}`}
             </div>
@@ -399,10 +430,13 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
             </thead>
             <tbody className="divide-y divide-gray-50">
               {visibles.map((fila, i) => (
-                <tr key={i} className="hoverable">
-                  {fila.map((celda, j) => (
-                    <CeldaValor key={j} valor={celda} money={!!datos.columnas[j]?.money} />
-                  ))}
+                <tr key={i} className={datos.tipos?.[inicio + i] === 'seccion' ? 'bg-petroleum-50' :
+                  datos.tipos?.[inicio + i]?.startsWith('total') || datos.tipos?.[inicio + i] === 'resultado' ? 'bg-gray-100 font-semibold' : 'hoverable'}>
+                  {datos.tipos?.[inicio + i] === 'seccion'
+                    ? <td colSpan={datos.columnas.length} className="px-3 py-2 font-bold text-petroleum-800">{fila[2]}</td>
+                    : fila.map((celda, j) => (
+                      <CeldaValor key={j} valor={celda} money={!!datos.columnas[j]?.money} />
+                    ))}
                 </tr>
               ))}
             </tbody>
@@ -464,7 +498,9 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
   const [recientes, setRecientes] = useState<string[]>(() => leerLista(STORAGE_RECIENTES));
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [params, setParams] = useState({
-    anio: '2026', mesDesde: 'Enero', mesHasta: 'Febrero', nivel: '6', incluirCeros: false,
+    anio: '2026', mesDesde: 'Enero', mesHasta: 'Febrero', nivel: '6',
+    incluirCeros: false, incluirResultados: true, incluirTerceros: false,
+    incluirCentros: false, detalleCuentaDesde: '', detalleCuentaHasta: '',
     cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '', comprobanteHasta: '',
     tipoDocumento: '', tipoDocumentoHasta: '',
     documentoDesde: '', documentoHasta: '', buscar: '',
@@ -531,7 +567,11 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
       return;
     }
     setParams(p => ({
-      ...p, cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '',
+      ...p,
+      mesDesde: !BALANCE_IDS.has(inf.id) && !MESES.includes(p.mesDesde) ? 'Enero' : p.mesDesde,
+      mesHasta: !BALANCE_IDS.has(inf.id) && !MESES.includes(p.mesHasta) ? 'Diciembre' : p.mesHasta,
+      nivel: BALANCE_IDS.has(inf.id) ? '4' : p.nivel,
+      cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '',
       comprobanteHasta: '', tipoDocumento: '', tipoDocumentoHasta: '',
       documentoDesde: '', documentoHasta: '', buscar: '',
     }));
@@ -545,10 +585,15 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
       const filtros: FiltrosBalanceComprobacion = {
         cia,
         anio: Number(params.anio),
-        mesDesde: MESES.indexOf(params.mesDesde) + 1,
-        mesHasta: MESES.indexOf(params.mesHasta) + 1,
+        mesDesde: MESES_BALANCE.indexOf(params.mesDesde) + 1,
+        mesHasta: MESES_BALANCE.indexOf(params.mesHasta) + 1,
         nivel: Number(params.nivel) as 4 | 6 | 9 | 12,
         incluirCeros: params.incluirCeros,
+        incluirResultados: params.incluirResultados,
+        incluirTerceros: params.incluirTerceros,
+        incluirCentros: params.incluirCentros,
+        detalleCuentaDesde: params.detalleCuentaDesde.trim(),
+        detalleCuentaHasta: params.detalleCuentaHasta.trim(),
       };
       setGenerando(true);
       try {
@@ -759,20 +804,20 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
           ) : (
           <form noValidate onSubmit={e => { e.preventDefault(); generar(showParams); }}>
             <div className="px-5 py-4 grid grid-cols-2 gap-4">
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && <div>
+              {!NO_PERIOD_REPORT_IDS.has(showParams.id) && <div>
                 <label htmlFor="param-anio" className="block text-xs font-medium text-gray-600 mb-1">Año</label>
                 <input id="param-anio" data-initial-focus value={params.anio} onChange={e => setParams(p => ({ ...p, anio: e.target.value }))} className={`${INPUT} font-mono`} />
               </div>}
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && <div>
+              {!NO_PERIOD_REPORT_IDS.has(showParams.id) && <div>
                 <label htmlFor="param-mes-desde" className="block text-xs font-medium text-gray-600 mb-1">Mes desde</label>
                 <select id="param-mes-desde" value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
-                  {MESES.map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && <div>
+              {!NO_PERIOD_REPORT_IDS.has(showParams.id) && <div>
                 <label htmlFor="param-mes-hasta" className="block text-xs font-medium text-gray-600 mb-1">Mes hasta</label>
                 <select id="param-mes-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
-                  {MESES.map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
               {BALANCE_IDS.has(showParams.id) && (
@@ -790,6 +835,29 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
                     <input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />
                     Incluir cuentas sin saldo ni movimiento
                   </label>
+                  <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={params.incluirResultados} onChange={e => setParams(p => ({ ...p, incluirResultados: e.target.checked }))} />
+                    Imprimir estado de resultados
+                  </label>
+                  <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />
+                    Incluir terceros
+                  </label>
+                  <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={params.incluirCentros} onChange={e => setParams(p => ({ ...p, incluirCentros: e.target.checked }))} />
+                    Incluir centros de costo
+                  </label>
+                  {(params.incluirTerceros || params.incluirCentros) && <>
+                    <div>
+                      <label htmlFor="detalle-cuenta-desde" className="block text-xs font-medium text-gray-600 mb-1">Detalle de cuenta desde (opcional)</label>
+                      <input id="detalle-cuenta-desde" value={params.detalleCuentaDesde} onChange={e => setParams(p => ({ ...p, detalleCuentaDesde: e.target.value }))} className={INPUT} />
+                    </div>
+                    <div>
+                      <label htmlFor="detalle-cuenta-hasta" className="block text-xs font-medium text-gray-600 mb-1">Detalle de cuenta hasta (opcional)</label>
+                      <input id="detalle-cuenta-hasta" value={params.detalleCuentaHasta} onChange={e => setParams(p => ({ ...p, detalleCuentaHasta: e.target.value }))} className={INPUT} />
+                    </div>
+                    <p className="col-span-2 text-xs text-gray-500">Si hay más de 10.000 renglones de detalle, acote el rango de cuentas.</p>
+                  </>}
                 </>
               )}
               {!BALANCE_IDS.has(showParams.id) && (
@@ -804,7 +872,7 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
                   ] as const).filter(([key]) => mostrarFiltro(showParams.id, key)).map(([key, label], index) => (
                     <div key={key}>
                       <label htmlFor={`param-${key}`} className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-                      <input id={`param-${key}`} data-initial-focus={THIRD_DIRECTORY_IDS.has(showParams.id) && index === 0 ? '' : undefined} value={params[key]} onChange={e => setParams(p => ({ ...p, [key]: e.target.value }))} className={INPUT} />
+                      <input id={`param-${key}`} data-initial-focus={NO_PERIOD_REPORT_IDS.has(showParams.id) && index === 0 ? '' : undefined} value={params[key]} onChange={e => setParams(p => ({ ...p, [key]: e.target.value }))} className={INPUT} />
                     </div>
                   ))}
                   {ACCOUNT_BALANCE_IDS.has(showParams.id) && (

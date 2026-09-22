@@ -724,8 +724,13 @@ def build_trial_balance(
     month_from: int,
     month_to: int,
     *,
-    level: int = 6,
+    level: int = 4,
     include_zero: bool = False,
+    include_results: bool = True,
+    include_third: bool = False,
+    include_centers: bool = False,
+    detail_from: str = "",
+    detail_to: str = "",
 ) -> dict[str, Any]:
     """Balance acumulado, con el contrato de ``INFOR02(1)`` (etapa C5).
 
@@ -745,6 +750,9 @@ def build_trial_balance(
     espera. Así el contrato no puede divergir entre motores.
     """
     from .balance_comprobacion_repository import _assemble_report, _validate_parameters
+
+    if include_third or include_centers or detail_from or detail_to:
+        raise ValueError("El detalle por tercero y centro de costo de este balance requiere Advantage.")
 
     _validate_parameters(year, month_from, month_to, level)
 
@@ -805,7 +813,7 @@ def build_trial_balance(
     }
     return _assemble_report(
         int(codigo), empresa, year, month_from, month_to, level, include_zero,
-        list(filas_por_codigo.values()),
+        list(filas_por_codigo.values()), include_results=include_results,
     )
 
 

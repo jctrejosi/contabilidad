@@ -19,11 +19,12 @@ export default function AnualCuenta({ cia }: { cia: string }) {
   const [details, setDetails] = useState<Record<number, DetalleAnualCuentaResponse>>({});
   const [loading, setLoading] = useState(false);
   const [loadingMonth, setLoadingMonth] = useState<number | null>(null);
+  const [showChart, setShowChart] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    setAccount(''); setNitFrom(''); setNitTo(''); setResult(null); setExpanded(null); setDetails({}); setError('');
+    setAccount(''); setNitFrom(''); setNitTo(''); setResult(null); setExpanded(null); setDetails({}); setShowChart(false); setError('');
     Promise.all([consultarPeriodoOperacion(cia), listarCuentas(cia)]).then(([period, items]) => {
       if (!active) return;
       setYear(period.anio); setAccounts(items);
@@ -37,12 +38,12 @@ export default function AnualCuenta({ cia }: { cia: string }) {
       ?? accounts.find(item => item.nombre.trim().toLocaleUpperCase('es-CO') === search);
   }, [accounts, account]);
   const allowsThird = Boolean(selectedAccount?.requiereTercero || selectedAccount?.claseIVA || selectedAccount?.claseRetencion);
-  function clearResult() { setResult(null); setExpanded(null); setDetails({}); }
+  function clearResult() { setResult(null); setExpanded(null); setDetails({}); setShowChart(false); }
 
   async function consult() {
     if (!account.trim()) { setError('Seleccione o digite la cuenta que desea consultar.'); return; }
     if (!selectedAccount) { setError('Seleccione una cuenta válida de la lista de resultados.'); return; }
-    setLoading(true); setError(''); setExpanded(null); setDetails({});
+    setLoading(true); setError(''); setExpanded(null); setDetails({}); setShowChart(false);
     try {
       setAccount(selectedAccount.codigo);
       setResult(await consultarMovimientoAnualCuenta({ cia, anio: year, cuenta: selectedAccount.codigo, nitDesde: nitFrom, nitHasta: nitTo }));
@@ -80,7 +81,13 @@ export default function AnualCuenta({ cia }: { cia: string }) {
     </div></div>
     {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     <div className="overflow-hidden rounded border border-gray-200 bg-white">
-      {result && <div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3"><span className="font-mono text-sm font-semibold text-gray-800">{result.cuenta}</span><span className="ml-3 text-sm text-gray-600">{result.nombre}</span></div>}
+      {result && <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-gray-50/60 px-4 py-3">
+        <div className="min-w-0 flex-1"><span className="font-mono text-sm font-semibold text-gray-800">{result.cuenta}</span><span className="ml-3 text-sm text-gray-600">{result.nombre}</span></div>
+        <button type="button" onClick={() => setShowChart(value => !value)} aria-expanded={showChart} aria-controls="grafica-anual-cuenta" className="rounded border border-petroleum-500 bg-white px-3 py-1.5 text-xs font-medium text-petroleum-700 hover:bg-petroleum-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500">
+          {showChart ? 'Ocultar gráfica' : 'Graficar'}
+        </button>
+      </div>}
+      {result && showChart && <AnnualAccountChart result={result} />}
       <div className="overflow-x-auto"><table className="w-full text-xs">
         <thead className="border-b border-gray-200 bg-gray-50"><tr>{['Mes', 'Débito', 'Crédito', 'Saldo del mes', 'Saldo acumulado', ''].map((heading, index) => <th key={`${heading}-${index}`} className={`whitespace-nowrap px-3 py-2.5 font-semibold text-gray-600 ${index > 0 && index < 5 ? 'text-right' : 'text-left'}`}>{heading}</th>)}</tr></thead>
         <tbody className="divide-y divide-gray-50">
@@ -93,6 +100,53 @@ export default function AnualCuenta({ cia }: { cia: string }) {
       </table></div>
     </div>
   </div>;
+}
+
+const shortAmount = new Intl.NumberFormat('es-CO', { notation: 'compact', maximumFractionDigits: 1 });
+
+function AnnualAccountChart({ result }: { result: MovimientoAnualCuentaResponse }) {
+  const months = result.meses;
+  const balances = months.map(item => item.saldoAcumulado);
+  const minBalance = Math.min(0, ...balances);
+  const maxBalance = Math.max(0, ...balances);
+  const balanceSpan = maxBalance - minBalance || 1;
+  const x = (index: number) => 65 + index * (835 / 11);
+  const y = (value: number) => 210 - ((value - minBalance) / balanceSpan) * 170;
+  const line = balances.map((value, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(value)}`).join(' ');
+  const maxMovement = Math.max(1, ...months.map(item => Math.max(item.debito, item.credito)));
+
+  return <section id="grafica-anual-cuenta" aria-label={`Gráficas del movimiento anual de ${result.cuenta}`} className="border-b border-gray-200 bg-white px-4 py-4">
+    <div className="mb-3 text-xs text-gray-600">Comportamiento de {result.cuenta} durante {result.anio}{result.nitDesde || result.nitHasta ? ` · NIT ${result.nitDesde || 'inicio'} a ${result.nitHasta || 'fin'}` : ''}. Los valores exactos permanecen en la tabla.</div>
+    <div className="grid gap-4">
+      <div className="min-w-0 rounded border border-gray-200 p-3">
+        <h3 className="mb-2 text-xs font-semibold text-gray-700">Saldo acumulado por mes</h3>
+        <div className="overflow-x-auto"><svg viewBox="0 0 960 250" className="min-w-[640px] w-full" role="img" aria-label="Evolución mensual del saldo acumulado">
+          {[0, 0.25, 0.5, 0.75, 1].map(fraction => {
+            const value = minBalance + balanceSpan * fraction;
+            return <g key={fraction}><line x1="55" x2="920" y1={y(value)} y2={y(value)} stroke="#e5e7eb" strokeWidth="1" /><text x="50" y={y(value) + 4} textAnchor="end" fill="#6b7280" fontSize="11">{shortAmount.format(value)}</text></g>;
+          })}
+          <path d={line} fill="none" stroke="#0073C0" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+          {months.map((month, index) => <g key={month.mes}><circle cx={x(index)} cy={y(month.saldoAcumulado)} r="5" fill="#0073C0"><title>{`${MONTHS[month.mes - 1]}: ${money(month.saldoAcumulado)}`}</title></circle><text x={x(index)} y="239" textAnchor="middle" fill="#4b5563" fontSize="11">{MONTHS[month.mes - 1].slice(0, 3)}</text></g>)}
+        </svg></div>
+      </div>
+      <div className="min-w-0 rounded border border-gray-200 p-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h3 className="text-xs font-semibold text-gray-700">Débitos y créditos por mes</h3><div className="flex gap-3 text-xs text-gray-600"><span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-petroleum-500" />Débitos</span><span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-[#00B0F2]" />Créditos</span></div></div>
+        <div className="overflow-x-auto"><svg viewBox="0 0 960 250" className="min-w-[640px] w-full" role="img" aria-label="Comparación mensual de débitos y créditos">
+          {[0, 0.25, 0.5, 0.75, 1].map(fraction => <g key={fraction}><line x1="55" x2="920" y1={210 - fraction * 170} y2={210 - fraction * 170} stroke="#e5e7eb" strokeWidth="1" /><text x="50" y={214 - fraction * 170} textAnchor="end" fill="#6b7280" fontSize="11">{shortAmount.format(maxMovement * fraction)}</text></g>)}
+          {months.map((month, index) => {
+            const center = x(index);
+            const debitHeight = month.debito / maxMovement * 170;
+            const creditHeight = month.credito / maxMovement * 170;
+            return <g key={month.mes}>
+              <rect x={center - 22} y={210 - debitHeight} width="19" height={debitHeight} rx="2" fill="#0073C0"><title>{`${MONTHS[month.mes - 1]} · Débitos: ${money(month.debito)}`}</title></rect>
+              <rect x={center + 3} y={210 - creditHeight} width="19" height={creditHeight} rx="2" fill="#00B0F2"><title>{`${MONTHS[month.mes - 1]} · Créditos: ${money(month.credito)}`}</title></rect>
+              <text x={center} y="239" textAnchor="middle" fill="#4b5563" fontSize="11">{MONTHS[month.mes - 1].slice(0, 3)}</text>
+            </g>;
+          })}
+        </svg></div>
+      </div>
+    </div>
+  </section>;
 }
 
 function MonthRow({ month, expanded, loading, detail, account, onToggle, onMore }: { month: MesMovimientoAnual; expanded: boolean; loading: boolean; detail?: DetalleAnualCuentaResponse; account: string; onToggle: () => void; onMore: () => void }) {

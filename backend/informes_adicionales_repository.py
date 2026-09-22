@@ -459,7 +459,8 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         sheet = workbook.active
         sheet.title = "Informe"
         sheet.append([report["compania"]["nombre"]])
-        period_label = ("Directorio general de terceros" if report.get("source") == "FADCLI" else
+        period_label = ("Catálogo de cuentas" if report["id"] == "listado-cuentas" else
+                        "Directorio general de terceros" if report.get("source") == "FADCLI" else
                         f"Año {report['anio']} · meses {report['mesDesde']:02d}–{report['mesHasta']:02d}")
         sheet.append([period_label])
         sheet.append(labels)
@@ -541,7 +542,8 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         ]))
         styles = getSampleStyleSheet()
         heading = Paragraph(escape(report["compania"]["nombre"]), styles["Heading1"])
-        detail = ("Directorio general de terceros" if report.get("source") == "FADCLI" else
+        detail = ("Catálogo de cuentas" if report["id"] == "listado-cuentas" else
+                  "Directorio general de terceros" if report.get("source") == "FADCLI" else
                   f"Año {report['anio']} · Meses {report['mesDesde']:02d}–{report['mesHasta']:02d}")
         subtitle = Paragraph(f"Informe {escape(report['id'])} · {detail}", styles["Normal"])
         document.build([heading, subtitle, Spacer(1, 12), table])

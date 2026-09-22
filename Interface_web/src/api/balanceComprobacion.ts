@@ -5,10 +5,18 @@ export interface FiltrosBalanceComprobacion {
   mesHasta: number;
   nivel: 4 | 6 | 9 | 12;
   incluirCeros: boolean;
+  incluirResultados: boolean;
+  incluirTerceros: boolean;
+  incluirCentros: boolean;
+  detalleCuentaDesde: string;
+  detalleCuentaHasta: string;
 }
 
 export interface CuentaBalanceComprobacion {
+  tipo?: 'seccion' | 'cuenta' | 'resultado' | 'total-clase' | 'total-estado' | 'total-balance' | 'tercero' | 'centro';
+  seccion?: string;
   cuenta: string;
+  nit?: string;
   nombre: string;
   nivel: number;
   saldoAnterior: number;
@@ -26,9 +34,16 @@ export interface BalanceComprobacion {
   nivel: number;
   nombreNivel: string;
   incluirCeros: boolean;
+  incluirResultados: boolean;
+  incluirTerceros?: boolean;
+  incluirCentros?: boolean;
+  version?: number;
   items: CuentaBalanceComprobacion[];
   count: number;
-  totales: { saldoAnterior: number; debito: number; credito: number; diferencia: number; saldoActual: number };
+  totales: {
+    saldoAnterior: number; debito: number; credito: number; diferencia: number; saldoActual: number;
+    activo?: number; pasivoPatrimonio?: number; resultadoEjercicio?: number;
+  };
   source: 'CONMAE';
 }
 
@@ -40,6 +55,11 @@ function query(filtros: FiltrosBalanceComprobacion): URLSearchParams {
     mesHasta: String(filtros.mesHasta),
     nivel: String(filtros.nivel),
     incluirCeros: String(filtros.incluirCeros),
+    incluirResultados: String(filtros.incluirResultados),
+    incluirTerceros: String(filtros.incluirTerceros),
+    incluirCentros: String(filtros.incluirCentros),
+    detalleCuentaDesde: filtros.detalleCuentaDesde,
+    detalleCuentaHasta: filtros.detalleCuentaHasta,
   });
 }
 

@@ -945,15 +945,23 @@ def execute_monthly_reprocess_endpoint(
 def trial_balance(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
     anio: int = Query(ge=1900, le=2100),
-    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
-    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
-    nivel: int = Query(6, ge=4, le=12),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=18),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=18),
+    nivel: int = Query(4, ge=4, le=12),
     incluir_ceros: bool = Query(False, alias="incluirCeros"),
+    incluir_resultados: bool = Query(True, alias="incluirResultados"),
+    incluir_terceros: bool = Query(False, alias="incluirTerceros"),
+    incluir_centros: bool = Query(False, alias="incluirCentros"),
+    detalle_desde: str = Query("", alias="detalleCuentaDesde"),
+    detalle_hasta: str = Query("", alias="detalleCuentaHasta"),
 ) -> dict[str, object]:
     """Lee los acumulados de CONMAE aplicando la lógica del informe Harbour."""
     try:
         return store.build_trial_balance(
             cia, anio, mes_desde, mes_hasta, level=nivel, include_zero=incluir_ceros,
+            include_results=incluir_resultados, include_third=incluir_terceros,
+            include_centers=incluir_centros, detail_from=detalle_desde,
+            detail_to=detalle_hasta,
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -963,16 +971,24 @@ def trial_balance(
 def export_trial_balance(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
     anio: int = Query(ge=1900, le=2100),
-    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
-    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
-    nivel: int = Query(6, ge=4, le=12),
+    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=18),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=18),
+    nivel: int = Query(4, ge=4, le=12),
     incluir_ceros: bool = Query(False, alias="incluirCeros"),
+    incluir_resultados: bool = Query(True, alias="incluirResultados"),
+    incluir_terceros: bool = Query(False, alias="incluirTerceros"),
+    incluir_centros: bool = Query(False, alias="incluirCentros"),
+    detalle_desde: str = Query("", alias="detalleCuentaDesde"),
+    detalle_hasta: str = Query("", alias="detalleCuentaHasta"),
     formato: Literal["xlsx", "pdf"] = Query(),
 ) -> Response:
     """Descarga el mismo resultado presentado en pantalla como XLSX o PDF."""
     try:
         report = store.build_trial_balance(
             cia, anio, mes_desde, mes_hasta, level=nivel, include_zero=incluir_ceros,
+            include_results=incluir_resultados, include_third=incluir_terceros,
+            include_centers=incluir_centros, detail_from=detalle_desde,
+            detail_to=detalle_hasta,
         )
         if formato == "xlsx":
             content = export_trial_balance_xlsx(report)

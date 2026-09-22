@@ -192,8 +192,13 @@ def build_trial_balance(
     month_from: int,
     month_to: int,
     *,
-    level: int = 6,
+    level: int = 4,
     include_zero: bool = False,
+    include_results: bool = True,
+    include_third: bool = False,
+    include_centers: bool = False,
+    detail_from: str = "",
+    detail_to: str = "",
 ) -> dict[str, Any]:
     """Balance de comprobación acumulado del motor activo, con el mismo contrato JSON."""
     if is_postgres():
@@ -201,7 +206,9 @@ def build_trial_balance(
     else:
         from .balance_comprobacion_repository import build_trial_balance as implementation
     return implementation(
-        cia, year, month_from, month_to, level=level, include_zero=include_zero
+        cia, year, month_from, month_to, level=level, include_zero=include_zero,
+        include_results=include_results, include_third=include_third,
+        include_centers=include_centers, detail_from=detail_from, detail_to=detail_to,
     )
 
 
