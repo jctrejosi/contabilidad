@@ -660,7 +660,7 @@ def cargar_terceros(carga: Carga) -> None:
         vistos.add(nit)
         if texto(fila["CFCHCREA"]) and not fecha_aaaammdd(fila["CFCHCREA"]):
             fechas_invalidas.append((fila["_loc"], fila))
-        # `docs/TERCEROS_ADS.md`: CESTADO = 1 activo, el resto bloqueado; y
+        # `docs/maestros/TERCEROS_ADS.md`: CESTADO = 1 activo, el resto bloqueado; y
         # CTIPOCLI = 1 natural, 2 jurídica. Cualquier otro valor cae al DEFAULT del
         # destino ('Juridica'), que es también lo que hace la interfaz al crear.
         tipo = {"1": "Natural", "2": "Juridica"}.get((texto(fila["CTIPOCLI"]) or "")[:1], "Juridica")

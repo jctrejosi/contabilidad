@@ -9,6 +9,9 @@ function calling**: hoy no hay herramientas registradas, así que el asistente
 responde en modo conversación; al agregar funciones en `app/tools.py` el loop de
 `app/deepseek.py` las ejecuta automáticamente sin tocar el resto.
 
+El plan del asistente (fases, fuentes de conocimiento e inventario del
+aplicativo) está en [`docs/catalogo/PLAN_ASISTENTE.md`](../docs/catalogo/PLAN_ASISTENTE.md).
+
 ## Arquitectura
 
 ```

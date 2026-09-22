@@ -20,7 +20,7 @@ moverse al esquema PostgreSQL definido en `db`.
 La pantalla **Configuración → Plan de cuentas** ya consulta la tabla real
 `CONMAE` y permite crear o modificar cuentas maestras. Su diseño, mapeo de
 campos, reglas contables y flujo técnico están documentados en
-[`docs/PLAN_CUENTAS_ADS.md`](docs/PLAN_CUENTAS_ADS.md).
+[`docs/maestros/PLAN_CUENTAS_ADS.md`](docs/maestros/PLAN_CUENTAS_ADS.md).
 
 Al abrir la aplicación se debe seleccionar una compañía real de `CONEMP`. Ese
 código queda como contexto de sesión y el Plan de cuentas consulta y escribe
@@ -29,11 +29,11 @@ código queda como contexto de sesión y el Plan de cuentas consulta y escribe
 La opción **Configuración → Terceros** consulta el maestro global `FADCLI` con
 búsqueda y paginación en Advantage. Esta tabla es compartida por todas las
 compañías. El alcance y las reglas pendientes de escritura están documentados
-en [`docs/TERCEROS_ADS.md`](docs/TERCEROS_ADS.md).
+en [`docs/maestros/TERCEROS_ADS.md`](docs/maestros/TERCEROS_ADS.md).
 
 La opción **Movimientos → Importaciones** lee archivos XLSX, CSV, TXT o ADT y crea
 un lote Borrador que debe verificarse antes de actualizarse. Su flujo y reglas
-están documentados en [`docs/IMPORTACIONES_ADS.md`](docs/IMPORTACIONES_ADS.md).
+están documentados en [`docs/movimientos/IMPORTACIONES_ADS.md`](docs/movimientos/IMPORTACIONES_ADS.md).
 
 ## Ejecución local
 

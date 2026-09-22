@@ -8558,7 +8558,7 @@
           "decimales": 0,
           "clase": "directo",
           "destino": "tipos_documento.modulo",
-          "transformacion": "Módulo de origen (Cartera 1, Inventarios 2, CxP 3, Contabilidad 9). Citado en `docs/TIPOS_DOCUMENTO_ADS.md`.",
+          "transformacion": "Módulo de origen (Cartera 1, Inventarios 2, CxP 3, Contabilidad 9). Citado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`.",
           "en_inventario": true
         },
         {
@@ -8657,7 +8657,7 @@
           "decimales": 0,
           "clase": "directo",
           "destino": "tipos_documento.conversion_codigo",
-          "transformacion": "Tipo documental al que convierte. Documentado en `docs/TIPOS_DOCUMENTO_ADS.md`.",
+          "transformacion": "Tipo documental al que convierte. Documentado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`.",
           "en_inventario": true
         },
         {
@@ -8712,7 +8712,7 @@
           "decimales": 0,
           "clase": "directo",
           "destino": "tipos_documento.genera_contabilizacion",
-          "transformacion": "«Genera contabilización»: citado en `docs/TIPOS_DOCUMENTO_ADS.md`.",
+          "transformacion": "«Genera contabilización»: citado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`.",
           "en_inventario": true
         },
         {
@@ -9350,7 +9350,7 @@
           "decimales": 0,
           "clase": "directo",
           "destino": "tipos_documento.prefijo",
-          "transformacion": "Prefijo documental. Citado en `docs/TIPOS_DOCUMENTO_ADS.md`.",
+          "transformacion": "Prefijo documental. Citado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`.",
           "en_inventario": true
         },
         {

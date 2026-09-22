@@ -492,20 +492,20 @@ REGLAS += [
        "Cuenta crédito del renglón n -> cuentas.id. Misma asimetría 9/8 (D-VISDOCUM-1)."),
     _r("VISDOCUM", "^MODULO$", DIRECTO, "tipos_documento.modulo",
        "Módulo de origen (Cartera 1, Inventarios 2, CxP 3, Contabilidad 9). Citado en "
-       "`docs/TIPOS_DOCUMENTO_ADS.md`."),
+       "`docs/maestros/TIPOS_DOCUMENTO_ADS.md`."),
     _r("VISDOCUM", "^TIPO$", DIRECTO, "tipos_documento.naturaleza",
        "Naturaleza del movimiento según el módulo. Se llama `naturaleza` para no "
        "confundirla con el «tipo de documento» que es la tabla entera."),
     _r("VISDOCUM", "^PREFIJO$", DIRECTO, "tipos_documento.prefijo",
-       "Prefijo documental. Citado en `docs/TIPOS_DOCUMENTO_ADS.md`."),
+       "Prefijo documental. Citado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`."),
     _r("VISDOCUM", "^COMPRO$", DERIVADO, "tipos_documento.comprobante_id",
        "Comprobante contable relacionado → `comprobantes.codigo`. La interfaz lo usa para "
        "ordenar los tipos que coinciden con el comprobante elegido."),
     _r("VISDOCUM", "^ICONTAB$", DIRECTO, "tipos_documento.genera_contabilizacion",
-       "«Genera contabilización»: citado en `docs/TIPOS_DOCUMENTO_ADS.md`."),
+       "«Genera contabilización»: citado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`."),
     _r("VISDOCUM", "^CONVER$", DIRECTO, "tipos_documento.permite_conversion"),
     _r("VISDOCUM", "^DOCCONVER$", DIRECTO, "tipos_documento.conversion_codigo",
-       "Tipo documental al que convierte. Documentado en `docs/TIPOS_DOCUMENTO_ADS.md`."),
+       "Tipo documental al que convierte. Documentado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`."),
     _r("VISDOCUM", "^CLAVE$|^CLAVE2$", PROCEDENCIA, "tipos_documento.legado",
        "**Corrección:** `CLAVE` es `LOGICAL(1)`, o sea una bandera (¿pide clave para usar "
        "el tipo?), no una contraseña. La primera versión la descartó por el nombre."),
