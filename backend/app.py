@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -143,6 +143,36 @@ from .cierres_repository import (
     CierreNotFound,
     CierreValidationError,
     CierresLegacyNotSupported,
+)
+from .administracion_repository import (
+    AdminConflict,
+    AdminLegacyNotSupported,
+    AdminNotFound,
+    AdminValidationError,
+)
+from .mantenimiento_repository import (
+    MaintenanceConflict,
+    MaintenanceLegacyNotSupported,
+    MaintenanceNotFound,
+    MaintenanceValidationError,
+)
+from .especiales_repository import (
+    EspecialesConflict,
+    EspecialesLegacyNotSupported,
+    EspecialesNotFound,
+    EspecialesValidationError,
+)
+from .reembolsos_repository import (
+    RefundConflict,
+    RefundLegacyNotSupported,
+    RefundNotFound,
+    RefundValidationError,
+)
+from .reasignacion_repository import (
+    ReassignmentConflict,
+    ReassignmentLegacyNotSupported,
+    ReassignmentNotFound,
+    ReassignmentValidationError,
 )
 
 
@@ -1030,6 +1060,11 @@ def _service_error(exc: Exception) -> HTTPException:
             CashFlowConflict,
             NiifConflict,
             CierreConflict,
+            AdminConflict,
+            MaintenanceConflict,
+            EspecialesConflict,
+            RefundConflict,
+            ReassignmentConflict,
         ),
     ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -1060,6 +1095,11 @@ def _service_error(exc: Exception) -> HTTPException:
             MediumNotFound,
             ConsolidacionNotFound,
             CierreNotFound,
+            AdminNotFound,
+            MaintenanceNotFound,
+            EspecialesNotFound,
+            RefundNotFound,
+            ReassignmentNotFound,
         ),
     ):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
@@ -1089,6 +1129,11 @@ def _service_error(exc: Exception) -> HTTPException:
             CashFlowValidationError,
             NiifValidationError,
             CierreValidationError,
+            AdminValidationError,
+            MaintenanceValidationError,
+            EspecialesValidationError,
+            RefundValidationError,
+            ReassignmentValidationError,
         ),
     ):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
@@ -1096,7 +1141,10 @@ def _service_error(exc: Exception) -> HTTPException:
         exc,
         (CompanyWriteNotImplemented, TaxLegacyNotSupported,
          ConsolidacionLegacyNotSupported, ConsolidacionPendiente,
-         CashFlowLegacyNotSupported, NiifLegacyNotSupported, CierresLegacyNotSupported),
+         CashFlowLegacyNotSupported, NiifLegacyNotSupported, CierresLegacyNotSupported,
+         AdminLegacyNotSupported, MaintenanceLegacyNotSupported,
+         EspecialesLegacyNotSupported, RefundLegacyNotSupported,
+         ReassignmentLegacyNotSupported),
     ):
         # R5/R10: rama no implementada declarada, con su causa y no con el mensaje
         # genérico de motor no disponible.
@@ -3143,6 +3191,539 @@ def cierre_traslado(
     try:
         return store.transfer_cierre(
             cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# ===========================================================================
+# Bloques D5, D6 y D7 · Administración: usuarios y permisos, bitácora e
+# integraciones. Rutas minúsculas (R9); la brecha de ADS se declara (R10).
+# ===========================================================================
+class UserWrite(BaseModel):
+    """Alta de usuario (D5 §1.2). Sin clave: el modelo no guarda contraseña."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=60)
+    email: str = Field(min_length=1, max_length=60)
+    rol: str = Field(min_length=1, max_length=20)
+    iniciales: str = Field("", max_length=4)
+    activo: bool = True
+    companias: list[str] = Field(min_length=1, max_length=50)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class UserUpdate(BaseModel):
+    """Modificación de usuario sin compañías, que tienen su propia ruta (D5 §1.3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nombre: str = Field(min_length=1, max_length=60)
+    email: str = Field(min_length=1, max_length=60)
+    rol: str = Field(min_length=1, max_length=20)
+    iniciales: str = Field("", max_length=4)
+    activo: bool = True
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class RolePermissionList(BaseModel):
+    """Reemplazo completo de los permisos de un rol (D5 §1.6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    permisos: list[str] = Field(max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class UserCompanyList(BaseModel):
+    """Compañías a las que accede el usuario (D5 §1.7)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    companias: list[str] = Field(min_length=1, max_length=50)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class IntegrationWrite(BaseModel):
+    """Estado y configuración declarada de una integración (D7 §3.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    estado: Literal["Conectado", "Desconectado", "Bloqueado"]
+    configuracion: dict[str, Any] = Field(default_factory=dict)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+@app.get("/api/usuarios", summary="Listar usuarios con rol y compañías")
+def usuarios_listar(
+    q: str = Query("", max_length=60),
+    estado: Literal["todos", "activo", "inactivo"] = Query("todos"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """Usuarios con su rol, estado y compañías (1.1)."""
+    try:
+        return store.list_users(q=q, estado=estado, page=page, page_size=page_size)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/usuarios", status_code=status.HTTP_201_CREATED, summary="Crear usuario")
+def usuario_crear(payload: UserWrite) -> dict[str, object]:
+    """Alta de usuario con rol existente y al menos una compañía (1.2)."""
+    try:
+        return store.create_user(payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/usuarios/{id}", summary="Modificar usuario")
+def usuario_actualizar(payload: UserUpdate, id: int = Path(ge=1)) -> dict[str, object]:
+    """Modifica nombre, correo, rol, iniciales o estado (1.3)."""
+    try:
+        return store.update_user(id, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete(
+    "/api/usuarios/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Dar de baja al usuario",
+)
+def usuario_baja(
+    id: int = Path(ge=1),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+) -> None:
+    """Baja lógica: la bitácora del usuario no se toca (1.4)."""
+    try:
+        store.delete_user(id, user=usuario, motivo=motivo)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/roles", summary="Listar roles y el catálogo de permisos")
+def roles_listar() -> dict[str, object]:
+    """Roles con sus permisos más el catálogo completo (1.5)."""
+    try:
+        return store.list_roles()
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/roles/{codigo}/permisos", summary="Reemplazar los permisos de un rol")
+def rol_permisos(
+    payload: RolePermissionList,
+    codigo: str = Path(min_length=1, max_length=20),
+) -> dict[str, object]:
+    """Reemplazo en bloque de los permisos del rol (1.6)."""
+    try:
+        return store.replace_role_permissions(codigo, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/usuarios/{id}/companias", summary="Fijar las compañías del usuario")
+def usuario_companias(payload: UserCompanyList, id: int = Path(ge=1)) -> dict[str, object]:
+    """Aislamiento por empresa: reemplazo en bloque de `usuario_companias` (1.7)."""
+    try:
+        return store.replace_user_companies(id, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+_AUDIT_RESULT = Literal["todos", "EXITO", "FALLO", "INFO"]
+_AUDIT_FORMAT = Literal["xlsx", "csv"]
+_AUDIT_QUERY = Query("", description="Compañía del registro; admite nulo (auditoría global).", pattern=r"^[0-9]{1,3}$")
+
+
+@app.get("/api/auditoria", summary="Consultar la bitácora")
+def auditoria_listar(
+    cia: str = _AUDIT_QUERY,
+    fecha_desde: str = Query("", alias="fechaDesde", max_length=10),
+    fecha_hasta: str = Query("", alias="fechaHasta", max_length=10),
+    modulo: str = Query("", max_length=40),
+    usuario: str = Query("", max_length=60),
+    resultado: _AUDIT_RESULT = Query("todos"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """Publica la bitácora real que el sistema ya escribe (2.1)."""
+    try:
+        return store.list_audit_log(
+            cia=cia, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, modulo=modulo,
+            usuario=usuario, resultado=resultado, page=page, page_size=page_size,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/auditoria/exportar", summary="Exportar la bitácora filtrada")
+def auditoria_exportar(
+    cia: str = _AUDIT_QUERY,
+    fecha_desde: str = Query("", alias="fechaDesde", max_length=10),
+    fecha_hasta: str = Query("", alias="fechaHasta", max_length=10),
+    modulo: str = Query("", max_length=40),
+    usuario: str = Query("", max_length=60),
+    resultado: _AUDIT_RESULT = Query("todos"),
+    formato: _AUDIT_FORMAT = Query(...),
+):
+    """Descarga el filtro visible; exportar también deja fila en la bitácora (2.2)."""
+    try:
+        resultado_export = store.export_audit_log(
+            cia=cia, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, modulo=modulo,
+            usuario=usuario, resultado=resultado, formato=formato,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(
+        content=resultado_export["content"],
+        media_type=resultado_export["media_type"],
+        headers={"Content-Disposition": f'attachment; filename="{resultado_export["filename"]}"'},
+    )
+
+
+@app.get("/api/integraciones", summary="Estado real de las integraciones")
+def integraciones_listar(cia: str = _CIA_QUERY) -> dict[str, object]:
+    """Filas de integración de la compañía con estado y fecha reales (3.1)."""
+    try:
+        return store.list_integrations(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/integraciones/{modulo}", summary="Declarar el estado de una integración")
+def integracion_actualizar(
+    payload: IntegrationWrite,
+    modulo: str = Path(min_length=1, max_length=40),
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Persiste estado, configuración y motivo; no prueba la conexión (3.2)."""
+    try:
+        return store.replace_integration(
+            cia, modulo, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# ===========================================================================
+# Bloque D4 · Reorganización y mantenimiento (solo PostgreSQL; P36)
+# ===========================================================================
+class MaintenanceStart(BaseModel):
+    """Entrada en modo mantenimiento (D4 §3.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+    respaldoRealizado: bool
+    alcance: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReorganizationWrite(BaseModel):
+    """Compactación o reindexación declarada (D4 §3.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+    tipo: Literal["Reindexar", "Analizar", "Compactar"]
+    alcance: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.get("/api/mantenimiento", summary="Consultar el mantenimiento en curso")
+def mantenimiento_estado(cia: str = _CIA_QUERY) -> dict[str, object]:
+    """Estado del modo mantenimiento y su actor (3.1)."""
+    try:
+        return store.get_maintenance(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post(
+    "/api/mantenimiento",
+    status_code=status.HTTP_201_CREATED,
+    summary="Entrar en modo mantenimiento",
+)
+def mantenimiento_iniciar(
+    payload: MaintenanceStart,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Un solo mantenimiento abierto por compañía; exige respaldo (3.2)."""
+    try:
+        return store.start_maintenance(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete(
+    "/api/mantenimiento",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Volver al estado normal",
+)
+def mantenimiento_cerrar(
+    cia: str = _CIA_QUERY,
+    proceso: int = Query(ge=1),
+    motivo: str = Query(min_length=5, max_length=180),
+    usuario: str = Query("WEB", min_length=1, max_length=4),
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> None:
+    """Cierra el proceso de mantenimiento y deja de bloquear (3.3)."""
+    try:
+        store.stop_maintenance(
+            cia, {"proceso": proceso, "motivo": motivo, "usuario": usuario},
+            user=usuario, dry_run=dry_run,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post(
+    "/api/reorganizaciones",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Ejecutar la reorganización",
+)
+def reorg_ejecutar(
+    payload: ReorganizationWrite,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Exige mantenimiento activo; una sola reorganización en curso (3.4)."""
+    try:
+        return store.start_reorganization(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/reorganizaciones/{id}", summary="Consultar una reorganización")
+def reorg_detalle(id: int = Path(ge=1), cia: str = _CIA_QUERY) -> dict[str, object]:
+    """Resultado y conteos de la ejecución (3.5)."""
+    try:
+        return store.get_reorganization(cia, id)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# ===========================================================================
+# Especiales · cuentas en cero (H6). La eliminación es la operación más
+# destructiva del plan y exige confirmación literal.
+# ===========================================================================
+class ZeroAccountRemoval(BaseModel):
+    """Eliminación de cuentas en cero confirmada (Especiales §4.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    anio: int = Field(ge=1900, le=2100)
+    cuentas: list[AccountCode] = Field(min_length=1, max_length=5000)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=10, max_length=180)
+    confirmacion: str = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def _confirmacion_literal(self) -> "ZeroAccountRemoval":
+        if self.confirmacion != "ELIMINAR":
+            raise ValueError("La confirmación debe ser el texto literal ELIMINAR.")
+        return self
+
+
+@app.get("/api/especiales/cuentas-en-cero", summary="Analizar cuentas en cero")
+def especiales_cuentas_cero(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2100),
+    incluir_no_afectables: bool = Query(False, alias="incluirNoAfectables"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, alias="pageSize", ge=1, le=500),
+) -> dict[str, object]:
+    """Cuentas sin saldo ni movimiento, con `eliminable` y el resumen (4.1)."""
+    try:
+        return store.list_zero_accounts(
+            cia, anio=anio, incluir_no_afectables=incluir_no_afectables,
+            page=page, page_size=page_size,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/especiales/cuentas-en-cero/eliminar", summary="Eliminar cuentas en cero")
+def especiales_cuentas_cero_eliminar(
+    payload: ZeroAccountRemoval,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Revalida cada cuenta en el servidor y registra el motivo en la bitácora (4.2)."""
+    try:
+        return store.delete_zero_accounts(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# ===========================================================================
+# Bloque E1 · Reasignación de NIT (solo PostgreSQL; el legado no tiene rutina)
+# ===========================================================================
+class ThirdPartyReassignment(BaseModel):
+    """Reescritura de las referencias contables de un NIT (E1)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nitNuevo: str = Field(pattern=r"^[0-9]{1,10}$")
+    motivo: str = Field(min_length=5, max_length=180)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    alcance: Literal["todo", "desdeFecha"] = "todo"
+    fecha: date | None = None
+
+    @model_validator(mode="after")
+    def _fecha_si_desde_fecha(self) -> "ThirdPartyReassignment":
+        if self.alcance == "desdeFecha" and self.fecha is None:
+            raise ValueError("El alcance 'desdeFecha' exige la fecha.")
+        return self
+
+
+@app.post("/api/terceros/{nit}/reasignar", summary="Reasignar las referencias de un NIT")
+def tercero_reasignar(
+    payload: ThirdPartyReassignment,
+    nit: str = Path(pattern=r"^[0-9]{1,10}$"),
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Reescribe el libro del NIT origen al destino, con informe de impacto (E1)."""
+    try:
+        return store.reassign_third_party(
+            cia, nit, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# ===========================================================================
+# Bloque E2 · Reembolsos (solo PostgreSQL: CONREMAE/CONREITE sin estructura)
+# ===========================================================================
+class RefundLineWrite(BaseModel):
+    """Partida de un reembolso (E2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    numeroLinea: int = Field(1, ge=1)
+    cuenta: str = Field(pattern=r"^[0-9]{1,12}$")
+    centro: str = Field("", max_length=7)
+    concepto: str = Field("", max_length=50)
+    debito: float = Field(0, ge=0)
+    credito: float = Field(0, ge=0)
+    documentoSoporte: str = Field("", max_length=12)
+
+
+class RefundWrite(BaseModel):
+    """Alta del reembolso con sus líneas (E2 §2.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    numero: str = Field(min_length=1, max_length=12)
+    fecha: date
+    periodo: str = Field(pattern=r"^(0[0-9]|1[0-8])$")
+    tercero: str = Field(min_length=1, max_length=15)
+    cajaMenor: str = Field("", max_length=60)
+    lineas: list[RefundLineWrite] = Field(min_length=2, max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class RefundUpdate(BaseModel):
+    """Modificación del borrador: `RefundWrite` sin `numero` (E2 §2.3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fecha: date
+    periodo: str = Field(pattern=r"^(0[0-9]|1[0-8])$")
+    tercero: str = Field(min_length=1, max_length=15)
+    cajaMenor: str = Field("", max_length=60)
+    lineas: list[RefundLineWrite] = Field(min_length=2, max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field("", max_length=180)
+
+
+class RefundApply(BaseModel):
+    """Confirmación del usuario que aplica el reembolso (E2 §2.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+@app.get("/api/reembolsos", summary="Listar reembolsos con su estado")
+def reembolsos_listar(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2100),
+    estado: Literal["todos", "Borrador", "Aplicado", "Anulado"] = Query("todos"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, alias="pageSize", ge=1, le=200),
+) -> dict[str, object]:
+    """Reembolsos con su total calculado sumando líneas (2.1)."""
+    try:
+        return store.list_reimbursements(
+            cia, anio=anio, estado=estado, page=page, page_size=page_size
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/reembolsos", status_code=status.HTTP_201_CREATED, summary="Crear reembolso")
+def reembolso_crear(
+    payload: RefundWrite,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Nace `Borrador`, exige cuadre y numero unico por compania y ano (2.2)."""
+    try:
+        return store.create_reimbursement(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/reembolsos/{numero}", summary="Modificar el borrador")
+def reembolso_actualizar(
+    payload: RefundUpdate,
+    numero: str = Path(min_length=1, max_length=12),
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Solo en `Borrador`; reemplaza las líneas en bloque (2.3)."""
+    try:
+        return store.update_reimbursement(
+            cia, numero, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/reembolsos/{numero}/aplicar", summary="Aplicar el reembolso")
+def reembolso_aplicar(
+    payload: RefundApply,
+    numero: str = Path(min_length=1, max_length=12),
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Crea el lote real con sus líneas y liga `lote_id`; idempotente (2.4)."""
+    try:
+        return store.apply_reimbursement(
+            cia, numero, payload.model_dump(), user=payload.usuario, dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc

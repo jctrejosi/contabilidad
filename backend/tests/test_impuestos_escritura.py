@@ -111,10 +111,12 @@ def test_d1_registers_the_twenty_planned_routes_with_their_methods() -> None:
     assert len(RUTAS_ESPERADAS) == 20
 
 
-def test_d1_does_not_register_the_especiales_routes() -> None:
-    # §4 pertenece a otro bloque y otro agente: no se adelanta aquí.
+def test_d1_registers_the_especiales_routes_once_implemented() -> None:
+    # §4 (Especiales) se implementó en su propio bloque; aquí solo se verifica
+    # que las rutas quedaron registradas con sus métodos.
     rutas = _routes()
-    assert not any("cuentas-en-cero" in ruta for ruta, _ in rutas)
+    assert ("/api/especiales/cuentas-en-cero", "GET") in rutas
+    assert ("/api/especiales/cuentas-en-cero/eliminar", "POST") in rutas
 
 
 # ---------------------------------------------------------------------------

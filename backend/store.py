@@ -1091,3 +1091,200 @@ def transfer_cierre(
     else:
         from .cierres_repository import transfer_cierre as implementation
     return implementation(cia, cierre_id, payload, user=user, dry_run=dry_run)
+
+
+# ---------------------------------------------------------------------------
+# Bloques D4, D5, D6, D7, Especiales, E1 y E2 — administración, mantenimiento,
+# bitácora, integraciones, cuentas en cero, reasignación de NIT y reembolsos.
+#
+# Cada bloque vive en su propio módulo, que concentra el contrato JSON, la rama
+# Advantage declarada (503 con la causa) y la implementación PostgreSQL; por eso
+# aquí solo se resuelve la operación (R1) y el despacho de motor queda dentro del
+# módulo (R10 declarado).
+# ---------------------------------------------------------------------------
+def list_users(
+    *, q: str = "", estado: str = "todos", page: int = 1, page_size: int = 50
+) -> dict[str, Any]:
+    """Usuarios con rol, estado y compañías (D5 §1.1)."""
+    from .administracion_repository import list_users as implementation
+    return implementation(q=q, estado=estado, page=page, page_size=page_size)
+
+
+def create_user(
+    payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Alta de usuario (D5 §1.2)."""
+    from .administracion_repository import create_user as implementation
+    return implementation(payload, user=user, dry_run=dry_run)
+
+
+def update_user(
+    user_id: int, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Modificación de usuario (D5 §1.3)."""
+    from .administracion_repository import update_user as implementation
+    return implementation(user_id, payload, user=user, dry_run=dry_run)
+
+
+def delete_user(
+    user_id: int, *, user: str = "WEB", motivo: str = "", dry_run: bool = False
+) -> None:
+    """Baja lógica de usuario (D5 §1.4)."""
+    from .administracion_repository import delete_user as implementation
+    return implementation(user_id, user=user, motivo=motivo, dry_run=dry_run)
+
+
+def list_roles() -> dict[str, Any]:
+    """Roles con sus permisos y el catálogo completo (D5 §1.5)."""
+    from .administracion_repository import list_roles as implementation
+    return implementation()
+
+
+def replace_role_permissions(
+    codigo: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reemplazo en bloque de los permisos de un rol (D5 §1.6)."""
+    from .administracion_repository import replace_role_permissions as implementation
+    return implementation(codigo, payload, user=user, dry_run=dry_run)
+
+
+def replace_user_companies(
+    user_id: int, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reemplazo en bloque de las compañías de un usuario (D5 §1.7)."""
+    from .administracion_repository import replace_user_companies as implementation
+    return implementation(user_id, payload, user=user, dry_run=dry_run)
+
+
+def list_audit_log(
+    *, cia: str = "", fecha_desde: str = "", fecha_hasta: str = "", modulo: str = "",
+    usuario: str = "", resultado: str = "todos", page: int = 1, page_size: int = 50,
+) -> dict[str, Any]:
+    """Bitácora real, paginada y filtrada (D6 §2.1)."""
+    from .administracion_repository import list_audit_log as implementation
+    return implementation(
+        cia=cia, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, modulo=modulo,
+        usuario=usuario, resultado=resultado, page=page, page_size=page_size,
+    )
+
+
+def export_audit_log(
+    *, cia: str = "", fecha_desde: str = "", fecha_hasta: str = "", modulo: str = "",
+    usuario: str = "", resultado: str = "todos", formato: str = "xlsx",
+) -> dict[str, Any]:
+    """Exportación de la bitácora filtrada (D6 §2.2)."""
+    from .administracion_repository import export_audit_log as implementation
+    return implementation(
+        cia=cia, fecha_desde=fecha_desde, fecha_hasta=fecha_hasta, modulo=modulo,
+        usuario=usuario, resultado=resultado, formato=formato,
+    )
+
+
+def list_integrations(cia: str) -> dict[str, Any]:
+    """Estado real de las integraciones de la compañía (D7 §3.1)."""
+    from .administracion_repository import list_integrations as implementation
+    return implementation(cia)
+
+
+def replace_integration(
+    cia: str, modulo: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Estado y configuración declarada de una integración (D7 §3.2)."""
+    from .administracion_repository import replace_integration as implementation
+    return implementation(cia, modulo, payload, user=user, dry_run=dry_run)
+
+
+def get_maintenance(cia: str) -> dict[str, Any]:
+    """Mantenimiento en curso y su actor (D4 §3.1)."""
+    from .mantenimiento_repository import get_maintenance as implementation
+    return implementation(cia)
+
+
+def start_maintenance(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Entra en modo mantenimiento (D4 §3.2)."""
+    from .mantenimiento_repository import start_maintenance as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def stop_maintenance(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Vuelve al estado normal (D4 §3.3)."""
+    from .mantenimiento_repository import stop_maintenance as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def start_reorganization(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Ejecuta la compactación o reindexación declarada (D4 §3.4)."""
+    from .mantenimiento_repository import start_reorganization as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def get_reorganization(cia: str, reorg_id: int) -> dict[str, Any]:
+    """Resultado y conteos de una reorganización (D4 §3.5)."""
+    from .mantenimiento_repository import get_reorganization as implementation
+    return implementation(cia, reorg_id)
+
+
+def list_zero_accounts(
+    cia: str, *, anio: int, incluir_no_afectables: bool = False,
+    page: int = 1, page_size: int = 100,
+) -> dict[str, Any]:
+    """Cuentas sin saldo ni movimiento (Especiales §4.1)."""
+    from .especiales_repository import list_zero_accounts as implementation
+    return implementation(
+        cia, anio=anio, incluir_no_afectables=incluir_no_afectables,
+        page=page, page_size=page_size,
+    )
+
+
+def delete_zero_accounts(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Elimina las cuentas en cero confirmadas (Especiales §4.2)."""
+    from .especiales_repository import delete_zero_accounts as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def reassign_third_party(
+    cia: str, nit: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reescribe las referencias contables de un NIT (E1)."""
+    from .reasignacion_repository import reassign_third_party as implementation
+    return implementation(cia, nit, payload, user=user, dry_run=dry_run)
+
+
+def list_reimbursements(
+    cia: str, *, anio: int, estado: str = "todos", page: int = 1, page_size: int = 50
+) -> dict[str, Any]:
+    """Reembolsos de la compañía y su estado (E2 §2.1)."""
+    from .reembolsos_repository import list_reimbursements as implementation
+    return implementation(cia, anio=anio, estado=estado, page=page, page_size=page_size)
+
+
+def create_reimbursement(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Crea el reembolso con sus líneas (E2 §2.2)."""
+    from .reembolsos_repository import create_reimbursement as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def update_reimbursement(
+    cia: str, numero: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Modifica el borrador y reemplaza sus líneas (E2 §2.3)."""
+    from .reembolsos_repository import update_reimbursement as implementation
+    return implementation(cia, numero, payload, user=user, dry_run=dry_run)
+
+
+def apply_reimbursement(
+    cia: str, numero: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Aplica el reembolso creando el lote real (E2 §2.4)."""
+    from .reembolsos_repository import apply_reimbursement as implementation
+    return implementation(cia, numero, payload, user=user, dry_run=dry_run)

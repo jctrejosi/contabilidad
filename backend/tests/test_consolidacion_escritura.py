@@ -83,11 +83,12 @@ def test_d3_registers_the_five_planned_routes_with_their_methods() -> None:
     assert len(RUTAS_ESPERADAS) == 5
 
 
-def test_d3_does_not_register_the_reorganizacion_routes() -> None:
-    # La sección 3 (D4) es otro bloque y otro agente. D2 (cierres) ya está
-    # implementado por su propio bloque, así que solo se comprueba D4.
+def test_d3_registers_the_reorganizacion_routes_once_implemented() -> None:
+    # La sección 3 (D4) la implementó su propio bloque; aquí solo se verifica
+    # que las rutas quedaron registradas con sus métodos.
     rutas = _routes()
-    assert not any("reorganizacion" in ruta for ruta, _ in rutas)
+    assert ("/api/reorganizaciones", "POST") in rutas
+    assert ("/api/reorganizaciones/{id}", "GET") in rutas
 
 
 def test_d3_new_paths_are_lower_case_with_hyphens() -> None:

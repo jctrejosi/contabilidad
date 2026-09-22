@@ -60,6 +60,8 @@ Sin contraparte legada; mientras no existan, la ruta es solo PostgreSQL.
 | ampliar `CONSOLID` (identidad, año, estado, orígenes) y añadir las correspondencias | consolidación (D3) | `16_consolidacion_homologacion.md` | `CONSOLID` es "Parcial" y tiene **4 campos** (`CODIGO, NOMBRE, HIST, VALOR`): sin id, año, estado ni orígenes. Por eso **las 5 rutas de D3 son 503 en ADS** (P27) |
 | reembolsos y su detalle | reembolsos (E2) | — | `CONREMAE`/`CONREITE`: "Sin estructura, estructura física no localizada" (P12, `db/old_db/MATRIZ_TABLAS_Y_BRECHAS.md:58-59`) |
 | `cierres`, `cierre_traslados` | cierres (D2) | — | sin contraparte |
+| `procesos` (mantenimiento y reorganización) | mantenimiento y reorganización (D4) | — | el legado hace índices `ADI` y `COPY STRUC` sobre el diccionario, sin tabla de procesos: **las 5 rutas de D4 son 503 en ADS** (P36, `backend/mantenimiento_repository.py`) |
+| `roles`, `permisos`, `rol_permisos`, `usuarios` (matriz de permisos) | usuarios y permisos (D5) | — | `VISUSU`/`CONOPER` solo aportan `IINICIAL/INOMBRE/IPASSWORD/IVENCE`: sin correo, sin estado, sin rol ni catálogo; la matriz las declara "Parcial" y prohíbe copiar "permisos permisivos ni claves en claro" (P28). Por eso **las 7 rutas de D5 son 503 en ADS** (`backend/administracion_repository.py`) |
 | acceso por compañía del usuario | usuarios y permisos (D5) | — | aporte del modelo (`db/postgresql/schema/08_seguridad.sql:94-101`) |
 | `integraciones` | integraciones (D7) | — | la contraparte del legado guarda configuración, no los registros del módulo (P30) |
 
@@ -70,7 +72,8 @@ No se resuelven con DDL, pero dejan rutas solo PostgreSQL:
 | Falta | Ruta | Nota |
 |---|---|---|
 | una operación `delete_account` sobre `CONMAE` | Especiales (cuentas en cero) | no existe en ningún repositorio de ADS |
-| lectura de `VISAUDI` | D6 bitácora | `backend/auditoria_repository.py` hoy **solo escribe** en `VISAUDI` |
+| lectura de `VISAUDI` | D6 bitácora | `backend/auditoria_repository.py` hoy **solo escribe** en `VISAUDI`; además `VISAUDI` no documenta el resultado `EXITO/FALLO/INFO` ni identificadores de usuario/rol que exige el contrato (§2.1) |
+| una rutina de reasignación de terceros | E1 reasignación de NIT | `FADCLI`/`CONEMP` conservan los campos, pero no hay operación de reasignación (`backend/reasignacion_repository.py`) |
 
 ---
 
@@ -81,6 +84,10 @@ No se resuelven con DDL, pero dejan rutas solo PostgreSQL:
 - Los **§1 y §2** nacen de las diferencias declaradas al implementar los bloques
   **B1, B2, B3 y D1**; su efecto visible es que esas rutas rechazan o degradan en
   Advantage con la causa declarada.
+- El **§3** cierra el inventario del plan: además de A5 y D3, registra las tablas
+  que necesitan **D2** (cierres), **D4** (mantenimiento), **D5** (usuarios y
+  permisos), **D7** (integraciones) y **E2** (reembolsos) para dejar de ser rutas
+  solo PostgreSQL. Ninguna bloquea al modelo nuevo.
 - El diccionario del legado y las brechas por proceso están en
   `db/old_db/DICCIONARIO_DEPURADO_CONTABDSI.md` y
   `db/old_db/MATRIZ_TABLAS_Y_BRECHAS.md`.
