@@ -842,12 +842,14 @@ def create_account(company_code: str, payload: dict[str, Any]) -> dict[str, Any]
             cursor.execute(
                 "INSERT INTO cuentas (compania_id, codigo, nombre, nivel, afectable, "
                 "controla_tercero, controla_centro, ajuste, clase_iva, clase_retencion, "
-                "parent_id, path) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "clasificacion_corriente, parent_id, path) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     compania_id, code, data["nombre"], len(code), data["afectable"],
                     data["requiereTercero"], data["requiereCentro"], data["ajuste"],
                     _CLASE_IVA_FISCAL if data["tipoFiscal"] == "I" else None,
                     _CLASE_RETENCION_FISCAL.get(data["tipoFiscal"]),
+                    data.get("clasificacionCorriente") or None,
                     padre_id, "/" + "/".join([*ancestros, code]),
                 ),
             )
@@ -881,12 +883,16 @@ def update_account(company_code: str, code: str, payload: dict[str, Any]) -> dic
             cursor.execute(
                 "UPDATE cuentas SET nombre = %s, afectable = %s, controla_tercero = %s, "
                 "controla_centro = %s, ajuste = %s, clase_iva = %s, clase_retencion = %s "
-                "WHERE id = %s",
+                + (", clasificacion_corriente = %s " if data.get("clasificacionCorriente") is not None
+                   else " ")
+                + "WHERE id = %s",
                 (
                     data["nombre"], data["afectable"], data["requiereTercero"],
                     data["requiereCentro"], data["ajuste"],
                     _CLASE_IVA_FISCAL if data["tipoFiscal"] == "I" else None,
-                    _CLASE_RETENCION_FISCAL.get(data["tipoFiscal"]), int(fila[0]),
+                    _CLASE_RETENCION_FISCAL.get(data["tipoFiscal"]),
+                    *([data["clasificacionCorriente"]] if data.get("clasificacionCorriente") is not None else []),
+                    int(fila[0]),
                 ),
             )
             contrato = _get_cuenta(cursor, compania_id, code)
@@ -4803,3 +4809,625 @@ def execute_consolidation(
     finally:
         connection.close()
     raise ConsolidacionPendiente(EXECUTION_PENDING_MESSAGE)
+
+
+# ---------------------------------------------------------------------------
+# Bloque A5 · Configuración de informes: flujo de caja y rubros NIIF
+#
+# Solo PostgreSQL: las tablas son nuevas y el legado no tiene contraparte
+# (docs/schemas/15_flujo_caja_niif.md). El reemplazo es **en bloque** dentro de
+# una transacción, nunca baja lógica fila a fila (§0 del detalle de A5).
+# ---------------------------------------------------------------------------
+def replace_flujo_caja_renglones(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reemplaza la definición completa del flujo de caja (§2).
+
+    Cada cuenta debe existir en el plan (422) y una cuenta no puede estar en dos
+    renglones con signos distintos (409, validado en el contrato puro). El conteo
+    ``cuentasSinUso`` avisa cuántas cuentas de tesorería del plan quedaron fuera
+    de la definición; es el aviso que evita un estado de flujo incompleto.
+    """
+    from .flujo_caja_niif_repository import (
+        CashFlowValidationError, cuentas_tesoreria_sin_uso, normalize_cash_flow_definition,
+    )
+
+    data = normalize_cash_flow_definition(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            preparados = [
+                (
+                    renglon["codigo"], renglon["nombre"], renglon["grupo"], renglon["orden"],
+                    _cuenta_de_plan(
+                        cursor, compania_id, renglon["cuenta"], CashFlowValidationError
+                    ),
+                    renglon["signo"],
+                )
+                for renglon in data["renglones"]
+            ]
+            cursor.execute(
+                "SELECT codigo FROM flujo_caja_renglones WHERE compania_id = %s "
+                "AND eliminado_en IS NULL",
+                (compania_id,),
+            )
+            existentes = {_text(fila[0]) for fila in cursor.fetchall()}
+            cursor.execute(
+                "SELECT codigo, afectable FROM cuentas WHERE compania_id = %s "
+                "AND eliminado_en IS NULL",
+                (compania_id,),
+            )
+            plan = [(_text(codigo), bool(afectable)) for codigo, afectable in cursor.fetchall()]
+            usadas = {renglon["cuenta"] for renglon in data["renglones"]}
+            sin_uso = cuentas_tesoreria_sin_uso(plan, usadas)
+            entrantes = {renglon["codigo"] for renglon in data["renglones"]}
+            creados = len(entrantes - existentes)
+            actualizados = len(entrantes & existentes)
+            retirados = len(existentes - entrantes)
+            if not dry_run:
+                cursor.execute(
+                    "DELETE FROM flujo_caja_renglones WHERE compania_id = %s", (compania_id,)
+                )
+                cursor.executemany(
+                    "INSERT INTO flujo_caja_renglones (compania_id, codigo, nombre, grupo, "
+                    "orden, cuenta_id, signo) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    [
+                        (compania_id, codigo, nombre, grupo, orden, cuenta_id, signo)
+                        for codigo, nombre, grupo, orden, cuenta_id, signo in preparados
+                    ],
+                )
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Reemplazo de definición del flujo de caja", "Informes",
+                    str(data["anio"]), data["motivo"],
+                    {
+                        "renglones": len(preparados), "creados": creados,
+                        "actualizados": actualizados, "retirados": retirados,
+                        "cuentasSinUso": sin_uso,
+                    },
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "item": {
+            "anio": data["anio"], "renglones": len(preparados), "creados": creados,
+            "actualizados": actualizados, "retirados": retirados,
+            "cuentasSinUso": sin_uso, "dryRun": dry_run,
+        },
+        "source": "flujo_caja_renglones",
+    }
+
+
+def replace_rubros_niif(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reemplaza los rubros NIIF y sus asignaciones de cuentas (§4).
+
+    Reemplazo en bloque de ``rubros_niif`` y ``rubro_niif_cuentas`` en una sola
+    transacción. Cada cuenta debe existir en el plan (422) y una cuenta no puede
+    estar en dos rubros del mismo informe (409, validado en el contrato puro).
+    ``cuentasSinRubro`` es el aviso de cobertura, con el criterio de §4.
+    """
+    from .flujo_caja_niif_repository import (
+        NiifValidationError, cuentas_sin_rubro, normalize_niif_classification,
+    )
+
+    data = normalize_niif_classification(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo_cia = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo_cia)
+            preparados: list[tuple[dict[str, Any], list[int]]] = []
+            asignadas: set[str] = set()
+            for rubro in data["rubros"]:
+                ids = [
+                    _cuenta_de_plan(cursor, compania_id, cuenta, NiifValidationError)
+                    for cuenta in rubro["cuentas"]
+                ]
+                asignadas.update(rubro["cuentas"])
+                preparados.append((rubro, ids))
+            cursor.execute(
+                "SELECT codigo FROM rubros_niif WHERE compania_id = %s AND eliminado_en IS NULL",
+                (compania_id,),
+            )
+            existentes = {_text(fila[0]) for fila in cursor.fetchall()}
+            cursor.execute(
+                "SELECT codigo, afectable FROM cuentas WHERE compania_id = %s "
+                "AND eliminado_en IS NULL",
+                (compania_id,),
+            )
+            plan = [(_text(codigo), bool(afectable)) for codigo, afectable in cursor.fetchall()]
+            sin_rubro = cuentas_sin_rubro(plan, asignadas)
+            entrantes = {rubro["codigo"] for rubro in data["rubros"]}
+            asignaciones = sum(len(ids) for _rubro, ids in preparados)
+            creados = len(entrantes - existentes)
+            actualizados = len(entrantes & existentes)
+            retirados = len(existentes - entrantes)
+            if not dry_run:
+                cursor.execute(
+                    "DELETE FROM rubro_niif_cuentas WHERE compania_id = %s", (compania_id,)
+                )
+                cursor.execute("DELETE FROM rubros_niif WHERE compania_id = %s", (compania_id,))
+                for rubro, ids in preparados:
+                    cursor.execute(
+                        "INSERT INTO rubros_niif (compania_id, codigo, nombre, informe, tipo, "
+                        "orden) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                        (
+                            compania_id, rubro["codigo"], rubro["nombre"], rubro["informe"],
+                            rubro["tipo"], rubro["orden"],
+                        ),
+                    )
+                    rubro_id = int(cursor.fetchone()[0])
+                    if ids:
+                        cursor.executemany(
+                            "INSERT INTO rubro_niif_cuentas (rubro_id, compania_id, cuenta_id) "
+                            "VALUES (%s, %s, %s)",
+                            [(rubro_id, compania_id, cuenta_id) for cuenta_id in ids],
+                        )
+                _auditar(
+                    cursor, compania_id, _usuario_id(cursor, user),
+                    "Reemplazo de rubros NIIF", "Informes", str(data["anio"]), data["motivo"],
+                    {
+                        "rubros": len(preparados), "asignaciones": asignaciones,
+                        "creados": creados, "actualizados": actualizados,
+                        "retirados": retirados, "cuentasSinRubro": sin_rubro,
+                    },
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "item": {
+            "anio": data["anio"], "rubros": len(preparados),
+            "asignaciones": asignaciones, "creados": creados,
+            "actualizados": actualizados, "retirados": retirados,
+            "cuentasSinRubro": sin_rubro, "dryRun": dry_run,
+        },
+        "source": "rubros_niif",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bloque D2 · Cierres (escritura)
+#
+# **Anidamiento de transacciones.** El lote se crea con ``store.create_lot`` y
+# ``store.save_lot_line``, que abren su **propia** conexión y transacción. Por eso
+# cada operación de cierre se parte en fases: se lee y valida en una conexión, se
+# crea el lote (transacciones del propio lote) y al final se marca el cierre (otra
+# conexión). Si la parte posterior falla, el lote recién creado se retira con
+# ``store.delete_lot`` (o se borran las filas de la matriz de traslado) para no
+# dejar un cierre a medias; la decisión y su consecuencia están en el docstring de
+# cada ruta y en el informe del bloque.
+# ---------------------------------------------------------------------------
+def _fecha_de_periodo(anio: int, periodo: str) -> date:
+    """Fecha representativa del período de un lote de cierre o traslado."""
+    numero = int(periodo)
+    if numero == 0:
+        return date(anio, 1, 1)
+    if 1 <= numero <= 12:
+        return date(anio, numero, 1)
+    return date(anio, 12, 31)  # 13..18: cierre del ejercicio
+
+
+def _bloqueantes(checklist: list[dict[str, Any]]) -> list[str]:
+    """Ids de los items bloqueantes sin cumplir (para la bitácora)."""
+    return [item["id"] for item in checklist if item["bloqueante"] and not item["cumplido"]]
+
+
+def create_cierre(
+    company_code: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Abre el cierre del año con la foto del checklist (§1.2).
+
+    Un año admite un solo cierre abierto: si ya existe uno en ``Pendiente`` (o
+    ``Ejecutado``), responde 409 con su ``id``. Se puede abrir aunque haya items
+    bloqueantes sin cumplir (queda ``Pendiente``); el checklist queda **congelado**
+    en ``cierres.checklist`` como trazabilidad. ``dryRun`` no escribe.
+    """
+    from .cierres_repository import CierreConflict, normalize_close, puede_cerrar
+    from .postgres_repository import _checklist_cierre
+
+    data = normalize_close(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo)
+            anio = data["anio"]
+            cursor.execute(
+                "SELECT id, estado FROM cierres WHERE compania_id = %s AND anio = %s "
+                "AND estado IN ('Pendiente', 'Ejecutado') ORDER BY id DESC LIMIT 1",
+                (compania_id, anio),
+            )
+            existente = cursor.fetchone()
+            if existente is not None:
+                raise CierreConflict(
+                    f"El año {anio} ya tiene un cierre {_text(existente[1])} "
+                    f"(id {int(existente[0])}): un año admite un solo cierre abierto."
+                )
+            checklist = _checklist_cierre(cursor, compania_id, anio)
+            puede = puede_cerrar(checklist)
+            cierre_id = None
+            if not dry_run:
+                usuario_id = _usuario_id(cursor, data["usuario"])
+                cursor.execute(
+                    "INSERT INTO cierres (compania_id, anio, estado, checklist, usuario_id) "
+                    "VALUES (%s, %s, 'Pendiente', %s::jsonb, %s) RETURNING id",
+                    (compania_id, anio, json.dumps(checklist), usuario_id),
+                )
+                cierre_id = int(cursor.fetchone()[0])
+                _auditar(
+                    cursor, compania_id, usuario_id, "Apertura de cierre", "Cierres",
+                    f"Cierre {anio} abierto (id {cierre_id}).", data["motivo"],
+                    {"anio": anio, "bloqueantes": _bloqueantes(checklist)},
+                )
+        _commit(connection, dry_run)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return {
+        "item": {
+            "id": cierre_id, "anio": anio, "estado": "Pendiente", "checklist": checklist,
+            "comprobante": None, "documento": None, "puedeCerrar": puede,
+        },
+        "source": "cierres",
+    }
+
+
+def generate_cierre_lot(
+    company_code: str,
+    cierre_id: int,
+    payload: dict[str, Any],
+    *,
+    user: str = "WEB",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Genera el lote de cierre a partir de los saldos del año (§1.3).
+
+    Rechaza con 409 si ``puedeCerrar`` es falso (checklist incompleto) o si el
+    cierre ya generó su lote (idempotencia). Las partidas se **calculan** de
+    ``saldos_cuenta``: cada cuenta de resultado se cancela contra
+    ``cuentaResultado``, que debe ser una cuenta de resultado afectable de la
+    compañía (422 si no). El lote nace ``Borrador`` y cuadrado; contabilizarlo es
+    el flujo normal de Lotes. **No** cierra el año ni abre el siguiente: es la
+    parte funcional de B13, declarada pendiente.
+
+    **Orden y fallo parcial.** El lote se crea con las rutas de lote existentes
+    (su propia transacción) y sólo después se marca el cierre (``documento``,
+    ``comprobante_id`` y ``cuenta_resultado_id``). Si el marcado falla, se retira
+    el lote recién creado para no dejar un cierre sin lote o un lote huérfano.
+    """
+    from . import store
+    from .cierres_repository import (
+        CLOSING_LOT_PREFIX, CierreConflict, CierreValidationError,
+        calcular_lineas_cierre, normalize_lot_action, puede_cerrar, totales_de_lineas,
+    )
+    from .postgres_repository import (
+        _checklist_cierre, _cierre_de_la_compania, _cuenta_resultado,
+        _masters_de_cierre, _saldos_resultado,
+    )
+
+    data = normalize_lot_action(payload)
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo)
+            cierre = _cierre_de_la_compania(cursor, compania_id, cierre_id)
+            if cierre["estado"] != "Pendiente":
+                raise CierreConflict(
+                    f"El cierre {cierre_id} está en estado {cierre['estado']}: "
+                    "no se puede generar el lote."
+                )
+            if cierre["documento"]:
+                raise CierreConflict(
+                    f"El cierre {cierre_id} ya generó el lote {cierre['documento']}."
+                )
+            anio = cierre["anio"]
+            cuenta = _cuenta_resultado(cursor, compania_id, data["cuenta_resultado"])
+            checklist = _checklist_cierre(cursor, compania_id, anio)
+            if not puede_cerrar(checklist):
+                raise CierreConflict(
+                    "El checklist del cierre tiene items bloqueantes sin cumplir: "
+                    f"{', '.join(_bloqueantes(checklist))}."
+                )
+            lineas = calcular_lineas_cierre(
+                _saldos_resultado(cursor, compania_id, anio), data["cuenta_resultado"]
+            )
+            if not lineas:
+                raise CierreValidationError(
+                    "El año no tiene saldos de cuentas de resultado que cancelar."
+                )
+            totales = totales_de_lineas(lineas)
+            masters = _masters_de_cierre(cursor, compania_id)
+            cuenta_resultado_id = cuenta["id"]
+    finally:
+        connection.close()
+
+    lote = f"{CLOSING_LOT_PREFIX}{str(anio)[2:]}"
+    if dry_run:
+        return {
+            "item": {
+                "cierre": cierre_id, "lote": lote, "lineas": totales["lineas"],
+                "debito": totales["debito"], "credito": totales["credito"],
+                "cuadrado": totales["cuadrado"], "dryRun": True,
+            },
+            "source": "cierres",
+        }
+
+    fecha = _fecha_de_periodo(anio, data["mes"])
+    store.create_lot(
+        company_code,
+        {"lote": lote, "nombre": f"Cierre {anio}", "mes": data["mes"], "usuario": data["usuario"]},
+    )
+    try:
+        for numero, linea in enumerate(lineas, 1):
+            store.save_lot_line(
+                company_code,
+                lote,
+                {
+                    "cuenta": linea["cuenta"], "nit": "", "centro": "",
+                    "comprobante": masters["comprobante"],
+                    "tipoDocumento": masters["tipo_documento"],
+                    "documento": lote, "documentoAfectado": "",
+                    "concepto": f"Cierre {anio} partida {numero}", "fecha": fecha,
+                    "debito": linea["debito"], "credito": linea["credito"], "base": 0,
+                },
+            )
+        connection = _connect()
+        try:
+            with connection.cursor() as cursor:
+                codigo = _compania(cursor, company_code)
+                compania_id = _compania_id(cursor, codigo)
+                usuario_id = _usuario_id(cursor, data["usuario"])
+                cursor.execute(
+                    "UPDATE cierres SET documento = %s, comprobante_id = %s, "
+                    "cuenta_resultado_id = %s WHERE id = %s AND compania_id = %s",
+                    (lote, masters["comprobante_id"], cuenta_resultado_id, cierre_id, compania_id),
+                )
+                _auditar(
+                    cursor, compania_id, usuario_id, "Generación de lote de cierre", "Cierres",
+                    f"Cierre {cierre_id}: lote {lote} con {totales['lineas']} partidas.",
+                    data["motivo"],
+                    {"cierre": cierre_id, "lote": lote, "lineas": totales["lineas"],
+                     "cuadrado": totales["cuadrado"]},
+                )
+            _commit(connection, False)
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+    except Exception:
+        # Compensación única: si una partida o el marcado del cierre fallan, se
+        # retira el lote recién creado para no dejar un cierre a medias.
+        try:
+            store.delete_lot(company_code, lote, force=True)
+        except Exception:  # pragma: no cover - la compensación no oculta el fallo original
+            pass
+        raise
+
+    return {
+        "item": {
+            "cierre": cierre_id, "lote": lote, "lineas": totales["lineas"],
+            "debito": totales["debito"], "credito": totales["credito"],
+            "cuadrado": totales["cuadrado"], "dryRun": False,
+        },
+        "source": "cierres",
+    }
+
+
+def _persistir_traslados(
+    company_code: str, cierre_id: int, traslados: list[dict[str, Any]]
+) -> list[int]:
+    """Persiste la matriz origen/destino y devuelve los ids insertados (§1.4)."""
+    connection = _connect()
+    ids: list[int] = []
+    try:
+        with connection.cursor() as cursor:
+            codigo = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo)
+            for linea in traslados:
+                cursor.execute(
+                    "INSERT INTO cierre_traslados (cierre_id, origen_periodo, destino_periodo, "
+                    "cuenta_id, debito, credito) VALUES (%s, %s, %s, "
+                    "(SELECT id FROM cuentas WHERE compania_id = %s AND codigo = %s), %s, %s) "
+                    "RETURNING id",
+                    (cierre_id, linea["origen"], linea["destino"], compania_id, linea["cuenta"],
+                     linea["debito"], linea["credito"]),
+                )
+                ids.append(int(cursor.fetchone()[0]))
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return ids
+
+
+def _retirar_traslados(ids: list[int]) -> None:
+    """Compensación: retira la matriz recién insertada si los documentos fallan."""
+    if not ids:
+        return
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM cierre_traslados WHERE id = ANY(%s)", (ids,))
+        connection.commit()
+    except Exception:  # pragma: no cover - la compensación no puede ocultar el fallo
+        connection.rollback()
+    finally:
+        connection.close()
+
+
+def _crear_documentos_traslado(
+    company_code: str,
+    anio: int,
+    traslados: list[dict[str, Any]],
+    masters: dict[str, Any],
+    usuario: str,
+) -> None:
+    """Crea un lote en cada período destino con las líneas del traslado (§1.4)."""
+    from . import store
+    from .cierres_repository import TRANSFER_LOT_PREFIX
+
+    por_destino: dict[str, list[dict[str, Any]]] = {}
+    for linea in traslados:
+        por_destino.setdefault(linea["destino"], []).append(linea)
+    for destino, lineas in sorted(por_destino.items()):
+        lote = f"{TRANSFER_LOT_PREFIX}{destino}"
+        fecha = _fecha_de_periodo(anio, destino)
+        store.create_lot(
+            company_code,
+            {"lote": lote, "nombre": f"Traslado {destino} {anio}", "mes": destino, "usuario": usuario},
+        )
+        for linea in lineas:
+            store.save_lot_line(
+                company_code,
+                lote,
+                {
+                    "cuenta": linea["cuenta"], "nit": "", "centro": "",
+                    "comprobante": masters["comprobante"],
+                    "tipoDocumento": masters["tipo_documento"],
+                    "documento": lote, "documentoAfectado": "",
+                    "concepto": f"Traslado {linea['origen']} a {destino}", "fecha": fecha,
+                    "debito": linea["debito"], "credito": linea["credito"], "base": 0,
+                },
+            )
+
+
+def _auditar_traslado(
+    company_code: str, cierre_id: int, traslados: list[dict[str, Any]],
+    totales: dict[str, Any], data: dict[str, Any],
+) -> None:
+    """Registra la fila de bitácora del traslado (R8)."""
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo)
+            usuario_id = _usuario_id(cursor, data["usuario"])
+            _auditar(
+                cursor, compania_id, usuario_id, "Traslado de períodos", "Cierres",
+                f"Cierre {cierre_id}: traslado de {totales['lineas']} líneas por "
+                f"{totales['debito']}.", data["motivo"],
+                {"cierre": cierre_id, "lineas": totales["lineas"],
+                 "origenes": sorted({linea["origen"] for linea in traslados})},
+            )
+        _commit(connection, False)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def transfer_cierre(
+    company_code: str,
+    cierre_id: int,
+    payload: dict[str, Any],
+    *,
+    user: str = "WEB",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Ejecuta el asistente de traslado de períodos (§1.4).
+
+    Exige la confirmación literal ``TRASLADAR`` (422). Persiste la matriz en
+    ``cierre_traslados`` y, al aplicar, crea los documentos del período destino con
+    las mismas rutas del lote de cierre. Un traslado no se aplica dos veces: si el
+    par origen/destino/cuenta ya existe, 409 con el detalle.
+
+    **P-5.** Si el período de origen no está sembrado en ``periodos_contables``
+    (los ``13``..``18`` no existen en toda la copia), responde 422 con esa causa y
+    no inventa el período. Se consulta la tabla, no una lista fija en el código.
+    """
+    from .cierres_repository import CierreConflict, CierreValidationError, normalize_transfer, totales_de_lineas
+    from .postgres_repository import _cierre_de_la_compania, _masters_de_cierre, _periodo_sembrado
+
+    data = normalize_transfer(payload)
+    traslados = data["traslados"]
+    totales = totales_de_lineas(
+        [{"debito": linea["debito"], "credito": linea["credito"]} for linea in traslados]
+    )
+    connection = _connect()
+    try:
+        with connection.cursor() as cursor:
+            codigo = _compania(cursor, company_code)
+            compania_id = _compania_id(cursor, codigo)
+            cierre = _cierre_de_la_compania(cursor, compania_id, cierre_id)
+            if cierre["estado"] != "Pendiente":
+                raise CierreConflict(
+                    f"El cierre {cierre_id} está en estado {cierre['estado']}: "
+                    "no se puede trasladar."
+                )
+            anio = cierre["anio"]
+            for linea in traslados:
+                if not _periodo_sembrado(cursor, compania_id, anio, linea["origen"]):
+                    raise CierreValidationError(
+                        f"El período de origen {linea['origen']} no está sembrado en "
+                        f"periodos_contables para la compañía {codigo} y el año {anio}: el "
+                        "motor activo no lo tiene (decisión P-5 para los períodos 13 a 18). "
+                        "No se inventa el período."
+                    )
+                if not _periodo_sembrado(cursor, compania_id, anio, linea["destino"]):
+                    raise CierreValidationError(
+                        f"El período de destino {linea['destino']} no está sembrado en periodos_contables."
+                    )
+            cursor.execute(
+                "SELECT t.origen_periodo, t.destino_periodo, cu.codigo FROM cierre_traslados t "
+                "LEFT JOIN cuentas cu ON cu.id = t.cuenta_id WHERE t.cierre_id = %s",
+                (cierre_id,),
+            )
+            existentes = {(_text(o), _text(d), _text(c)) for o, d, c in cursor.fetchall()}
+            repetidas = [
+                linea for linea in traslados
+                if (linea["origen"], linea["destino"], linea["cuenta"]) in existentes
+            ]
+            if repetidas:
+                primera = repetidas[0]
+                raise CierreConflict(
+                    "El traslado ya fue aplicado: el par origen "
+                    f"{primera['origen']} → destino {primera['destino']} de la cuenta "
+                    f"{primera['cuenta']} ya está en cierre_traslados."
+                )
+            masters = _masters_de_cierre(cursor, compania_id)
+    finally:
+        connection.close()
+
+    if dry_run:
+        return {
+            "item": {
+                "cierre": cierre_id, "lineas": totales["lineas"], "debito": totales["debito"],
+                "credito": totales["credito"], "aplicado": False, "dryRun": True,
+            },
+            "source": "cierre_traslados",
+        }
+
+    ids = _persistir_traslados(company_code, cierre_id, traslados)
+    try:
+        _crear_documentos_traslado(company_code, anio, traslados, masters, data["usuario"])
+    except Exception:
+        _retirar_traslados(ids)
+        raise
+    _auditar_traslado(company_code, cierre_id, traslados, totales, data)
+
+    return {
+        "item": {
+            "cierre": cierre_id, "lineas": totales["lineas"], "debito": totales["debito"],
+            "credito": totales["credito"], "aplicado": True, "dryRun": False,
+        },
+        "source": "cierre_traslados",
+    }

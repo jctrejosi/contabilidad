@@ -970,3 +970,124 @@ def execute_consolidation(
     else:
         from .consolidacion_repository import execute_consolidation as implementation
     return implementation(cia, consolidacion_id, payload, user=user, dry_run=dry_run)
+
+
+# ---------------------------------------------------------------------------
+# Bloque A5 · Configuración de informes — flujo de caja y rubros NIIF
+#
+# Las cuatro rutas de configuración son solo PostgreSQL: en Advantage declaran la
+# brecha (503) con ``CashFlowLegacyNotSupported``/``NiifLegacyNotSupported``. La
+# ruta de informes conserva su despacho original para los ids que ya funcionan
+# (R2) y solo desvía los cinco ids nuevos según el motor.
+# ---------------------------------------------------------------------------
+def list_flujo_caja_renglones(cia: str, *, anio: int | None = None) -> dict[str, Any]:
+    """Definición de cuentas del flujo de caja (``flujo_caja_renglones``)."""
+    if is_postgres():
+        from .postgres_repository import list_flujo_caja_renglones as implementation
+    else:
+        from .flujo_caja_niif_repository import list_flujo_caja_renglones as implementation
+    return implementation(cia, anio=anio)
+
+
+def replace_flujo_caja_renglones(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reemplaza la definición completa del flujo de caja (solo PostgreSQL)."""
+    if is_postgres():
+        from .postgres_writes import replace_flujo_caja_renglones as implementation
+    else:
+        from .flujo_caja_niif_repository import replace_flujo_caja_renglones as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def list_rubros_niif(
+    cia: str, *, anio: int | None = None, informe: str = "todos"
+) -> dict[str, Any]:
+    """Rubros NIIF y sus cuentas (``rubros_niif``/``rubro_niif_cuentas``)."""
+    if is_postgres():
+        from .postgres_repository import list_rubros_niif as implementation
+    else:
+        from .flujo_caja_niif_repository import list_rubros_niif as implementation
+    return implementation(cia, anio=anio, informe=informe)
+
+
+def replace_rubros_niif(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Reemplaza los rubros NIIF y sus asignaciones (solo PostgreSQL)."""
+    if is_postgres():
+        from .postgres_writes import replace_rubros_niif as implementation
+    else:
+        from .flujo_caja_niif_repository import replace_rubros_niif as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def build_additional_report(
+    report_id: str, cia: str, year: int, month_from: int, month_to: int, **filtros: Any
+) -> dict[str, Any]:
+    """Informe adicional del motor activo (R1).
+
+    Los ids que ya funcionaban siguen yendo al repositorio de Advantage tal como
+    hoy (R2). Solo los cinco ids de A5 tienen rama por motor: en PostgreSQL los
+    generan las tablas nuevas; en Advantage declaran la carencia con 422 (§0).
+    """
+    from .flujo_caja_niif_repository import NUEVOS_INFORME_IDS
+
+    if report_id in NUEVOS_INFORME_IDS and is_postgres():
+        from .postgres_repository import build_additional_report as implementation
+    elif report_id in NUEVOS_INFORME_IDS:
+        from .flujo_caja_niif_repository import build_additional_report as implementation
+    else:
+        from .informes_adicionales_repository import build_additional_report as implementation
+    return implementation(report_id, cia, year, month_from, month_to, **filtros)
+
+
+# ---------------------------------------------------------------------------
+# Bloque D2 · Cierres — mismo contrato JSON en los dos motores (R1, R10)
+#
+# Las cuatro rutas son "requiere tabla nueva en ADS": el legado no tiene el cierre
+# como fila ni las tablas `cierres` y `cierre_traslados`. La rama de Advantage
+# declara la brecha (503) con la causa; solo PostgreSQL las implementa.
+# ---------------------------------------------------------------------------
+def list_cierres(cia: str, anio: int) -> dict[str, Any]:
+    """Estado del cierre del año y checklist calculado (§1.1)."""
+    if is_postgres():
+        from .postgres_repository import list_cierres as implementation
+    else:
+        from .cierres_repository import list_cierres as implementation
+    return implementation(cia, anio)
+
+
+def create_cierre(
+    cia: str, payload: dict[str, Any], *, user: str = "WEB", dry_run: bool = False
+) -> dict[str, Any]:
+    """Abre el cierre del año con la foto del checklist (§1.2)."""
+    if is_postgres():
+        from .postgres_writes import create_cierre as implementation
+    else:
+        from .cierres_repository import create_cierre as implementation
+    return implementation(cia, payload, user=user, dry_run=dry_run)
+
+
+def generate_cierre_lot(
+    cia: str, cierre_id: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Genera el lote de cierre del año (§1.3)."""
+    if is_postgres():
+        from .postgres_writes import generate_cierre_lot as implementation
+    else:
+        from .cierres_repository import generate_cierre_lot as implementation
+    return implementation(cia, cierre_id, payload, user=user, dry_run=dry_run)
+
+
+def transfer_cierre(
+    cia: str, cierre_id: int, payload: dict[str, Any],
+    *, user: str = "WEB", dry_run: bool = False,
+) -> dict[str, Any]:
+    """Ejecuta el asistente de traslado de períodos (§1.4)."""
+    if is_postgres():
+        from .postgres_writes import transfer_cierre as implementation
+    else:
+        from .cierres_repository import transfer_cierre as implementation
+    return implementation(cia, cierre_id, payload, user=user, dry_run=dry_run)

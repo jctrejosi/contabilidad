@@ -430,12 +430,11 @@ def build_additional_report(
             note = "Formato predeterminado del documento." if report_id == "doc-formato" else ""
             return _result(report_id, header, year, month_from, month_to, columns, rows, "MOV01", note=note)
 
-        if report_id in {"def-cuentas-flujo", "flujo-comparativo"}:
-            raise ValueError("El flujo de caja requiere la definición de cuentas del sistema original, que aún no está disponible en esta instalación.")
-        if report_id == "acum-corriente":
-            raise ValueError("Falta la clasificación corriente/no corriente de los auxiliares por tercero para generar este informe.")
-        if report_id in {"esfa-apertura", "nic-saldos"}:
-            raise ValueError("Los informes NIC/NIIF requieren configurar la clasificación contable y los tipos documentales antes de generarse.")
+        # Los cinco informes de A5 (``def-cuentas-flujo``, ``flujo-comparativo``,
+        # ``acum-corriente``, ``esfa-apertura`` y ``nic-saldos``) ya no llegan aquí:
+        # dependen de tablas nuevas que solo existen en PostgreSQL y el despacho de
+        # ``store`` elige la rama por motor antes de esta función
+        # (``backend/flujo_caja_niif_repository.py``).
         if report_id == "generador-personalizado":
             raise ValueError("El generador personalizado está pendiente de implementación.")
         raise ValueError("Este informe requiere una homologación específica y aún no está disponible.")

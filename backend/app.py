@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -103,7 +103,7 @@ from .balance_comprobacion_repository import (
     export_trial_balance_pdf,
     export_trial_balance_xlsx,
 )
-from .informes_adicionales_repository import build_additional_report, export_additional_report
+from .informes_adicionales_repository import export_additional_report
 from .reproceso_mensual_repository import (
     MonthlyReprocessValidationError,
 )
@@ -130,6 +130,20 @@ from .consolidacion_repository import (
     ConsolidacionPendiente,
     ConsolidacionValidationError,
 )
+from .flujo_caja_niif_repository import (
+    CashFlowConflict,
+    CashFlowLegacyNotSupported,
+    CashFlowValidationError,
+    NiifConflict,
+    NiifLegacyNotSupported,
+    NiifValidationError,
+)
+from .cierres_repository import (
+    CierreConflict,
+    CierreNotFound,
+    CierreValidationError,
+    CierresLegacyNotSupported,
+)
 
 
 logger = logging.getLogger("contabdsi.backend")
@@ -150,6 +164,15 @@ class AccountWrite(BaseModel):
     requiereTercero: bool = Field(False, description="Exige tercero al contabilizar (CONMAE.MCTAPAGOS).")
     requiereCentro: bool = Field(False, description="Exige centro de costo (CONMAE.MCOSTOS).")
     ajuste: bool = Field(False, description="Participa en ajustes por inflación (CONMAE.MAJUSTE).")
+    clasificacionCorriente: str | None = Field(
+        None,
+        max_length=30,
+        description=(
+            "Clasificación corriente/no corriente de la cuenta "
+            "(cuentas.clasificacion_corriente, CONMAE.CTCTABASE). Aditivo y opcional: "
+            "omitirlo conserva la clasificación vigente."
+        ),
+    )
     tipoFiscal: Literal["O", "I", "R"] = Field(
         "O",
         description="Clasificación MIVA_RET: O=otra, I=IVA, R=retención.",
@@ -863,6 +886,124 @@ class ConsolidationExecution(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# Bloque A5 · Informes: flujo de caja y rubros NIIF (R6: extra="forbid", límites)
+# ---------------------------------------------------------------------------
+AccountCode = Annotated[str, Field(pattern=r"^[0-9]{1,12}$")]
+NiifType = Literal[
+    "Activo Corriente", "Activo No Corriente", "Pasivo Corriente", "Pasivo No Corriente",
+    "Patrimonio", "Ingreso", "Costo", "Gasto", "Orden",
+]
+
+
+class CashFlowLine(BaseModel):
+    """Un renglón de la definición del flujo de caja (§2).
+
+    ``signo`` usa la convención de ``renglones_renta.signo``: 1 suma y -1 resta
+    al total del grupo. El ``orden`` fija la presentación dentro del grupo.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9]{1,10}$")
+    nombre: str = Field(min_length=1, max_length=60)
+    grupo: Literal["Operacion", "Inversion", "Financiacion"]
+    orden: int = Field(0, ge=0, le=9999)
+    cuenta: AccountCode
+    signo: Literal[-1, 1]
+
+
+class CashFlowDefinition(BaseModel):
+    """Reemplazo completo de la definición del flujo de caja (§2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    anio: int = Field(ge=1900, le=2100)
+    renglones: list[CashFlowLine] = Field(min_length=1, max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class NiifGroup(BaseModel):
+    """Un rubro NIIF con las cuentas del plan asignadas (§4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(pattern=r"^[A-Za-z0-9-]{1,10}$")
+    nombre: str = Field(min_length=1, max_length=60)
+    informe: Literal["ESFA", "ER"]
+    tipo: NiifType
+    orden: int = Field(0, ge=0, le=9999)
+    cuentas: list[AccountCode] = Field(default_factory=list, max_length=5000)
+
+
+class NiifClassification(BaseModel):
+    """Reemplazo completo de los rubros NIIF y sus asignaciones (§4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    anio: int = Field(ge=1900, le=2100)
+    rubros: list[NiifGroup] = Field(min_length=1, max_length=200)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+# ---------------------------------------------------------------------------
+# Bloque D2 · Cierres (R6: extra="forbid", alias camelCase y límites)
+# ---------------------------------------------------------------------------
+class CloseRequest(BaseModel):
+    """Cuerpo de la apertura del cierre (1.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    anio: int = Field(ge=1900, le=2100)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+
+
+class CierreLotActionRequest(BaseModel):
+    """Cuerpo del lote de cierre (1.3): período y cuenta de resultado."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+    mes: str = Field(
+        pattern=r"^(0[0-9]|1[0-8])$",
+        description="Período del asiento de cierre (00..18).",
+    )
+    cuentaResultado: str = Field(
+        pattern=r"^[0-9]{1,12}$",
+        description="Cuenta de resultado que recibe el cierre (07_procesos.sql:42).",
+    )
+
+
+class TransferLine(BaseModel):
+    """Una línea del asistente de traslado de períodos (1.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    origenPeriodo: str = Field(pattern=r"^(0[0-9]|1[0-8])$")
+    destinoPeriodo: str = Field(pattern=r"^(0[0-9]|1[0-8])$")
+    cuenta: str = Field(pattern=r"^[0-9]{1,12}$")
+    debito: float = Field(0, ge=0)
+    credito: float = Field(0, ge=0)
+
+
+class CloseTransferRequest(BaseModel):
+    """Cuerpo del traslado de períodos (1.4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    traslados: list[TransferLine] = Field(min_length=1, max_length=5000)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+    motivo: str = Field(min_length=5, max_length=180)
+    confirmacion: str = Field(
+        min_length=1, max_length=20,
+        description="Debe ser el texto literal TRASLADAR.",
+    )
+
+
 def _service_error(exc: Exception) -> HTTPException:
     """Convierte errores de dominio/ADS en respuestas HTTP estables y seguras."""
     if isinstance(
@@ -884,6 +1025,9 @@ def _service_error(exc: Exception) -> HTTPException:
             TaxFormatConflict,
             AccumulationConflict,
             ConsolidacionConflict,
+            CashFlowConflict,
+            NiifConflict,
+            CierreConflict,
         ),
     ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -913,6 +1057,7 @@ def _service_error(exc: Exception) -> HTTPException:
             TaxFormatNotFound,
             MediumNotFound,
             ConsolidacionNotFound,
+            CierreNotFound,
         ),
     ):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
@@ -939,13 +1084,17 @@ def _service_error(exc: Exception) -> HTTPException:
             MediumValidationError,
             AccumulationValidationError,
             ConsolidacionValidationError,
+            CashFlowValidationError,
+            NiifValidationError,
+            CierreValidationError,
         ),
     ):
         return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if isinstance(
         exc,
         (CompanyWriteNotImplemented, TaxLegacyNotSupported,
-         ConsolidacionLegacyNotSupported, ConsolidacionPendiente),
+         ConsolidacionLegacyNotSupported, ConsolidacionPendiente,
+         CashFlowLegacyNotSupported, NiifLegacyNotSupported, CierresLegacyNotSupported),
     ):
         # R5/R10: rama no implementada declarada, con su causa y no con el mensaje
         # genérico de motor no disponible.
@@ -2270,9 +2419,14 @@ def additional_report_endpoint(
     nivel: int = Query(6, ge=4, le=12),
     incluir_ceros: bool = Query(False, alias="incluirCeros"),
 ) -> dict[str, object]:
-    """Lee Advantage con los parámetros originales; no modifica tablas."""
+    """Lee el motor activo con los parámetros originales; no modifica tablas.
+
+    El despacho por motor y por id vive en ``store`` (R1): los ids que ya
+    funcionaban siguen yendo al repositorio de Advantage (R2) y solo los cinco
+    informes de A5 eligen rama según el motor.
+    """
     try:
-        return build_additional_report(
+        return store.build_additional_report(
             report_id, cia, anio, mes_desde, mes_hasta,
             account_from=cuenta_desde, account_to=cuenta_hasta, nit=nit,
               center=centro, voucher=comprobante, voucher_to=comprobante_hasta,
@@ -2859,6 +3013,133 @@ def consolidacion_ejecutar(
     """
     try:
         return store.execute_consolidation(
+            cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# ===========================================================================
+# Bloque A5 · Configuración de informes: flujo de caja y rubros NIIF
+#
+# Cuatro rutas de configuración solo PostgreSQL; en Advantage declaran la brecha
+# (503). R9: rutas minúsculas con guiones y listas ``{"items", "count", "source"}``.
+# ===========================================================================
+@app.get("/api/flujo-caja-renglones", summary="Consultar la definición del flujo de caja")
+def flujo_caja_renglones(
+    cia: str = _CIA_QUERY,
+    anio: int | None = Query(None, ge=1900, le=2100, description="Ejercicio de la definición."),
+) -> dict[str, object]:
+    """Definición de cuentas del flujo de caja de la compañía (§1)."""
+    try:
+        return store.list_flujo_caja_renglones(cia, anio=anio)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/flujo-caja-renglones", summary="Reemplazar la definición del flujo de caja")
+def reemplazar_flujo_caja_renglones(
+    payload: CashFlowDefinition,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Reemplazo en bloque de la definición completa del flujo (§2)."""
+    try:
+        return store.replace_flujo_caja_renglones(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/rubros-niif", summary="Consultar los rubros NIIF y sus cuentas")
+def rubros_niif(
+    cia: str = _CIA_QUERY,
+    anio: int | None = Query(None, ge=1900, le=2100, description="Ejercicio de la clasificación."),
+    informe: Literal["todos", "ESFA", "ER"] = Query("todos", description="Informe a listar."),
+) -> dict[str, object]:
+    """Rubros NIIF de la compañía, filtrados por informe (§3)."""
+    try:
+        return store.list_rubros_niif(cia, anio=anio, informe=informe)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/rubros-niif", summary="Reemplazar los rubros NIIF y sus asignaciones")
+def reemplazar_rubros_niif(
+    payload: NiifClassification,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Reemplazo en bloque de los rubros NIIF y sus asignaciones (§4)."""
+    try:
+        return store.replace_rubros_niif(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# ===========================================================================
+# Bloque D2 · Cierres (R9: rutas minúsculas; R10: la brecha de ADS se declara)
+# ===========================================================================
+@app.get("/api/cierres", summary="Consultar el estado del cierre del año")
+def cierres(
+    cia: str = _CIA_QUERY,
+    anio: int = Query(ge=1900, le=2100),
+) -> dict[str, object]:
+    """Estado del cierre y checklist **calculado**; sin fila devuelve ``id: null`` (1.1)."""
+    try:
+        return store.list_cierres(cia, anio)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post(
+    "/api/cierres",
+    status_code=status.HTTP_201_CREATED,
+    summary="Abrir el cierre del año",
+)
+def abrir_cierre(
+    payload: CloseRequest,
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Abre el cierre con la foto del checklist; un año admite uno abierto (1.2)."""
+    try:
+        return store.create_cierre(
+            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/cierres/{id}/lote", summary="Generar el lote de cierre")
+def cierre_lote(
+    payload: CierreLotActionRequest,
+    id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Genera el lote de cierre desde los saldos del año, reutilizando Lotes (1.3)."""
+    try:
+        return store.generate_cierre_lot(
+            cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/cierres/{id}/traslado", summary="Trasladar períodos de ajuste")
+def cierre_traslado(
+    payload: CloseTransferRequest,
+    id: int = Path(ge=1),
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun", description="Informa sin escribir."),
+) -> dict[str, object]:
+    """Persiste la matriz en ``cierre_traslados`` y crea los documentos del destino (1.4)."""
+    try:
+        return store.transfer_cierre(
             cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
         )
     except Exception as exc:
