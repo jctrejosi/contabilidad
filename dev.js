@@ -69,6 +69,10 @@ const ADD_CONTAB_DIR = path.join(ROOT, "ADD_CONTAB");
 const ADS_DICTIONARY = path.join(ADD_CONTAB_DIR, "PUBLIDATA.add");
 const LOGS_DIR = path.join(ROOT, "logs");
 const PIDS_FILE = path.join(LOGS_DIR, ".pids.json");
+// Respaldo de los datos migrados: el `.dump` completo se ignora y viajan las partes.
+const BACKUPS_DIR = path.join(ROOT, "db", "backups");
+const BACKUP_PARTS_DIR = path.join(BACKUPS_DIR, "partes");
+const BACKUP_MANIFEST = path.join(BACKUP_PARTS_DIR, "respaldo.json");
 
 const IS_WIN = process.platform === "win32";
 const TASKKILL = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
@@ -92,6 +96,14 @@ const CONFIG = {
 // otra cosa.
 const STORE_ADVANTAGE = "advantage";
 const STORE_POSTGRES = "postgres";
+
+// Contenedor de db/postgresql/docker-compose.yml. Donde existe, los comandos de
+// PostgreSQL se ejecutan dentro de él y no hace falta cliente en el anfitrión
+// (el caso de Windows, donde scripts/up.sh —bash— no corre).
+const DB_CONTAINER = "contabdsi-db";
+// Base de demostración que inicializa el contenedor (`POSTGRES_DB`): lleva el
+// seed, así que la migración nunca se restaura ahí.
+const SEEDED_DB = "contabdsi";
 
 function resolvedDatabaseUrl() {
   const fromEnv = (process.env.DATABASE_URL || "").trim();
@@ -841,6 +853,248 @@ async function ensureDatabase(options) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Datos migrados · restaurar el respaldo en partes
+// ─────────────────────────────────────────────────────────────────────────────
+
+let dbContainerState = null;
+
+/**
+ * ¿Está corriendo el contenedor de PostgreSQL del proyecto? Donde existe, los
+ * comandos de PostgreSQL se ejecutan dentro de él: así Windows no necesita
+ * cliente de PostgreSQL instalado (`scripts/up.sh` es bash y allí no corre).
+ */
+function dbContainerRunning() {
+  if (dbContainerState !== null) return dbContainerState;
+  dbContainerState = false;
+  if (commandExists("docker") && dockerDaemonUp()) {
+    const result = spawnSync("docker", ["inspect", "-f", "{{.State.Running}}", DB_CONTAINER], {
+      stdio: "pipe",
+      windowsHide: true,
+      encoding: "utf8",
+    });
+    dbContainerState = result.status === 0 && (result.stdout || "").trim() === "true";
+  }
+  return dbContainerState;
+}
+
+/** Nombre de la base dentro de una URL de conexión. */
+function databaseNameOf(url) {
+  try {
+    return decodeURIComponent(new URL(url).pathname.replace(/^\//, ""));
+  } catch {
+    return "";
+  }
+}
+
+/** La misma URL apuntando a la base de mantenimiento (`postgres`). */
+function maintenanceUrlOf(url) {
+  return url.replace(/\/[^/?]*(\?|$)/, "/postgres$1");
+}
+
+/**
+ * Consulta de una sola columna. Devuelve `null` cuando falla, que aquí es
+ * información —base o tabla inexistente— y no un error.
+ */
+function psqlScalar(url, database, sql) {
+  const inContainer = dbContainerRunning();
+  const command = inContainer ? "docker" : "psql";
+  const args = inContainer
+    ? ["exec", DB_CONTAINER, "psql", "-U", CONFIG.dbUser, "-d", database, "-t", "-A", "-c", sql]
+    : [url, "-t", "-A", "-c", sql];
+  const result = spawnSync(command, args, { stdio: "pipe", windowsHide: true, encoding: "utf8" });
+  if (result.error || result.status !== 0) return null;
+  return (result.stdout || "").trim();
+}
+
+/**
+ * Crea la base vacía. El esquema no se carga aquí: lo trae el propio respaldo,
+ * y así no choca con `--clean`.
+ */
+function createMigrationDatabase(url, database, fd) {
+  const inContainer = dbContainerRunning();
+  const command = inContainer ? "docker" : "psql";
+  const args = inContainer
+    ? ["exec", DB_CONTAINER, "createdb", "-U", CONFIG.dbUser, database]
+    : [maintenanceUrlOf(url), "-v", "ON_ERROR_STOP=1", "-c", `CREATE DATABASE "${database}"`];
+  const result = spawnSync(command, args, {
+    stdio: ["ignore", fd, fd],
+    windowsHide: true,
+    timeout: 60000,
+  });
+  return result.status === 0;
+}
+
+/**
+ * Respaldo declarado en `db/backups/partes/respaldo.json`: nombre del `.dump`,
+ * partes que lo componen y SHA-256 de la unión. Sin manifiesto no se adivina.
+ */
+function readBackupManifest() {
+  if (!fs.existsSync(BACKUP_MANIFEST)) return null;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(BACKUP_MANIFEST, "utf8"));
+    const rutas = (manifest.partes || []).map(nombre => path.join(BACKUP_PARTS_DIR, nombre));
+    if (!manifest.archivo || !rutas.length) return null;
+    if (rutas.some(ruta => !fs.existsSync(ruta))) return null;
+    return { ...manifest, rutas };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deja un `.dump` utilizable: reutiliza el archivo completo si ya está en
+ * `db/backups/`; si no, une las partes y comprueba el SHA-256 del manifiesto
+ * **antes** de escribir, para no restaurar un archivo a medias.
+ */
+function materializeBackup(manifest) {
+  const target = path.join(BACKUPS_DIR, manifest.archivo);
+  if (fs.existsSync(target) && (!manifest.sha256 || sha256(fs.readFileSync(target)) === manifest.sha256)) {
+    info(`Se reutiliza ${rel(target)}.`);
+    return target;
+  }
+
+  info(`Uniendo ${manifest.rutas.length} partes → ${rel(target)}`);
+  const unido = Buffer.concat(manifest.rutas.map(ruta => fs.readFileSync(ruta)));
+  if (manifest.bytes && unido.length !== manifest.bytes) {
+    warn(`El respaldo unido pesa ${unido.length} bytes y el manifiesto declara ${manifest.bytes}.`);
+    return null;
+  }
+  if (manifest.sha256) {
+    const digest = sha256(unido);
+    if (digest !== manifest.sha256) {
+      warn(`El respaldo unido no reproduce el SHA-256 esperado (${manifest.sha256}).`);
+      return null;
+    }
+    ok(`SHA-256 verificado (${digest.slice(0, 16)}…).`);
+  }
+  fs.writeFileSync(target, unido);
+  return target;
+}
+
+/**
+ * `pg_restore` del respaldo: dentro del contenedor si existe y, si no, con el
+ * cliente del anfitrión. `--clean --if-exists` sirve tanto para una base recién
+ * creada como para una que ya tenga el esquema.
+ */
+function restoreBackup(url, database, dumpPath, fd) {
+  const timeout = 3600000;
+  if (dbContainerRunning()) {
+    const remoto = "/tmp/contabdsi-restore.dump";
+    const copiado = spawnSync("docker", ["cp", dumpPath, `${DB_CONTAINER}:${remoto}`], {
+      stdio: ["ignore", fd, fd],
+      windowsHide: true,
+      timeout: 900000,
+    });
+    if (copiado.status !== 0) return false;
+    const restored = spawnSync(
+      "docker",
+      [
+        "exec", DB_CONTAINER, "pg_restore", "-U", CONFIG.dbUser, "-d", database,
+        "--clean", "--if-exists", "--no-owner", "--no-privileges", remoto,
+      ],
+      { stdio: ["ignore", fd, fd], windowsHide: true, timeout },
+    );
+    spawnSync("docker", ["exec", DB_CONTAINER, "rm", "-f", remoto], {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    return restored.status === 0;
+  }
+
+  const result = spawnSync(
+    "pg_restore",
+    ["-d", url, "--clean", "--if-exists", "--no-owner", "--no-privileges", dumpPath],
+    { stdio: ["ignore", fd, fd], windowsHide: true, timeout },
+  );
+  if (result.error && result.error.code === "ENOENT") {
+    warn("No hay contenedor de PostgreSQL ni cliente `pg_restore` en el PATH.");
+    return false;
+  }
+  return result.status === 0;
+}
+
+/**
+ * Deja los datos migrados en la base que va a usar el backend: la crea si falta
+ * y, cuando está vacía, restaura el respaldo en partes de `db/backups/partes/`.
+ *
+ * Dos reglas que no se saltan:
+ * - La base de demostración (`contabdsi`, con seed) no se toca: mezclar la
+ *   migración con el seed es justo lo que el cargador rechaza.
+ * - Si la base ya tiene documentos, no se restaura nada.
+ */
+async function ensureMigrationData(options) {
+  step("Datos migrados · respaldo en partes");
+
+  if (!options.restore) {
+    info("Restauración omitida (--no-restore).");
+    return false;
+  }
+
+  const url = resolvedDatabaseUrl();
+  const database = databaseNameOf(url);
+  if (!database) {
+    warn("No se pudo deducir el nombre de la base desde DATABASE_URL.");
+    return false;
+  }
+  if (database === SEEDED_DB) {
+    info(`La base «${SEEDED_DB}» es la de demostración (con seed): ahí no se restaura.`);
+    info(`Para los datos migrados apunta DATABASE_URL a otra, p. ej. postgres://${CONFIG.dbUser}:${CONFIG.dbUser}@127.0.0.1:${CONFIG.dbPort}/contabdsi_datos`);
+    return false;
+  }
+
+  const manifest = readBackupManifest();
+  if (!manifest) {
+    info(`No hay respaldo en ${rel(BACKUP_PARTS_DIR)} (falta ${rel(BACKUP_MANIFEST)}).`);
+    info("Puedes copiar las partes y el manifiesto, o migrar desde cero:");
+    info(`   python db/migration/cargador/cargar.py --url "${url}"`);
+    return false;
+  }
+
+  const { fd, logPath } = openLog(SERVICES.db);
+  try {
+    const existe =
+      psqlScalar(maintenanceUrlOf(url), "postgres", `SELECT 1 FROM pg_database WHERE datname = '${database}'`) === "1";
+    if (!existe) {
+      info(`La base «${database}» no existe; se crea vacía.`);
+      if (!createMigrationDatabase(url, database, fd)) {
+        warn(`No se pudo crear «${database}» (detalle en ${rel(logPath)}).`);
+        return false;
+      }
+    }
+
+    const documentos = psqlScalar(url, database, "SELECT count(*) FROM documentos");
+    if (documentos === null) {
+      info(`La base «${database}» existe sin el esquema; lo trae el respaldo.`);
+    } else if (Number(documentos) > 0) {
+      ok(`La base «${database}» ya tiene datos (${documentos} documentos): no se toca.`);
+      return true;
+    } else {
+      info(`La base «${database}» está vacía.`);
+    }
+
+    const dump = materializeBackup(manifest);
+    if (!dump) {
+      warn("No se pudo preparar el respaldo; no se restaura nada.");
+      return false;
+    }
+
+    info(`Restaurando ${rel(dump)} → «${database}» (detalle en ${rel(logPath)}).`);
+    if (!restoreBackup(url, database, dump, fd)) {
+      warn("La restauración falló; revisa el detalle en el log de la base.");
+      warn("Para reintentar desde cero:");
+      warn(`   psql "${maintenanceUrlOf(url)}" -c 'DROP DATABASE "${database}"'`);
+      return false;
+    }
+
+    const restaurados = psqlScalar(url, database, "SELECT count(*) FROM documentos");
+    ok(`Datos migrados listos en «${database}» (${restaurados ?? "?"} documentos).`);
+    return true;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Servicios
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1160,6 +1414,7 @@ function printHelp() {
   log("   node dev.js --db-advantage   arranca el backend contra Advantage (legado; por defecto)");
   log("");
   log("   --no-db                      omite PostgreSQL");
+  log("   --no-restore                 no restaura el respaldo de los datos migrados");
   log("   --require-db                 falla si la base de datos no puede iniciar");
   log("   --require-ads                falla si Advantage (origen) no está disponible");
   log("   --no-install                 no instala dependencias");
@@ -1172,6 +1427,8 @@ function printHelp() {
   log(c.dim("   --db-postgres usa DATABASE_URL (o DB_USER/DB_PORT/DB_NAME); sin ella,"));
   log(c.dim("   postgres://contabdsi@127.0.0.1:5433/contabdsi. Para los datos migrados:"));
   log(c.dim("   DATABASE_URL=postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi_datos"));
+  log(c.dim("   Con --db-postgres, si esa base está vacía se restaura sola el respaldo de"));
+  log(c.dim("   db/backups/partes/ (la base de demostración con seed nunca se toca)."));
   log(c.dim("   Si un puerto está ocupado, se libera antes de arrancar."));
   log(c.dim("   Logs: logs/<servicio>.log (backend, ia-service, web, db)"));
   log("");
@@ -1197,6 +1454,7 @@ function parseArgs(argv) {
     reload: true,
     keepDb: false,
     dockerAutostart: true,
+    restore: true,
   };
 
   for (const argument of argv) {
@@ -1240,6 +1498,9 @@ function parseArgs(argv) {
         break;
       case "--no-docker-autostart":
         parsed.dockerAutostart = false;
+        break;
+      case "--no-restore":
+        parsed.restore = false;
         break;
       default:
         warn(`Opción desconocida: ${argument}`);
@@ -1307,6 +1568,11 @@ async function main() {
       warn("Levanta la base (`docker compose up -d` en db/postgresql) o define DATABASE_URL.");
       if (options.requireDb) throw new Error("PostgreSQL no está disponible (--db-postgres).");
     }
+  }
+
+  // Los datos migrados van antes de levantar el backend, que es su primer lector.
+  if (options.store === STORE_POSTGRES && options.db && dbReachable) {
+    await ensureMigrationData(options);
   }
 
   step("Levantando servicios");

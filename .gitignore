@@ -8,8 +8,11 @@ __pycache__/
 /logs/
 /db/migration/staging/
 
-# Respaldos de la base (datos reales del cliente: nunca se versionan).
-/db/backups/
+# Respaldos de la base (datos reales del cliente): el .dump crudo no se versiona.
+/db/backups/*
+# Excepción deliberada: las partes que viajan por git para montar el entorno en
+# otro PC. Ver db/backups/partes/README.md (unir, verificar sha256, restaurar).
+!/db/backups/partes/
 
 # Base de datos Advantage y binarios del servidor (~2.6 GB)
 /db_new/data/
