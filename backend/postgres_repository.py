@@ -996,8 +996,13 @@ def build_trial_balance(
     month_from: int,
     month_to: int,
     *,
-    level: int = 6,
+    level: int = 4,
     include_zero: bool = False,
+    include_results: bool = True,
+    include_thirds: bool = False,
+    include_centers: bool = False,
+    detail_from: str = "",
+    detail_to: str = "",
 ) -> dict[str, Any]:
     """Balance acumulado, con el contrato de ``INFOR02(1)`` (etapa C5).
 
@@ -1019,6 +1024,8 @@ def build_trial_balance(
     from .balance_comprobacion_repository import _assemble_report, _validate_parameters
 
     _validate_parameters(year, month_from, month_to, level)
+    if include_thirds or include_centers:
+        raise ValueError("El detalle por tercero o centro de costo requiere la conexión Advantage.")
 
     with _connect() as connection, connection.cursor() as cursor:
         codigo = _compania(cursor, company_code)
@@ -1077,7 +1084,8 @@ def build_trial_balance(
     }
     return _assemble_report(
         int(codigo), empresa, year, month_from, month_to, level, include_zero,
-        list(filas_por_codigo.values()),
+        list(filas_por_codigo.values()), include_results=include_results,
+        detail_from=detail_from, detail_to=detail_to,
     )
 
 

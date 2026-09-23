@@ -8,6 +8,7 @@ import {
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const PERIODOS = [...MESES, 'Mes 13', 'Mes 14', 'Mes 15', 'Mes 16', 'Mes 17', 'Mes 18'];
 
 const fmtCOP = (value: number) => new Intl.NumberFormat('es-CO', {
   style: 'currency', currency: 'COP', maximumFractionDigits: 2,
@@ -24,6 +25,11 @@ interface Formulario {
   mesHasta: number;
   nivel: 4 | 6 | 9 | 12;
   incluirCeros: boolean;
+  incluirResultados: boolean;
+  incluirTerceros: boolean;
+  incluirCentros: boolean;
+  detalleCuentaDesde: string;
+  detalleCuentaHasta: string;
 }
 
 export default function BalanceComprobacion({ cia }: Props) {
@@ -46,8 +52,10 @@ export default function BalanceComprobacion({ cia }: Props) {
       .then(periodo => {
         if (!vigente) return;
         const mesHasta = periodo.mesesHabilitados.at(-1) ?? 1;
-        setFormulario({ anio: String(periodo.anio), mesDesde: 1, mesHasta, nivel: 6, incluirCeros: false });
-        setConsulta({ cia, anio: periodo.anio, mesDesde: 1, mesHasta, nivel: 6, incluirCeros: false });
+        const defaults = { mesDesde: 1, mesHasta, nivel: 4 as const, incluirCeros: false,
+          incluirResultados: true, incluirTerceros: false, incluirCentros: false,
+          detalleCuentaDesde: '', detalleCuentaHasta: '' };
+        setFormulario({ anio: String(periodo.anio), ...defaults });
       })
       .catch((cause: unknown) => {
         if (vigente) setError(cause instanceof Error ? cause.message : 'No fue posible consultar el período.');
@@ -90,7 +98,7 @@ export default function BalanceComprobacion({ cia }: Props) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-gray-800">Balance de comprobación</h1>
-          <p className="text-xs text-gray-500">Acumulados reales de CONMAE por cuenta y rango de meses.</p>
+          <p className="text-xs text-gray-500">Estado de resultados y balance acumulado por cuenta y rango de meses.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -149,7 +157,7 @@ export default function BalanceComprobacion({ cia }: Props) {
                 onChange={e => setFormulario({ ...formulario, mesDesde: Number(e.target.value) })}
                 className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
               >
-                {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                {PERIODOS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
             </div>
             <div>
@@ -159,7 +167,7 @@ export default function BalanceComprobacion({ cia }: Props) {
                 onChange={e => setFormulario({ ...formulario, mesHasta: Number(e.target.value) })}
                 className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
               >
-                {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                {PERIODOS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
             </div>
             <div>
@@ -185,6 +193,17 @@ export default function BalanceComprobacion({ cia }: Props) {
               />
               Incluir cuentas sin saldo ni movimiento
             </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mt-3">
+            <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={formulario.incluirResultados} onChange={e => setFormulario({ ...formulario, incluirResultados: e.target.checked })} />Incluir estado de resultados</label>
+            <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={formulario.incluirTerceros} onChange={e => setFormulario({ ...formulario, incluirTerceros: e.target.checked })} />Incluir terceros</label>
+            <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={formulario.incluirCentros} onChange={e => setFormulario({ ...formulario, incluirCentros: e.target.checked })} />Incluir centros de costo</label>
+          </div>
+          {(formulario.incluirTerceros || formulario.incluirCentros) && <div className="flex gap-3 mt-3">
+            <input aria-label="Detalle: cuenta desde" placeholder="Detalle: cuenta desde" value={formulario.detalleCuentaDesde} onChange={e => setFormulario({ ...formulario, detalleCuentaDesde: e.target.value })} className="border rounded px-2 py-1 text-xs" />
+            <input aria-label="Detalle: cuenta hasta" placeholder="Detalle: cuenta hasta" value={formulario.detalleCuentaHasta} onChange={e => setFormulario({ ...formulario, detalleCuentaHasta: e.target.value })} className="border rounded px-2 py-1 text-xs" />
+          </div>}
+          <div className="mt-3">
             <button
               onClick={() => setConsulta({
                 cia,
@@ -193,6 +212,11 @@ export default function BalanceComprobacion({ cia }: Props) {
                 mesHasta: formulario.mesHasta,
                 nivel: formulario.nivel,
                 incluirCeros: formulario.incluirCeros,
+                incluirResultados: formulario.incluirResultados,
+                incluirTerceros: formulario.incluirTerceros,
+                incluirCentros: formulario.incluirCentros,
+                detalleCuentaDesde: formulario.detalleCuentaDesde,
+                detalleCuentaHasta: formulario.detalleCuentaHasta,
               })}
               disabled={cargando}
               className="text-xs px-3 py-1.5 rounded text-white font-medium disabled:cursor-wait disabled:opacity-60"
@@ -223,6 +247,7 @@ export default function BalanceComprobacion({ cia }: Props) {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-3 py-2.5 text-left font-semibold text-gray-600 w-24">Cuenta</th>
+                <th className="px-3 py-2.5 text-left font-semibold text-gray-600 w-24">NIT / Centro</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Nombre</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Saldo anterior</th>
                 <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Débito</th>
@@ -231,14 +256,16 @@ export default function BalanceComprobacion({ cia }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {cargando && <tr><td colSpan={6} className="px-3 py-10 text-center text-xs text-gray-500">Consultando CONMAE…</td></tr>}
-              {!cargando && !error && !balance && <tr><td colSpan={6} className="px-3 py-10 text-center text-xs text-gray-500">Aún no se ha consultado el balance.</td></tr>}
+              {cargando && <tr><td colSpan={7} className="px-3 py-10 text-center text-xs text-gray-500">Consultando…</td></tr>}
+              {!cargando && !error && !balance && <tr><td colSpan={7} className="px-3 py-10 text-center text-xs text-gray-500">Aún no se ha consultado el balance.</td></tr>}
               {!cargando && balance && balance.items.length === 0 && (
-                <tr><td colSpan={6} className="px-3 py-10 text-center text-xs text-gray-500">La compañía no tiene acumulados en el período seleccionado.</td></tr>
+                <tr><td colSpan={7} className="px-3 py-10 text-center text-xs text-gray-500">La compañía no tiene acumulados en el período seleccionado.</td></tr>
               )}
-              {!cargando && balance && balance.items.map(row => (
-                <tr key={row.cuenta} className="hoverable">
+              {!cargando && balance && balance.items.map((row, index) => (
+                <tr key={`${row.tipo}-${row.cuenta}-${row.nit}-${index}`} className={row.tipo === 'seccion' ? 'bg-petroleum-500' : row.tipo.startsWith('total') || row.tipo === 'resultado' ? 'bg-petroleum-50 font-semibold' : 'hoverable'}>
+                  {row.tipo === 'seccion' ? <td colSpan={7} className="px-3 py-2 text-white font-semibold">{row.nombre}</td> : <>
                   <td className="px-3 py-2 font-mono font-medium text-gray-700">{row.cuenta}</td>
+                  <td className="px-3 py-2 font-mono text-gray-600">{row.nit}</td>
                   <td className="px-3 py-2 text-gray-600">{row.nombre}</td>
                   <td className="px-3 py-2 text-right font-mono text-gray-600">{row.saldoAnterior !== 0 ? fmtCOP(row.saldoAnterior) : '—'}</td>
                   <td className="px-3 py-2 text-right font-mono text-gray-800">{row.debito !== 0 ? fmtCOP(row.debito) : '—'}</td>
@@ -246,13 +273,14 @@ export default function BalanceComprobacion({ cia }: Props) {
                   <td className={`px-3 py-2 text-right font-mono font-semibold ${row.saldoActual > 0 ? 'text-green-700' : row.saldoActual < 0 ? 'text-red-700' : 'text-gray-400'}`}>
                     {row.saldoActual !== 0 ? fmtCOP(row.saldoActual) : '—'}
                   </td>
+                  </>}
                 </tr>
               ))}
             </tbody>
             {!cargando && balance && (
               <tfoot className="bg-gray-50 border-t-2 border-gray-300">
                 <tr>
-                  <td className="px-3 py-2.5 font-bold text-gray-800 text-xs" colSpan={2}>TOTALES</td>
+                  <td className="px-3 py-2.5 font-bold text-gray-800 text-xs" colSpan={3}>ACTIVO</td>
                   <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totales?.saldoAnterior ?? 0)}</td>
                   <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totales?.debito ?? 0)}</td>
                   <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totales?.credito ?? 0)}</td>
@@ -265,7 +293,7 @@ export default function BalanceComprobacion({ cia }: Props) {
 
         {balance && (
           <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
-            <span>{balance.count} cuenta(s)</span>
+            <span>{balance.items.filter(item => item.tipo === 'cuenta').length} cuenta(s)</span>
             <span className={cuadrado ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
               {cuadrado ? 'Cuadrado' : `Descuadrado por ${fmtCOP(Math.abs(totales?.diferencia ?? 0))}`}
             </span>

@@ -5,6 +5,7 @@ from pypdf import PdfReader
 
 from backend.balance_comprobacion_repository import (
     _account_values,
+    _assemble_report,
     export_trial_balance_pdf,
     export_trial_balance_xlsx,
 )
@@ -44,8 +45,8 @@ def test_xlsx_export_keeps_amounts_as_numeric_cells() -> None:
     sheet = workbook["Balance acumulado"]
 
     assert sheet["A1"].value == "BALANCE DE COMPROBACIÓN ACUMULADO"
-    assert sheet["D8"].value == 80.0
-    assert sheet["E8"].value == 30.0
+    assert sheet["E8"].value == 80.0
+    assert sheet["F8"].value == 30.0
     assert sheet.freeze_panes == "A8"
 
 
@@ -57,3 +58,42 @@ def test_pdf_export_is_readable_and_contains_report_title() -> None:
     assert len(reader.pages) == 1
     assert "BALANCE DE COMPROBACIÓN ACUMULADO" in text
     assert "DISPONIBLE" in text
+
+
+def test_harbour_sections_and_result_are_added_only_to_equity_root() -> None:
+    rows = [
+        {"CODIGO": "1", "MNOMBRE": "ACTIVO", "MSALDO": 1000},
+        {"CODIGO": "2", "MNOMBRE": "PASIVO", "MSALDO": -300},
+        {"CODIGO": "3", "MNOMBRE": "PATRIMONIO", "MSALDO": -500},
+        {"CODIGO": "31", "MNOMBRE": "CAPITAL", "MSALDO": -500},
+        {"CODIGO": "4", "MNOMBRE": "INGRESOS", "MSALDO": -300},
+        {"CODIGO": "5", "MNOMBRE": "GASTOS", "MSALDO": 100},
+    ]
+    report = _assemble_report(27, {"EMPNOM": "PRUEBA", "EMPNIT": "1"}, 2026, 1, 1, 4, False, rows)
+    assert [item["seccion"] for item in report["items"] if item["tipo"] == "seccion"] == ["resultados", "balance"]
+    equity = next(item for item in report["items"] if item["tipo"] == "cuenta" and item["cuenta"] == "3")
+    capital = next(item for item in report["items"] if item["tipo"] == "cuenta" and item["cuenta"] == "31")
+    assert equity["saldoActual"] == 700
+    assert capital["saldoActual"] == 500
+    assert report["totales"]["resultadoEjercicio"] == 200
+    assert report["totales"]["diferencia"] == 0
+
+
+def test_hidden_results_follow_original_456_rule() -> None:
+    rows = [
+        {"CODIGO": "1", "MNOMBRE": "ACTIVO", "MSALDO": 0},
+        {"CODIGO": "2", "MNOMBRE": "PASIVO", "MSALDO": 0},
+        {"CODIGO": "3", "MNOMBRE": "PATRIMONIO", "MSALDO": 0},
+        {"CODIGO": "4", "MNOMBRE": "INGRESOS", "MSALDO": -100},
+        {"CODIGO": "5", "MNOMBRE": "GASTOS", "MSALDO": 20},
+        {"CODIGO": "6", "MNOMBRE": "COSTOS", "MSALDO": 30},
+        {"CODIGO": "7", "MNOMBRE": "OTROS", "MSALDO": 40},
+    ]
+    report = _assemble_report(27, {"EMPNOM": "PRUEBA", "EMPNIT": "1"}, 2026, 1, 1, 4, False, rows, include_results=False)
+    assert sum(item["tipo"] == "seccion" for item in report["items"]) == 1
+    assert report["totales"]["resultadoEjercicio"] == 50
+
+
+def test_special_months_are_counted_in_opening_and_period() -> None:
+    row = {"MSALDO": 100, "MACMDEB13": 30, "MACMCRE13": -10, "MACMDEB14": 5}
+    assert _account_values(row, 14, 14) == (120, 5, 0, 125)

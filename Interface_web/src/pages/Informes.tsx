@@ -143,9 +143,11 @@ interface DatosInforme {
   filas: Celda[][];
   totales?: Celda[];
   nota?: string;
+  tipos?: string[];
 }
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MESES_BALANCE = [...MESES, 'Mes 13', 'Mes 14', 'Mes 15', 'Mes 16', 'Mes 17', 'Mes 18'];
 const BALANCE_IDS = new Set(['balance-comp', 'balance-comp-lib']);
 const ACCOUNT_BALANCE_IDS = new Set([
   'balance-mensual', 'inventario-bal', 'mayor-bal', 'saldos-cuenta', 'bal-gral-resultados',
@@ -248,19 +250,14 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
     if (!preview.balance) return { columnas: [], filas: [] };
     return {
       columnas: [
-        { label: 'Cuenta' }, { label: 'Nombre' }, { label: 'Saldo anterior', money: true },
+        { label: 'Cuenta' }, { label: 'NIT / Centro' }, { label: 'Nombre' }, { label: 'Saldo anterior', money: true },
         { label: 'Débitos', money: true }, { label: 'Créditos', money: true }, { label: 'Saldo actual', money: true },
       ],
       filas: preview.balance.items.map(item => [
-        item.cuenta, item.nombre, item.saldoAnterior, item.debito, item.credito, item.saldoActual,
+        item.cuenta, item.nit, item.nombre, item.saldoAnterior, item.debito, item.credito, item.saldoActual,
       ]),
-      totales: [
-        '', 'TOTALES DE CONTROL', preview.balance.totales.saldoAnterior,
-        preview.balance.totales.debito, preview.balance.totales.credito, preview.balance.totales.saldoActual,
-      ],
-      nota: preview.balance.totales.diferencia === 0
-        ? 'Balance cuadrado.'
-        : `Diferencia contable: ${fmtMonto(preview.balance.totales.diferencia)}.`,
+      tipos: preview.balance.items.map(item => item.tipo),
+      nota: `Activo: ${fmtMonto(preview.balance.totales.saldoActual)} · Pasivo y patrimonio: ${fmtMonto(preview.balance.totales.pasivoPatrimonio)} · Diferencia: ${fmtMonto(preview.balance.totales.diferencia)}.`,
     };
   }, [preview.balance, preview.report]);
   const [pagina, setPagina] = useState(0);
@@ -400,10 +397,11 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
                 </tr>
               )}
               {visibles.map((fila, i) => (
-                <tr key={i} className="hoverable">
-                  {fila.map((celda, j) => (
-                    <CeldaValor key={j} valor={celda} money={!!datos.columnas[j]?.money} />
-                  ))}
+                <tr key={i} className={datos.tipos?.[inicio + i] === 'seccion' ? 'bg-petroleum-500 text-white font-semibold' :
+                  datos.tipos?.[inicio + i]?.startsWith('total') || datos.tipos?.[inicio + i] === 'resultado' ? 'bg-petroleum-50 font-semibold' : 'hoverable'}>
+                  {datos.tipos?.[inicio + i] === 'seccion'
+                    ? <td colSpan={datos.columnas.length} className="px-3 py-2 text-white font-semibold">{fila[2]}</td>
+                    : fila.map((celda, j) => <CeldaValor key={j} valor={celda} money={!!datos.columnas[j]?.money} />)}
                 </tr>
               ))}
             </tbody>
@@ -465,7 +463,9 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
   const [recientes, setRecientes] = useState<string[]>(() => leerLista(STORAGE_RECIENTES));
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [params, setParams] = useState({
-    anio: '2026', mesDesde: 'Enero', mesHasta: 'Febrero', nivel: '6', incluirCeros: false,
+    anio: '2026', mesDesde: 'Enero', mesHasta: 'Febrero', nivel: '4', incluirCeros: false,
+    incluirResultados: true, incluirTerceros: false, incluirCentros: false,
+    detalleCuentaDesde: '', detalleCuentaHasta: '',
     cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '', comprobanteHasta: '',
     tipoDocumento: '', tipoDocumentoHasta: '',
     documentoDesde: '', documentoHasta: '', buscar: '',
@@ -532,7 +532,10 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
       return;
     }
     setParams(p => ({
-      ...p, cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '',
+      ...p, nivel: BALANCE_IDS.has(inf.id) ? '4' : p.nivel,
+      mesDesde: BALANCE_IDS.has(inf.id) ? p.mesDesde : (MESES.includes(p.mesDesde) ? p.mesDesde : 'Enero'),
+      mesHasta: BALANCE_IDS.has(inf.id) ? p.mesHasta : (MESES.includes(p.mesHasta) ? p.mesHasta : 'Diciembre'),
+      cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '',
       comprobanteHasta: '', tipoDocumento: '', tipoDocumentoHasta: '',
       documentoDesde: '', documentoHasta: '', buscar: '',
     }));
@@ -546,10 +549,15 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
       const filtros: FiltrosBalanceComprobacion = {
         cia,
         anio: Number(params.anio),
-        mesDesde: MESES.indexOf(params.mesDesde) + 1,
-        mesHasta: MESES.indexOf(params.mesHasta) + 1,
+        mesDesde: MESES_BALANCE.indexOf(params.mesDesde) + 1,
+        mesHasta: MESES_BALANCE.indexOf(params.mesHasta) + 1,
         nivel: Number(params.nivel) as 4 | 6 | 9 | 12,
         incluirCeros: params.incluirCeros,
+        incluirResultados: params.incluirResultados,
+        incluirTerceros: params.incluirTerceros,
+        incluirCentros: params.incluirCentros,
+        detalleCuentaDesde: params.detalleCuentaDesde,
+        detalleCuentaHasta: params.detalleCuentaHasta,
       };
       setGenerando(true);
       try {
@@ -769,13 +777,13 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
               {!THIRD_DIRECTORY_IDS.has(showParams.id) && <div>
                 <label htmlFor="param-mes-desde" className="block text-xs font-medium text-gray-600 mb-1">Mes desde</label>
                 <select id="param-mes-desde" value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
-                  {MESES.map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
               {!THIRD_DIRECTORY_IDS.has(showParams.id) && <div>
                 <label htmlFor="param-mes-hasta" className="block text-xs font-medium text-gray-600 mb-1">Mes hasta</label>
                 <select id="param-mes-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
-                  {MESES.map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
               {BALANCE_IDS.has(showParams.id) && (
@@ -793,6 +801,29 @@ export default function Informes({ onNavigate, initialCategory, cia }: Props) {
                     <input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />
                     Incluir cuentas sin saldo ni movimiento
                   </label>
+                  <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={params.incluirResultados} onChange={e => setParams(p => ({ ...p, incluirResultados: e.target.checked }))} />
+                    Incluir estado de resultados
+                  </label>
+                  <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />
+                    Incluir detalle por terceros
+                  </label>
+                  <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600">
+                    <input type="checkbox" checked={params.incluirCentros} onChange={e => setParams(p => ({ ...p, incluirCentros: e.target.checked }))} />
+                    Incluir detalle por centros de costo
+                  </label>
+                  {(params.incluirTerceros || params.incluirCentros) && <>
+                    <div>
+                      <label htmlFor="param-detalle-desde" className="block text-xs font-medium text-gray-600 mb-1">Detalle: cuenta desde</label>
+                      <input id="param-detalle-desde" value={params.detalleCuentaDesde} onChange={e => setParams(p => ({ ...p, detalleCuentaDesde: e.target.value }))} className={INPUT} />
+                    </div>
+                    <div>
+                      <label htmlFor="param-detalle-hasta" className="block text-xs font-medium text-gray-600 mb-1">Detalle: cuenta hasta</label>
+                      <input id="param-detalle-hasta" value={params.detalleCuentaHasta} onChange={e => setParams(p => ({ ...p, detalleCuentaHasta: e.target.value }))} className={INPUT} />
+                    </div>
+                    <p className="col-span-2 text-xs text-gray-500">Si el detalle es muy extenso, indique un rango de cuentas para acotarlo.</p>
+                  </>}
                 </>
               )}
               {!BALANCE_IDS.has(showParams.id) && (
