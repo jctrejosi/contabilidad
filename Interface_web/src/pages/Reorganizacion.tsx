@@ -1,260 +1,260 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { USUARIO } from '../data/mock';
+import { useEffect, useState } from 'react';
+import {
+  consultarCatalogoIndices, consultarEstadoReorganizacion, consultarPlanCrearIndice,
+  consultarPlanReorganizacion, crearIndice, iniciarReorganizacion,
+  type CatalogoIndicesAds, type EstadoReorganizacion, type PlanCrearIndice, type PlanReorganizacion,
+} from '../api/reorganizacionAds';
 
-const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
-const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
-const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-
-type Fase = 'en-linea' | 'ejecutando' | 'completado';
-
-const TABLAS_AFECTADAS = ['MOVIMIENTOS', 'LOTES', 'SALDOS', 'TERCEROS', 'DOCUMENTOS', 'ÍNDICES SECUNDARIOS'];
-
-const PASOS = [
-  { hasta: 25, texto: 'Verificando exclusividad de usuarios…' },
-  { hasta: 50, texto: 'Compactando registros eliminados…' },
-  { hasta: 75, texto: 'Reconstruyendo índices secundarios…' },
-  { hasta: 99, texto: 'Verificando integridad de tablas…' },
-  { hasta: 100, texto: 'Finalizando…' },
-];
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    dialog?.showModal();
-    dialog?.querySelector<HTMLElement>('[data-initial-focus]')?.focus();
-    return () => dialog?.close();
-  }, []);
-  return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
-      <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-        <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
-        <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
-      </div>
-      {children}
-    </dialog>
-  );
-}
+const BOTON = 'rounded bg-petroleum-500 px-4 py-2 text-sm font-medium text-white hover:bg-petroleum-600 disabled:cursor-not-allowed disabled:opacity-50';
 
 export default function Reorganizacion() {
-  const [showModal, setShowModal] = useState(false);
-  const [fase, setFase] = useState<Fase>('en-linea');
+  const [plan, setPlan] = useState<PlanReorganizacion | null>(null);
+  const [estado, setEstado] = useState<EstadoReorganizacion | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [iniciando, setIniciando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [respaldo, setRespaldo] = useState(false);
-  const [motivo, setMotivo] = useState('');
-  const [texto, setTexto] = useState('');
-  const [progreso, setProgreso] = useState(0);
-  const [resultado, setResultado] = useState<{ duracion: string; registros: number; indices: number; nota: string } | null>(null);
+  const [sinUsuarios, setSinUsuarios] = useState(false);
+  const [confirmacion, setConfirmacion] = useState('');
+  const [catalogo, setCatalogo] = useState<CatalogoIndicesAds | null>(null);
+  const [tablaIndice, setTablaIndice] = useState('');
+  const [nombreIndice, setNombreIndice] = useState('');
+  const [campoNuevo, setCampoNuevo] = useState('');
+  const [camposIndice, setCamposIndice] = useState<string[]>([]);
+  const [planIndice, setPlanIndice] = useState<PlanCrearIndice | null>(null);
+  const [validandoIndice, setValidandoIndice] = useState(false);
+  const [creandoIndice, setCreandoIndice] = useState(false);
+  const [confirmacionIndice, setConfirmacionIndice] = useState('');
 
-  const motivoValido = motivo.trim().length >= 10;
-  const textoValido = texto === 'REORGANIZAR';
-  const habilitado = respaldo && motivoValido && textoValido;
+  async function actualizarPlan() {
+    setCargando(true);
+    setError(null);
+    try {
+      const [siguientePlan, siguienteEstado, siguienteCatalogo] = await Promise.all([
+        consultarPlanReorganizacion(), consultarEstadoReorganizacion(), consultarCatalogoIndices(),
+      ]);
+      setPlan(siguientePlan);
+      setEstado(siguienteEstado);
+      setCatalogo(siguienteCatalogo);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible consultar el diccionario.');
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  useEffect(() => { void actualizarPlan(); }, []);
 
   useEffect(() => {
-    if (fase !== 'ejecutando') return;
-    const id = window.setInterval(() => setProgreso(p => Math.min(100, p + 4)), 200);
-    return () => window.clearInterval(id);
-  }, [fase]);
-
-  useEffect(() => {
-    if (fase !== 'ejecutando' || progreso < 100) return;
-    const t = window.setTimeout(() => {
-      setFase('completado');
-      setResultado({
-        duracion: '4,2 s',
-        registros: 14520,
-        indices: 6,
-        nota: `Nota de auditoría BIT-2026-0297 — usuario ${USUARIO.nombre} (${USUARIO.rol}), motivo registrado, operación verificada.`,
+    if (estado?.estado !== 'Ejecutando') return;
+    const timer = window.setInterval(() => {
+      consultarEstadoReorganizacion().then(siguiente => {
+        setEstado(siguiente);
+        if (siguiente?.estado === 'Completada' && siguiente.tipo === 'crearIndice') {
+          setPlanIndice(null);
+          void actualizarPlan();
+        }
+      }).catch(cause => {
+        setError(cause instanceof Error ? cause.message : 'Se perdió la consulta del proceso.');
       });
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, [fase, progreso]);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [estado?.estado]);
 
-  function confirmar() {
-    setShowModal(false);
-    setFase('ejecutando');
-    setProgreso(0);
-    setResultado(null);
+  async function iniciar() {
+    if (!plan || plan.inaccesibles.some(item => !item.reconstruible) || !respaldo || !sinUsuarios || confirmacion !== 'REORGANIZAR') return;
+    setIniciando(true);
+    setError(null);
+    try {
+      setEstado(await iniciarReorganizacion(plan.huella));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible iniciar la reindexación.');
+    } finally {
+      setIniciando(false);
+    }
   }
 
-  function volverEnLinea() {
-    setFase('en-linea');
-    setProgreso(0);
-    setResultado(null);
-    setRespaldo(false);
-    setMotivo('');
-    setTexto('');
+  async function validarIndice() {
+    setValidandoIndice(true);
+    setError(null);
+    setPlanIndice(null);
+    try {
+      setPlanIndice(await consultarPlanCrearIndice(tablaIndice, nombreIndice, camposIndice));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible validar el índice.');
+    } finally {
+      setValidandoIndice(false);
+    }
   }
 
-  const pasoActual = PASOS.find(p => progreso <= p.hasta)?.texto ?? PASOS[PASOS.length - 1].texto;
+  async function iniciarIndice() {
+    if (!planIndice || planIndice.estado !== 'pendiente' || !respaldo || !sinUsuarios || confirmacionIndice !== 'CREAR INDICE') return;
+    setCreandoIndice(true);
+    setError(null);
+    try {
+      setEstado(await crearIndice(planIndice));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible crear el índice.');
+    } finally {
+      setCreandoIndice(false);
+    }
+  }
+
+  function cambiarCampo(index: number, direction: -1 | 1) {
+    const next = [...camposIndice];
+    const target = index + direction;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setCamposIndice(next);
+    setPlanIndice(null);
+  }
+
+  const tablasConIndices = plan?.tablas.filter(item => item.indices.length > 0) ?? [];
+  const completas = estado?.resultados.filter(item => item.estado === 'Completada').length ?? 0;
+  const total = tablasConIndices.length;
+  const progreso = total ? Math.round(completas / total * 100) : 0;
+  const ejecutando = estado?.estado === 'Ejecutando';
+  const camposDisponibles = catalogo?.tablas.find(item => item.tabla === tablaIndice)?.campos ?? [];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-3 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 text-xs text-gray-400">Administración / Reorganización de datos</div>
-          <h1 className="text-lg font-semibold text-gray-800">Reorganización de índices / compactación</h1>
-          <p className="mt-1 text-xs text-gray-500">Operación de mantenimiento exclusiva: excluye a los demás usuarios y requiere respaldo previo verificado.</p>
-        </div>
-        <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
+    <div className="mx-auto max-w-6xl space-y-4 p-4">
+      <div>
+        <div className="mb-1 text-xs text-gray-400">Administración / Reorganización de datos</div>
+        <h1 className="text-lg font-semibold text-gray-800">Reorganización de índices</h1>
+        <p className="mt-1 text-xs text-gray-500">
+          Reconstruye los índices existentes de las tablas contables registradas en Advantage. No elimina registros ni cambia sus definiciones.
+        </p>
       </div>
 
-      {/* Banner de estado */}
-      {fase === 'ejecutando' && (
-        <div className="rounded border border-amber-300 bg-amber-50 px-4 py-3">
-          <div className="flex items-start gap-3">
-            <span className="text-base leading-none mt-0.5">🔧</span>
-            <div className="flex-1">
-              <div className="text-xs font-semibold text-amber-800">Modo mantenimiento activo</div>
-              <p className="text-xs text-amber-700 mt-0.5">Acceso exclusivo: los demás usuarios están excluidos del sistema hasta terminar.</p>
-              <div className="mt-3 h-2 w-full rounded-full bg-amber-200 overflow-hidden">
-                <div className="h-full bg-petroleum-500 transition-all duration-200" style={{ width: `${progreso}%` }} />
-              </div>
-              <div className="mt-1.5 flex items-center justify-between text-xs text-amber-700">
-                <span className="font-mono">{pasoActual}</span>
-                <span className="font-mono font-semibold">{progreso}%</span>
-              </div>
+      {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      {estado && (
+        <section className={`rounded border p-4 ${estado.estado === 'Fallida' ? 'border-red-200 bg-red-50' : estado.estado === 'Completada' ? 'border-green-200 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold">
+            <span>{estado.tipo === 'crearIndice'
+              ? estado.estado === 'Ejecutando' ? `Creando ${estado.nombreIndice} en ${estado.tablaActual}…` : `Creación del índice ${estado.estado.toLowerCase()}`
+              : estado.estado === 'Ejecutando' ? `Reindexando ${estado.tablaActual || 'preparando tablas'}…` : `Reorganización ${estado.estado.toLowerCase()}`}</span>
+            {estado.tipo !== 'crearIndice' && <span>{completas} de {total} tablas con índices</span>}
+          </div>
+          {estado.tipo !== 'crearIndice' && <div className="mt-3 h-2 overflow-hidden rounded bg-gray-200">
+            <div className="h-full bg-petroleum-500 transition-all" style={{ width: `${progreso}%` }} />
+          </div>}
+          {estado.segundos !== null && <p className="mt-2 text-xs">Duración: {estado.segundos.toLocaleString('es-CO')} segundos.</p>}
+          {estado.error && <p className="mt-2 text-xs text-red-700">Error en {estado.tablaActual || 'la verificación'}: {estado.error}{estado.tipo !== 'crearIndice' ? ' Las tablas completadas antes del fallo permanecen reindexadas.' : ''}</p>}
+          {estado.resultados.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {estado.resultados.map(item => <span key={item.tabla} className="rounded border border-gray-200 bg-white px-2 py-1 text-xs">{item.tabla}: {item.estado}{item.reconstruido ? ' · índice recreado' : ''}{item.segundos !== undefined ? ` (${item.segundos.toLocaleString('es-CO')} s)` : ''}</span>)}
             </div>
-          </div>
-        </div>
+          )}
+        </section>
       )}
 
-      {fase === 'completado' && resultado && (
-        <div className="space-y-3">
-          <div className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-            ✓ Reorganización completada correctamente en {resultado.duracion}. El sistema vuelve a estar disponible para todos los usuarios.
-          </div>
-          <div className="rounded border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-relaxed text-blue-800">{resultado.nota}</div>
+      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-petroleum-900">Índices del diccionario actual</h2>
+          <button type="button" className="rounded border border-gray-300 px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-50" disabled={cargando || ejecutando} onClick={() => void actualizarPlan()}>
+            Actualizar vista previa
+          </button>
         </div>
-      )}
-
-      {/* Tarjeta principal */}
-      <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-5 py-3">
-          <span className="text-sm font-semibold text-petroleum-900">Reorganización de índices / compactación</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-            fase === 'en-linea' ? 'bg-green-100 text-green-700' : fase === 'ejecutando' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-          }`}>
-            {fase === 'en-linea' ? 'En línea' : fase === 'ejecutando' ? 'Mantenimiento' : 'Completado'}
-          </span>
-        </div>
-
-        <div className="space-y-3 p-4">
-          <p className="text-xs leading-relaxed text-gray-500">
-            La reorganización reindexa las tablas contables y compacta los registros eliminados. Se ejecuta en modo mantenimiento
-            exclusivo: los demás usuarios no pueden operar mientras dure el proceso.
-          </p>
-
-          <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-            <legend className="px-2 text-xs font-semibold text-petroleum-800">Tablas afectadas</legend>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {TABLAS_AFECTADAS.map(t => (
-                <span key={t} className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-mono text-gray-600">{t}</span>
+        {cargando ? <p className="mt-3 text-sm text-gray-500">Consultando Advantage…</p> : plan && (
+          <>
+            <p className="mt-2 text-xs text-gray-600">
+              {tablasConIndices.length} tablas con {plan.totalIndices} índices. La operación afecta el diccionario compartido por todas las compañías, no solo la compañía seleccionada.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {plan.tablas.map(item => (
+                <details key={item.tabla} className="rounded border border-gray-200 bg-gray-50 px-3 py-2">
+                  <summary className="cursor-pointer text-xs font-medium text-gray-800">{item.tabla} · {item.indices.length} índices</summary>
+                  <ul className="mt-2 space-y-1 text-xs text-gray-600">
+                    {item.indices.length ? item.indices.map(index => <li key={`${index.archivo}:${index.nombre}`} className="break-all" title={`${index.expresion}${index.condicion ? ` · ${index.condicion}` : ''}`}>{index.nombre} · {index.archivo}</li>) : <li>Sin índices; no se reindexa.</li>}
+                  </ul>
+                </details>
               ))}
             </div>
-          </fieldset>
-
-          <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
-            <legend className="px-2 text-xs font-semibold text-petroleum-800">Requisitos</legend>
-            <ul className="mt-2 space-y-1.5 text-xs text-gray-600">
-              <li className="flex items-start gap-2"><span className="text-petroleum-500">▸</span> Respaldo íntegro y reciente de la contabilidad (obligatorio).</li>
-              <li className="flex items-start gap-2"><span className="text-petroleum-500">▸</span> Exclusividad: sin otros usuarios activos en el sistema.</li>
-              <li className="flex items-start gap-2"><span className="text-petroleum-500">▸</span> Motivo justificado de la operación (mínimo 10 caracteres).</li>
-              <li className="flex items-start gap-2"><span className="text-petroleum-500">▸</span> Confirmación escrita del texto <span className="font-mono font-semibold">REORGANIZAR</span>.</li>
-            </ul>
-          </fieldset>
-
-          {resultado && fase === 'completado' && (
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded border border-gray-200 p-3 text-center">
-                <div className="text-xs text-gray-400">Duración</div>
-                <div className="font-mono text-sm font-semibold text-gray-800 mt-1">{resultado.duracion}</div>
+            {plan.ausentes.length > 0 && <p className="mt-3 text-xs text-amber-700">No registradas en este diccionario; se omiten: {plan.ausentes.join(', ')}.</p>}
+            {plan.inaccesibles.length > 0 && (
+              <div role="alert" className={`mt-3 rounded border px-3 py-2 text-xs ${plan.inaccesibles.some(item => !item.reconstruible) ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                {plan.inaccesibles.some(item => !item.reconstruible)
+                  ? 'Hay tablas que no se pueden abrir ni reconstruir automáticamente.'
+                  : 'Hay archivos de índice ausentes. Advantage intentará recrearlos desde el diccionario antes de reindexar.'}
+                {plan.inaccesibles.map(item => <p key={item.tabla} className="mt-1">{item.tabla}: {item.reconstruible ? `Se recrearán ${item.archivosFaltantes.join(', ')}.` : item.motivo}</p>)}
               </div>
-              <div className="rounded border border-gray-200 p-3 text-center">
-                <div className="text-xs text-gray-400">Registros compactados</div>
-                <div className="font-mono text-sm font-semibold text-gray-800 mt-1">{resultado.registros.toLocaleString('es-CO')}</div>
-              </div>
-              <div className="rounded border border-gray-200 p-3 text-center">
-                <div className="text-xs text-gray-400">Índices reconstruidos</div>
-                <div className="font-mono text-sm font-semibold text-gray-800 mt-1">{resultado.indices}</div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-center gap-4 rounded-b-lg border-t border-gray-200 bg-gray-50 px-5 py-4">
-            {fase === 'en-linea' && (
-              <button type="button" onClick={() => setShowModal(true)} className={BUTTON_PRIMARY}>Iniciar mantenimiento</button>
             )}
-            {fase === 'completado' && (
-              <button type="button" onClick={volverEnLinea} className={BUTTON_PRIMARY}>Volver al estado normal</button>
-            )}
-          </div>
+          </>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-petroleum-900">Verificar y crear un índice nuevo</h2>
+        <p className="mt-2 text-xs text-gray-600">
+          Seleccione una tabla y los campos en el orden de búsqueda. Antes de crear, se comprobará si ya existe un índice equivalente en el diccionario compartido por todas las compañías.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs text-gray-700">Tabla
+            <select value={tablaIndice} disabled={ejecutando || cargando} onChange={event => {
+              setTablaIndice(event.target.value); setCamposIndice([]); setCampoNuevo(''); setPlanIndice(null);
+            }} className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm">
+              <option value="">Seleccione una tabla</option>
+              {catalogo?.tablas.map(item => <option key={item.tabla} value={item.tabla}>{item.tabla}</option>)}
+            </select>
+          </label>
+          <label className="text-xs text-gray-700">Nombre del índice
+            <input value={nombreIndice} disabled={ejecutando} maxLength={128} onChange={event => { setNombreIndice(event.target.value.toUpperCase()); setPlanIndice(null); }} placeholder="Ej. CONMAE7" className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm" />
+          </label>
         </div>
-      </div>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="min-w-56 flex-1 text-xs text-gray-700">Agregar campo
+            <select value={campoNuevo} disabled={!tablaIndice || ejecutando} onChange={event => setCampoNuevo(event.target.value)} className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm">
+              <option value="">Seleccione un campo</option>
+              {camposDisponibles.filter(field => !camposIndice.includes(field)).map(field => <option key={field} value={field}>{field}</option>)}
+            </select>
+          </label>
+          <button type="button" disabled={!campoNuevo || camposIndice.length >= 8 || ejecutando} onClick={() => {
+            setCamposIndice(previous => [...previous, campoNuevo]); setCampoNuevo(''); setPlanIndice(null);
+          }} className="rounded border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50 disabled:opacity-50">Agregar campo</button>
+        </div>
+        {camposIndice.length > 0 && <div className="mt-3 space-y-1">
+          {camposIndice.map((field, index) => <div key={field} className="flex items-center gap-2 text-xs text-gray-700">
+            <span className="w-5 text-right">{index + 1}.</span><span className="min-w-28 font-medium">{field}</span>
+            <button type="button" disabled={index === 0 || ejecutando} onClick={() => cambiarCampo(index, -1)} aria-label={`Subir ${field}`} className="rounded border px-2 disabled:opacity-40">↑</button>
+            <button type="button" disabled={index === camposIndice.length - 1 || ejecutando} onClick={() => cambiarCampo(index, 1)} aria-label={`Bajar ${field}`} className="rounded border px-2 disabled:opacity-40">↓</button>
+            <button type="button" disabled={ejecutando} onClick={() => { setCamposIndice(previous => previous.filter(item => item !== field)); setPlanIndice(null); }} className="text-red-700 disabled:opacity-40">Quitar</button>
+          </div>)}
+        </div>}
+        <button type="button" disabled={!tablaIndice || !nombreIndice || !camposIndice.length || validandoIndice || ejecutando} onClick={() => void validarIndice()} className="mt-4 rounded border border-petroleum-500 px-3 py-2 text-xs text-petroleum-900 hover:bg-gray-50 disabled:opacity-50">
+          {validandoIndice ? 'Verificando…' : 'Verificar índice'}
+        </button>
+        {planIndice && <div className={`mt-3 rounded border px-3 py-2 text-xs ${planIndice.estado === 'pendiente' ? 'border-amber-200 bg-amber-50 text-amber-900' : planIndice.estado === 'existente' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
+          <p>{planIndice.motivo}</p>
+          <p className="mt-1">{planIndice.nombre} en {planIndice.tabla}: {planIndice.campos.join(' → ')}</p>
+        </div>}
+        {planIndice?.estado === 'pendiente' && <div className="mt-3">
+          <p className="text-xs text-gray-600">Para crear el índice, confirme el respaldo y la salida de los demás usuarios en la sección inferior.</p>
+          <label htmlFor="confirmacion-indice" className="mt-2 block text-xs text-gray-600">Escriba CREAR INDICE para confirmar</label>
+          <input id="confirmacion-indice" value={confirmacionIndice} disabled={ejecutando} onChange={event => setConfirmacionIndice(event.target.value)} className="mt-1 w-full max-w-xs rounded border border-gray-300 px-3 py-2 text-sm" />
+          <div className="mt-3"><button type="button" className={BOTON} disabled={!respaldo || !sinUsuarios || confirmacionIndice !== 'CREAR INDICE' || ejecutando || creandoIndice} onClick={() => void iniciarIndice()}>
+            {creandoIndice ? 'Iniciando…' : 'Crear índice'}
+          </button></div>
+        </div>}
+      </section>
 
-      {/* Modal de riesgo */}
-      {showModal && (
-        <Modal title="Reorganización de índices / compactación" onClose={() => setShowModal(false)}>
-          <div className="space-y-4 p-5">
-            <div className="rounded border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-relaxed text-red-700">
-              Operación de alto riesgo: detiene el servicio contable para los demás usuarios y compacta registros eliminados.
-              No puede deshacerse parcialmente — exige un respaldo íntegro y verificado.
-            </div>
-            <div>
-              <div className="mb-1.5 text-xs font-medium text-gray-600">Tablas afectadas</div>
-              <div className="flex flex-wrap gap-1.5">
-                {TABLAS_AFECTADAS.map(t => (
-                  <span key={t} className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-mono text-gray-600">{t}</span>
-                ))}
-              </div>
-            </div>
-            <label className="flex cursor-pointer items-start gap-2.5 rounded border border-gray-200 px-3 py-2.5 text-xs text-gray-700">
-              <input
-                type="checkbox"
-                checked={respaldo}
-                onChange={e => setRespaldo(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-petroleum-500"
-              />
-              <span>Confirmo que existe un <strong>respaldo íntegro y reciente</strong> de la contabilidad (obligatorio).</span>
-            </label>
-            <div>
-              <label htmlFor="reorg-motivo" className="mb-1 block text-xs font-medium text-gray-600">
-                Motivo de la operación <span className="text-gray-400">({Math.max(0, 10 - motivo.trim().length)} caracteres restantes)</span>
-              </label>
-              <textarea
-                id="reorg-motivo"
-                data-initial-focus
-                rows={3}
-                value={motivo}
-                onChange={e => setMotivo(e.target.value)}
-                placeholder="Describa por qué se requiere reorganizar los datos (mínimo 10 caracteres)"
-                className={`${INPUT} font-mono`}
-              />
-            </div>
-            <div>
-              <label htmlFor="reorg-texto" className="mb-1 block text-xs font-medium text-gray-600">Escriba <span className="font-mono font-semibold">REORGANIZAR</span> para confirmar</label>
-              <input
-                id="reorg-texto"
-                value={texto}
-                onChange={e => setTexto(e.target.value)}
-                placeholder="REORGANIZAR"
-                className={`${INPUT} font-mono`}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
-            <button type="button" onClick={() => setShowModal(false)} className={BUTTON_SECONDARY}>Cancelar</button>
-            <button type="button" onClick={confirmar} disabled={!habilitado} className={`${BUTTON_PRIMARY} disabled:cursor-not-allowed disabled:opacity-50`}>
-              Confirmar reorganización
-            </button>
-          </div>
-          {!habilitado && (
-            <p className="px-5 pb-4 text-xs text-gray-400">
-              El botón se habilita al marcar el respaldo, escribir un motivo de al menos 10 caracteres y el texto REORGANIZAR.
-            </p>
-          )}
-        </Modal>
-      )}
+      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-petroleum-900">Antes de iniciar</h2>
+        <p className="mt-2 text-xs text-gray-600">
+          Advantage necesita acceso exclusivo a cada tabla. Cierre el programa original y las demás sesiones que puedan mantener estas tablas abiertas. Si no obtiene exclusividad, el proceso se detendrá e indicará la tabla afectada.
+        </p>
+        <div className="mt-3 space-y-2 text-xs text-gray-700">
+          <label className="flex items-start gap-2"><input type="checkbox" checked={respaldo} onChange={event => setRespaldo(event.target.checked)} disabled={ejecutando} /> Confirmo que tengo un respaldo reciente y verificado del diccionario y sus tablas.</label>
+          <label className="flex items-start gap-2"><input type="checkbox" checked={sinUsuarios} onChange={event => setSinUsuarios(event.target.checked)} disabled={ejecutando} /> Confirmo que los demás usuarios han salido de la aplicación y de Advantage.</label>
+        </div>
+        <label htmlFor="confirmacion-reorganizacion" className="mt-4 block text-xs text-gray-600">Escriba REORGANIZAR para confirmar</label>
+        <input id="confirmacion-reorganizacion" value={confirmacion} onChange={event => setConfirmacion(event.target.value)} disabled={ejecutando} className="mt-1 w-full max-w-xs rounded border border-gray-300 px-3 py-2 text-sm" />
+        <div className="mt-4">
+          <button type="button" className={BOTON} onClick={() => void iniciar()} disabled={!plan?.totalIndices || !!plan?.inaccesibles.some(item => !item.reconstruible) || !respaldo || !sinUsuarios || confirmacion !== 'REORGANIZAR' || ejecutando || iniciando || cargando}>
+            {iniciando ? 'Iniciando…' : ejecutando ? 'Reorganización en curso' : 'Reindexar índices existentes'}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

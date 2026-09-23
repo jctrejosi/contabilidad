@@ -173,6 +173,8 @@ def build_additional_report(
     company = normalize_company_code(cia)
     if not 1900 <= year <= 2100 or not 1 <= month_from <= month_to <= 12:
         raise ValueError("Seleccione un año y un rango de meses válido.")
+    if report_id == "doc-formato" and month_from != month_to:
+        raise ValueError("Seleccione un único mes o lote para imprimir los documentos.")
     account_from = _safe(account_from, "cuenta inicial", 12, account=True)
     account_to = _safe(account_to, "cuenta final", 12, account=True)
     nit = _safe(nit, "tercero", 15)
@@ -458,7 +460,9 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         sheet = workbook.active
         sheet.title = "Informe"
         sheet.append([report["compania"]["nombre"]])
-        period_label = ("Directorio general de terceros" if report.get("source") == "FADCLI" else
+        period_label = ("Catálogo de cuentas" if report["id"] == "listado-cuentas" else
+                        "Directorio general de terceros" if report.get("source") == "FADCLI" else
+                        f"Mes o lote {report['mesDesde']:02d}" if report["id"] == "doc-formato" else
                         f"Año {report['anio']} · meses {report['mesDesde']:02d}–{report['mesHasta']:02d}")
         sheet.append([period_label])
         sheet.append(labels)
@@ -540,7 +544,8 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         ]))
         styles = getSampleStyleSheet()
         heading = Paragraph(escape(report["compania"]["nombre"]), styles["Heading1"])
-        detail = ("Directorio general de terceros" if report.get("source") == "FADCLI" else
+        detail = ("Catálogo de cuentas" if report["id"] == "listado-cuentas" else
+                  "Directorio general de terceros" if report.get("source") == "FADCLI" else
                   f"Año {report['anio']} · Meses {report['mesDesde']:02d}–{report['mesHasta']:02d}")
         subtitle = Paragraph(f"Informe {escape(report['id'])} · {detail}", styles["Normal"])
         document.build([heading, subtitle, Spacer(1, 12), table])

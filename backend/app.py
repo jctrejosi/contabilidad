@@ -22,6 +22,16 @@ from .ads_repository import (
     AdsConfigurationError,
     CompanyNotFound,
 )
+from .reorganizacion_ads_repository import (
+    ReorganizationConflict,
+    ReorganizationValidationError,
+    get_index_catalog as get_ads_index_catalog,
+    get_index_creation_plan as get_ads_index_creation_plan,
+    get_plan as get_ads_reorganization_plan,
+    get_status as get_ads_reorganization_status,
+    start_index_creation as start_ads_index_creation,
+    start_reorganization as start_ads_reorganization,
+)
 from .postgres_repository import PostgresConfigurationError
 from .terceros_repository import (
     ThirdPartyAlreadyExists,
@@ -3425,6 +3435,99 @@ def integracion_actualizar(
         return store.replace_integration(
             cia, modulo, payload.model_dump(), user=payload.usuario, dry_run=dry_run
         )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+class AdsReorganizationWrite(BaseModel):
+    """Confirmación del plan de índices visible en el ADD activo."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    huella: str = Field(min_length=64, max_length=64)
+    respaldoConfirmado: bool
+    confirmacion: str
+
+
+class AdsIndexDefinition(BaseModel):
+    """Índice simple solicitado desde administración; el repositorio valida el ADD."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tabla: str
+    nombre: str
+    campos: list[str]
+
+
+class AdsIndexCreate(AdsIndexDefinition):
+    huella: str = Field(min_length=64, max_length=64)
+    respaldoConfirmado: bool
+    confirmacion: str
+
+
+@app.get("/api/ads/indices/catalogo", summary="Tablas y campos disponibles para nuevos índices")
+def indices_ads_catalogo() -> dict[str, Any]:
+    try:
+        return get_ads_index_catalog()
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/ads/indices/plan", summary="Validar un índice antes de crearlo")
+def indices_ads_plan(payload: AdsIndexDefinition) -> dict[str, Any]:
+    try:
+        return get_ads_index_creation_plan(
+            table=payload.tabla, name=payload.nombre, columns=payload.campos
+        )
+    except ReorganizationValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/ads/indices", status_code=status.HTTP_202_ACCEPTED,
+          summary="Crear un índice en el diccionario Advantage")
+def indices_ads_crear(payload: AdsIndexCreate) -> dict[str, Any]:
+    try:
+        return start_ads_index_creation(
+            table=payload.tabla, name=payload.nombre, columns=payload.campos,
+            huella=payload.huella, respaldo=payload.respaldoConfirmado,
+            confirmacion=payload.confirmacion,
+        )
+    except ReorganizationConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ReorganizationValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/ads/reorganizacion/plan", summary="Consultar índices contables en Advantage")
+def reorganizacion_ads_plan() -> dict[str, Any]:
+    try:
+        return get_ads_reorganization_plan()
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/ads/reorganizacion/estado", summary="Consultar avance de reindexación Advantage")
+def reorganizacion_ads_estado() -> dict[str, Any] | None:
+    return get_ads_reorganization_status()
+
+
+@app.post("/api/ads/reorganizacion", status_code=status.HTTP_202_ACCEPTED,
+          summary="Reindexar índices existentes del diccionario Advantage")
+def reorganizacion_ads_iniciar(payload: AdsReorganizationWrite) -> dict[str, Any]:
+    try:
+        return start_ads_reorganization(
+            huella=payload.huella,
+            respaldo=payload.respaldoConfirmado,
+            confirmacion=payload.confirmacion,
+        )
+    except ReorganizationConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ReorganizationValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise _service_error(exc) from exc
 

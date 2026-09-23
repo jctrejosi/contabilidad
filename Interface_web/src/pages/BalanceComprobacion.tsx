@@ -20,7 +20,6 @@ interface Props {
 }
 
 interface Formulario {
-  anio: string;
   mesDesde: number;
   mesHasta: number;
   nivel: 4 | 6 | 9 | 12;
@@ -34,6 +33,7 @@ interface Formulario {
 
 export default function BalanceComprobacion({ cia }: Props) {
   const [formulario, setFormulario] = useState<Formulario | null>(null);
+  const [anioOperacion, setAnioOperacion] = useState<number | null>(null);
   const [consulta, setConsulta] = useState<FiltrosBalanceComprobacion | null>(null);
   const [balance, setBalance] = useState<BalanceComprobacionDatos | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -45,6 +45,7 @@ export default function BalanceComprobacion({ cia }: Props) {
   useEffect(() => {
     let vigente = true;
     setFormulario(null);
+    setAnioOperacion(null);
     setConsulta(null);
     setBalance(null);
     setError('');
@@ -55,7 +56,8 @@ export default function BalanceComprobacion({ cia }: Props) {
         const defaults = { mesDesde: 1, mesHasta, nivel: 4 as const, incluirCeros: false,
           incluirResultados: true, incluirTerceros: false, incluirCentros: false,
           detalleCuentaDesde: '', detalleCuentaHasta: '' };
-        setFormulario({ anio: String(periodo.anio), ...defaults });
+        setAnioOperacion(periodo.anio);
+        setFormulario(defaults);
       })
       .catch((cause: unknown) => {
         if (vigente) setError(cause instanceof Error ? cause.message : 'No fue posible consultar el período.');
@@ -142,15 +144,6 @@ export default function BalanceComprobacion({ cia }: Props) {
           <h2 className="text-xs font-semibold text-gray-700 mb-3">Parámetros del informe</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Año</label>
-              <input
-                type="number"
-                value={formulario.anio}
-                onChange={e => setFormulario({ ...formulario, anio: e.target.value })}
-                className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
-              />
-            </div>
-            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Desde mes</label>
               <select
                 value={formulario.mesDesde}
@@ -205,20 +198,26 @@ export default function BalanceComprobacion({ cia }: Props) {
           </div>}
           <div className="mt-3">
             <button
-              onClick={() => setConsulta({
-                cia,
-                anio: Number(formulario.anio),
-                mesDesde: formulario.mesDesde,
-                mesHasta: formulario.mesHasta,
-                nivel: formulario.nivel,
-                incluirCeros: formulario.incluirCeros,
-                incluirResultados: formulario.incluirResultados,
-                incluirTerceros: formulario.incluirTerceros,
-                incluirCentros: formulario.incluirCentros,
-                detalleCuentaDesde: formulario.detalleCuentaDesde,
-                detalleCuentaHasta: formulario.detalleCuentaHasta,
-              })}
-              disabled={cargando}
+              onClick={() => {
+                if (anioOperacion === null) {
+                  setError('No fue posible determinar el período operativo de la compañía.');
+                  return;
+                }
+                setConsulta({
+                  cia,
+                  anio: anioOperacion,
+                  mesDesde: formulario.mesDesde,
+                  mesHasta: formulario.mesHasta,
+                  nivel: formulario.nivel,
+                  incluirCeros: formulario.incluirCeros,
+                  incluirResultados: formulario.incluirResultados,
+                  incluirTerceros: formulario.incluirTerceros,
+                  incluirCentros: formulario.incluirCentros,
+                  detalleCuentaDesde: formulario.detalleCuentaDesde,
+                  detalleCuentaHasta: formulario.detalleCuentaHasta,
+                });
+              }}
+              disabled={cargando || anioOperacion === null}
               className="text-xs px-3 py-1.5 rounded text-white font-medium disabled:cursor-wait disabled:opacity-60"
               style={{ backgroundColor: '#0073C0' }}
             >

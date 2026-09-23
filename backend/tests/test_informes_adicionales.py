@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from backend.informes_adicionales_repository import (
     _monthly_sum,
     _safe,
+    build_additional_report,
     export_additional_report,
 )
 
@@ -30,6 +31,11 @@ def test_filters_reject_sql_injection() -> None:
 
 def test_month_columns_only_use_selected_months() -> None:
     assert _monthly_sum("MACMDEB", 2, 3) == "COALESCE(MACMDEB02, 0) + COALESCE(MACMDEB03, 0)"
+
+
+def test_document_format_requires_one_month_or_lot() -> None:
+    with pytest.raises(ValueError, match="único mes o lote"):
+        build_additional_report("doc-formato", "027", 2026, 1, 2)
 
 
 def test_csv_export_contains_real_rows() -> None:

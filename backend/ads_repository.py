@@ -206,13 +206,22 @@ def ads_connection() -> Iterator[Any]:
 
 
 @contextmanager
-def ads_odbc_connection() -> Iterator[Any]:
-    """Abre Advantage mediante ADODB + ODBC para escrituras masivas estables."""
+def ads_odbc_connection(*, no_table_cache: bool = False) -> Iterator[Any]:
+    """Abre Advantage mediante ADODB + ODBC para escrituras masivas estables.
+
+    El mantenimiento de índices requiere acceso exclusivo a cada tabla. Con
+    ``no_table_cache`` el controlador no conserva tablas cerradas por SELECT,
+    evitando que nuestras propias verificaciones bloqueen ``sp_Reindex``.
+    Las demás operaciones conservan la configuración habitual.
+    """
     pythoncom.CoInitialize()
     connection = None
     try:
         connection = win32com.client.Dispatch("ADODB.Connection")
-        connection.Open(load_odbc_connection_string())
+        connection_string = load_odbc_connection_string()
+        if no_table_cache:
+            connection_string += "MaxTableCloseCache=0;"
+        connection.Open(connection_string)
         yield connection
     finally:
         if connection is not None:
