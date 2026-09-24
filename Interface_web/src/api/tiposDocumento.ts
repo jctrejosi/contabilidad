@@ -1,5 +1,6 @@
 export interface TipoDocumentoReal {
-  id: number;
+  /** VISDOCUM no tiene ID; se utiliza su código global como clave estable. */
+  id: string;
   codigo: string;
   nombre: string;
   modulo: number;
@@ -32,7 +33,7 @@ export interface TiposDocumentoResponse {
 
 let requestInProgress: Promise<TiposDocumentoResponse> | null = null;
 
-/** Consulta el maestro global VISDOCUM; deliberadamente no acepta CIA. */
+/** Consulta VISDOCUM sin CIA; el backend limita SUC a la sucursal 1. */
 export function listarTiposDocumento(): Promise<TiposDocumentoResponse> {
   if (requestInProgress) return requestInProgress;
   requestInProgress = fetch('/api/tipos-documento')

@@ -1,8 +1,8 @@
 """Consulta del maestro global de tipos de documento VISDOCUM.
 
-VISDOCUM no contiene CIA. Sus códigos y reglas operativas son compartidos por
-todas las compañías/contabilidades, por lo que este repositorio nunca recibe
-ni aplica un filtro de compañía.
+VISDOCUM no contiene CIA. Sus códigos y reglas operativas se comparten entre
+compañías, pero cada lectura y escritura se restringe a SUC=1 mientras no haya
+selección de sucursal en la aplicación.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from .ads_repository import (
 )
 from .auditoria_repository import register_master_creation
 from .lotes_repository import _one
+from .visdocum_sucursal import VISDOCUM_SUCURSAL
 
 
 MODULE_NAMES = {
@@ -136,8 +137,8 @@ def create_document_type(
 ) -> dict[str, Any]:
     """Crea un tipo de documento (B2.3) en el legado (``VISDOCUM``).
 
-    ``VISDOCUM`` es global (no tiene ``CIA``): la unicidad de ``CODIGO`` es de
-    todas las compañías. La compañía activa se usa solo para validar la
+    ``VISDOCUM`` no tiene ``CIA``: la unicidad de ``CODIGO`` se comprueba dentro
+    de la sucursal predeterminada. La compañía activa se usa para validar la
     referencia a ``CONTICOM.COMPRO``, que sí es por contabilidad. La numeración
     se guarda en ``MODICONSE`` (``Manual`` permite modificar el consecutivo).
     """
@@ -153,7 +154,7 @@ def create_document_type(
             raise CompanyNotFound(f"No existe la compañía {company_code}.")
         if _one(
             connection,
-            "SELECT TOP 1 CODIGO FROM VISDOCUM WHERE CODIGO = ?",
+            f"SELECT TOP 1 CODIGO FROM VISDOCUM WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
             [(ADO_TYPE_VARCHAR, 2, data["codigo"])],
         ) is not None:
             raise DocumentTypeAlreadyExists(
@@ -172,9 +173,9 @@ def create_document_type(
             _execute(
                 connection,
                 "INSERT INTO VISDOCUM "
-                "(CODIGO, NOMBRE, MODULO, TIPO, CONSE, MODICONSE, PREFIJO, COMPRO, "
+                f"(SUC, CODIGO, NOMBRE, MODULO, TIPO, CONSE, MODICONSE, PREFIJO, COMPRO, "
                 "ICONTAB, CONVER, DOCCONVER) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                f"VALUES ({VISDOCUM_SUCURSAL}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (ADO_TYPE_VARCHAR, 2, data["codigo"]),
                     (ADO_TYPE_VARCHAR, DOCUMENT_TYPE_NAME_SIZE, data["nombre"]),
@@ -215,7 +216,9 @@ def _document_type_from_row(row: dict[str, Any]) -> dict[str, Any]:
     """Traduce los controles principales usados por DOCUMVIS/TRAB_DOC."""
     module = int(_number(row.get("MODULO")))
     return {
-        "id": int(_number(row.get("ID"))),
+        # El diccionario Advantage actual no define ID en VISDOCUM. CODIGO es
+        # el identificador estable del catálogo global y sirve como clave UI.
+        "id": _text(row.get("CODIGO")),
         "codigo": _text(row.get("CODIGO")),
         "nombre": _text(row.get("NOMBRE")),
         "modulo": module,
@@ -241,12 +244,12 @@ def _document_type_from_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_document_types() -> list[dict[str, Any]]:
-    """Devuelve el catálogo global completo, ordenado por CODIGO."""
+    """Devuelve los tipos de la sucursal predeterminada, sin filtro de CIA."""
     sql = (
-        "SELECT ID, CODIGO, NOMBRE, MODULO, TIPO, CONSE, MODICONSE, PREFIJO, "
+        "SELECT CODIGO, NOMBRE, MODULO, TIPO, CONSE, MODICONSE, PREFIJO, "
         "COMPRO, ICONTAB, ICXP, BANCOS, CONVER, DOCCONVER, FPAGO, DOCOFI, "
         "MODICOS, TRASLADO, REPETI, GRABASAL, VALDIAN "
-        "FROM VISDOCUM ORDER BY CODIGO"
+        f"FROM VISDOCUM WHERE SUC = {VISDOCUM_SUCURSAL} ORDER BY CODIGO"
     )
     with ads_connection() as connection:
         recordset = _open_recordset(connection, sql)

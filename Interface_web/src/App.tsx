@@ -152,21 +152,14 @@ export default function App() {
         return <Comparativos cia={companiaActiva.codigo} />;
 
       case 'informes/documentos':
-        return <Informes cia={companiaActiva.codigo} initialCategory="documentos" onNavigate={navigate} />;
       case 'informes/libros':
-        return <Informes cia={companiaActiva.codigo} initialCategory="libros" onNavigate={navigate} />;
       case 'informes/estados':
-        return <Informes cia={companiaActiva.codigo} initialCategory="estados" onNavigate={navigate} />;
       case 'informes/terceros':
-        return <Informes cia={companiaActiva.codigo} initialCategory="terceros" onNavigate={navigate} />;
       case 'informes/centros':
-        return <Informes cia={companiaActiva.codigo} initialCategory="centros" onNavigate={navigate} />;
       case 'informes/flujo-caja':
-        return <Informes cia={companiaActiva.codigo} initialCategory="flujo" onNavigate={navigate} />;
       case 'informes/nic-niif':
-        return <Informes cia={companiaActiva.codigo} initialCategory="niif" onNavigate={navigate} />;
       case 'informes/generador':
-        return <Informes cia={companiaActiva.codigo} initialCategory="generador" onNavigate={navigate} />;
+        return <Informes cia={companiaActiva.codigo} onNavigate={navigate} />;
 
       case 'impuestos/retenciones':
         return <ImpuestosPage initialTab="retenciones" />;

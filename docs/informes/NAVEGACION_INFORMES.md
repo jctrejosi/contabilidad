@@ -1,23 +1,16 @@
-# Navegación del centro de informes
+# Navegación de informes
 
-Las opciones del grupo **Informes** comparten una sola pantalla general. Cada
-opción del menú lateral se relaciona con una sección de esa pantalla:
+La pantalla reproduce el orden principal `1` a `9` y `A` a `R` de
+`MENU_INFOR` en `C:\Xedit4\CONTABDSI\Source\CONTABDSI.PRG`.
+Solo se despliegan submenús en las entradas que los tienen en el programa
+original. No hay categorías visuales adicionales ni informes repetidos.
 
-| Opción del menú | Sección visible |
-|---|---|
-| Documentos | Documentos |
-| Libros | Libros contables |
-| Estados y balances | Estados y balances |
-| Terceros | Terceros |
-| Centros | Centros de costo |
-| Flujo de caja | Flujo de caja |
-| NIC/NIIF | NIC / NIIF |
-| Generador personalizado | Generador personalizado |
+Las acciones de mantenimiento incluidas en algunos submenús originales
+(limpiar o generar acumulados, carga manual) se omiten porque esta pantalla
+se limita a consultas e impresión. Las opciones de informe cuya consulta real
+todavía no se ha migrado se muestran como **Pendiente**, sin enlazar a datos
+de demostración.
 
-Al seleccionar una opción, React conserva el centro general y desplaza el
-contenedor principal hasta la sección correspondiente. La opción elegida queda
-marcada en el menú lateral y en la barra de categorías.
-
-Los botones de categorías ubicados dentro del centro utilizan la misma
-navegación. Las demás categorías permanecen disponibles debajo y no se
-eliminan ni se filtran de la pantalla.
+La búsqueda, los favoritos y los recientes operan sobre los informes
+disponibles en este menú. Los accesos antiguos por categoría siguen abriendo
+la misma pantalla para no romper enlaces existentes.

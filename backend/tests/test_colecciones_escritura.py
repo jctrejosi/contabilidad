@@ -660,6 +660,7 @@ def test_ads_template_update_rewrites_the_whole_pair_block(monkeypatch) -> None:
     assert item["codigo"] == "NO"
     sql, parametros = ejecutadas[0]
     assert sql.startswith("UPDATE VISDOCUM SET NOMBRE = ?")
+    assert "WHERE SUC = 1 AND CODIGO = ?" in sql
     for columna in ("DEB01", "DEB02", "DEB09", "CRE01", "CRE09", "NOM01", "NOM08"):
         assert f"{columna} = ?" in sql
     # Una sola sentencia reescribe el bloque completo (NOMBRE + parejas) y el código

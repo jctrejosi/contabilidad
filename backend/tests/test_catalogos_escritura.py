@@ -7,6 +7,7 @@ de abrir la conexión. La ejecución real de un `201` contra Advantage o Postgre
 requiere un motor disponible y queda fuera de esta suite.
 """
 
+from contextlib import contextmanager
 from decimal import Decimal
 
 import pytest
@@ -216,6 +217,35 @@ def test_ads_document_type_rejects_global_only_fields_before_connection() -> Non
         create_document_type("27", {**TIPO, "terceroObligatorio": True})
     with pytest.raises(DocumentTypeValidationError, match="obligatorio"):
         create_document_type("27", {"codigo": "NC"})
+
+
+def test_ads_document_type_creation_sets_default_branch(monkeypatch) -> None:
+    statements: list[str] = []
+
+    class Connection:
+        def BeginTrans(self):
+            pass
+
+        def CommitTrans(self):
+            pass
+
+        def RollbackTrans(self):
+            pass
+
+    @contextmanager
+    def connection():
+        yield Connection()
+
+    monkeypatch.setattr(tipos_documento_repository, "ads_odbc_connection", connection)
+    monkeypatch.setattr(tipos_documento_repository, "_company_exists", lambda *_: True)
+    monkeypatch.setattr(tipos_documento_repository, "_one", lambda _connection, sql, _params: statements.append(sql) or None)
+    monkeypatch.setattr(tipos_documento_repository, "_execute", lambda _connection, sql, _params: statements.append(sql))
+    monkeypatch.setattr(tipos_documento_repository, "register_master_creation", lambda *_, **__: None)
+
+    tipos_documento_repository.create_document_type("027", TIPO)
+    assert "WHERE SUC = 1 AND CODIGO = ?" in statements[0]
+    assert "INSERT INTO VISDOCUM (SUC, CODIGO" in statements[1]
+    assert "VALUES (1, ?," in statements[1]
 
 
 def test_pg_document_type_rejects_invalid_numeracion_before_connection() -> None:

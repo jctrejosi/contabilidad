@@ -50,7 +50,10 @@ Rutas disponibles:
 - `GET /api/companias`: consulta las compañías de `CONEMP` para el ingreso.
 - `GET /api/terceros`: pagina y busca el maestro global `FADCLI`.
 - `GET /api/centros?cia=027`: consulta `CONCECOS` aislado por compañía.
-- `GET /api/tipos-documento`: consulta el maestro global `VISDOCUM` sin CIA.
+- `GET /api/tipos-documento`: consulta `VISDOCUM` sin CIA y solo para `SUC=1`
+  (sucursal predeterminada hasta que exista selección de sucursal). La creación
+  de tipos, la validación de lotes/partidas, las plantillas y la reserva de
+  consecutivos usan la misma sucursal para evitar mezclar registros.
 - `GET /api/comprobantes?cia=027`: consulta `CONTICOM` aislado por compañía.
 - `GET /api/movimiento-mensual?cia=027&anio=2025&mes=1`: consulta paginada de `MOV01`; admite filtros de cuenta, tercero, comprobante, centro y documento.
 - `GET /api/cuentas?cia=027`: consulta las cuentas maestras de esa compañía.

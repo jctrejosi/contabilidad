@@ -150,7 +150,8 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
   const [aviso, setAviso] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
   const capturaRef = useRef<HTMLDivElement>(null);
 
-  // CONMAE, CONCECOS y CONTICOM son maestros por compañía; VISDOCUM es global.
+  // CONMAE, CONCECOS y CONTICOM son por compañía; VISDOCUM se comparte entre
+  // compañías, pero el backend solo entrega la sucursal predeterminada (SUC=1).
   // Todos se resuelven al entrar para que la captura nunca mezcle catálogos de
   // otra contabilidad ni dependa de listas de demostración del frontend.
   useEffect(() => {
@@ -195,7 +196,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
 
   const cuentasAfectables = cuentas.filter(c => c.afectable);
 
-  // VISDOCUM es global. Los tipos vinculados al comprobante seleccionado se
+  // Los tipos de VISDOCUM/SUC=1 vinculados al comprobante seleccionado se
   // presentan primero, pero los demás permanecen disponibles para no alterar
   // la operación histórica cuando COMPROBA viene vacío o difiere por módulo.
   const tiposDocumentoOrdenados = Array.from(

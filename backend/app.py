@@ -113,6 +113,11 @@ from .balance_comprobacion_repository import (
     export_trial_balance_pdf,
     export_trial_balance_xlsx,
 )
+from .balance_mensual_repository import (
+    build_monthly_balance,
+    export_monthly_balance_pdf,
+    export_monthly_balance_xlsx,
+)
 from .informes_adicionales_repository import export_additional_report
 from .reproceso_mensual_repository import (
     MonthlyReprocessValidationError,
@@ -1429,7 +1434,7 @@ def create_cost_center_endpoint(
 
 @app.get("/api/tipos-documento", summary="Consultar tipos de documento globales")
 def document_types() -> dict[str, object]:
-    """Lee VISDOCUM sin CIA porque el catálogo se comparte entre compañías."""
+    """Lee VISDOCUM de sucursal 1, compartido entre compañías."""
     try:
         items = store.list_document_types()
     except Exception as exc:
@@ -1452,7 +1457,7 @@ def create_document_type_endpoint(
     cia: str = Query(description="Compañía activa para validar el comprobante.", pattern=r"^[0-9]{1,3}$"),
     usuario: str = Query("WEB", min_length=1, max_length=4),
 ) -> dict[str, object]:
-    """Crea un tipo de documento; en PostgreSQL es por compañía, en ADS global."""
+    """Crea un tipo; en ADS se comparte por compañía dentro de sucursal 1."""
     try:
         item = store.create_document_type(cia, payload.model_dump(), user=usuario)
     except Exception as exc:
@@ -1460,7 +1465,7 @@ def create_document_type_endpoint(
     return {
         "item": item,
         "source": "VISDOCUM",
-        # R10: VISDOCUM no tiene CIA (global); tipos_documento sí es por compañía.
+        # VISDOCUM no tiene CIA, pero sus operaciones ADS usan SUC=1.
         "sharedAcrossCompanies": not store.is_postgres(),
     }
 
@@ -2470,6 +2475,64 @@ def export_trial_balance(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/api/informes/balance-comprobacion-mensual", summary="Generar balance de comprobación mensual")
+def monthly_trial_balance(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(alias="mesDesde", ge=1, le=18),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=18),
+    nivel: int = Query(4, ge=4, le=12),
+    incluir_ceros: bool = Query(False, alias="incluirCeros"),
+    incluir_resultados: bool = Query(True, alias="incluirResultados"),
+    incluir_terceros: bool = Query(False, alias="incluirTerceros"),
+    incluir_centros: bool = Query(False, alias="incluirCentros"),
+    detalle_desde: str = Query("", alias="detalleCuentaDesde"),
+    detalle_hasta: str = Query("", alias="detalleCuentaHasta"),
+) -> dict[str, Any]:
+    """INFOR02(2): período neto, resultados y detalles de la compañía activa."""
+    try:
+        return build_monthly_balance(
+            cia, anio, mes_desde, mes_hasta, level=nivel, include_zero=incluir_ceros,
+            include_results=incluir_resultados, include_thirds=incluir_terceros,
+            include_centers=incluir_centros, detail_from=detalle_desde, detail_to=detalle_hasta,
+        )
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/balance-comprobacion-mensual/exportar", summary="Imprimir o exportar balance mensual")
+def export_monthly_trial_balance(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(alias="mesDesde", ge=1, le=18),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=18),
+    nivel: int = Query(4, ge=4, le=12),
+    incluir_ceros: bool = Query(False, alias="incluirCeros"),
+    incluir_resultados: bool = Query(True, alias="incluirResultados"),
+    incluir_terceros: bool = Query(False, alias="incluirTerceros"),
+    incluir_centros: bool = Query(False, alias="incluirCentros"),
+    detalle_desde: str = Query("", alias="detalleCuentaDesde"),
+    detalle_hasta: str = Query("", alias="detalleCuentaHasta"),
+    formato: Literal["xlsx", "pdf"] = Query(),
+    visualizar: bool = Query(False),
+) -> Response:
+    """La vista previa, el PDF y Excel se calculan con los mismos filtros."""
+    try:
+        report = build_monthly_balance(
+            cia, anio, mes_desde, mes_hasta, level=nivel, include_zero=incluir_ceros,
+            include_results=incluir_resultados, include_thirds=incluir_terceros,
+            include_centers=incluir_centros, detail_from=detalle_desde, detail_to=detalle_hasta,
+        )
+        content = export_monthly_balance_pdf(report) if formato == "pdf" else export_monthly_balance_xlsx(report)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    media_type = "application/pdf" if formato == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    filename = f"balance_mensual_{int(cia):03d}_{anio}_{mes_desde:02d}_{mes_hasta:02d}.{formato}"
+    disposition = "inline" if visualizar and formato == "pdf" else "attachment"
+    return Response(content=content, media_type=media_type,
+                    headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})
 
 
 @app.get("/api/informes/adicionales/{report_id}", summary="Generar informe contable adicional")

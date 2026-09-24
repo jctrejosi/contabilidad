@@ -45,6 +45,7 @@ from .contabilizacion_repository import (
     _validate_company_and_period,
     _validate_masters,
 )
+from .visdocum_sucursal import VISDOCUM_SUCURSAL
 
 
 LOT_CODE = re.compile(r"^[A-Za-z0-9 ._/-]+$")
@@ -273,7 +274,7 @@ def _validate_line_masters(
         raise LotValidationError("El comprobante no existe para la compañía activa.")
     if _one(
         connection,
-        "SELECT TOP 1 CODIGO FROM VISDOCUM WHERE CODIGO = ?",
+        f"SELECT TOP 1 CODIGO FROM VISDOCUM WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
         [(ADO_TYPE_VARCHAR, 2, data["tipoDocumento"])],
     ) is None:
         raise LotValidationError("El tipo de documento no existe en VISDOCUM.")
@@ -939,7 +940,7 @@ def _build_lot_verification(
         if line["tipoDocumento"] not in type_cache:
             type_cache[line["tipoDocumento"]] = _one(
                 connection,
-                "SELECT TOP 1 CODIGO FROM VISDOCUM WHERE CODIGO = ?",
+                f"SELECT TOP 1 CODIGO FROM VISDOCUM WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
                 [(ADO_TYPE_VARCHAR, 2, line["tipoDocumento"])],
             )
         if type_cache[line["tipoDocumento"]] is None:

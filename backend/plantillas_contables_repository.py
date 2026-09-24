@@ -6,7 +6,9 @@ parejas de cuentas en ``plantilla_lineas``; en el legado la plantilla **es** el
 bloque de parejas de una fila de ``VISDOCUM`` — el mismo maestro global de tipos
 documentales que consume ``/api/tipos-documento``. La ruta acepta ``cia``, la usa
 para validar las cuentas contra ``CONMAE`` y declara el alcance con
-``sharedAcrossCompanies``.
+``sharedAcrossCompanies``. Todas las operaciones sobre ``VISDOCUM`` usan
+``SUC=1`` hasta disponer de selección de sucursal; los códigos no se buscan ni
+se modifican en las demás sucursales.
 
 **Mapeo real, no simulado** (``db/old_db/MATRIZ_TABLAS_Y_BRECHAS.md``
 L22-23 y L165-175; ``db/old_db/PLAN_MIGRACION_POSTGRESQL.md`` L130-131, B09):
@@ -68,6 +70,7 @@ from .auditoria_repository import (
 )
 from .companias_repository import validate_company_reason
 from .lotes_repository import _one
+from .visdocum_sucursal import VISDOCUM_SUCURSAL
 # Patrón de cuenta del contrato de configuración, declarado en el módulo de
 # tarifas de IVA y reutilizado por los demás catálogos de B3.
 from .tarifas_iva_repository import ACCOUNT_CODE
@@ -361,10 +364,11 @@ def _legacy_parameters(data: dict[str, Any]) -> list[tuple[int, int, Any]]:
 
 
 def _legacy_pair_row(connection: Any, codigo: str) -> dict[str, Any] | None:
-    """Fila de ``VISDOCUM`` del código, o ``None`` si no existe."""
+    """Fila de ``VISDOCUM`` del código en la sucursal activa, o ``None``."""
     return _one(
         connection,
-        f"SELECT TOP 1 {TEMPLATE_LEGACY_SELECT} FROM VISDOCUM WHERE CODIGO = ?",
+        f"SELECT TOP 1 {TEMPLATE_LEGACY_SELECT} FROM VISDOCUM "
+        f"WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
         [(ADO_TYPE_VARCHAR, 2, codigo)],
     )
 
@@ -378,14 +382,15 @@ def _plantilla_existente(connection: Any, codigo: str) -> dict[str, Any]:
 
 
 def list_plantillas_contables(cia: str) -> list[dict[str, Any]]:
-    """Plantillas del maestro global ``VISDOCUM`` (las filas con parejas)."""
+    """Plantillas de VISDOCUM en sucursal 1 (filas con parejas)."""
     company_id = normalize_company_code(cia)
     with ads_connection() as connection:
         if not _company_exists(connection, company_id):
             raise CompanyNotFound(f"No existe la compañía {cia}.")
         recordset = _open_recordset(
             connection,
-            f"SELECT {TEMPLATE_LEGACY_SELECT} FROM VISDOCUM ORDER BY CODIGO",
+            f"SELECT {TEMPLATE_LEGACY_SELECT} FROM VISDOCUM "
+            f"WHERE SUC = {VISDOCUM_SUCURSAL} ORDER BY CODIGO",
         )
         try:
             filas = [_template_from_row(row) for row in _rows(recordset)]
@@ -411,7 +416,7 @@ def create_plantilla_contable(
             raise CompanyNotFound(f"No existe la compañía {cia}.")
         if _legacy_pair_row(connection, data["codigo"]) is not None:
             raise TemplateAlreadyExists(
-                f"El código {data['codigo']} ya está usado en VISDOCUM: en el legado la "
+                f"El código {data['codigo']} ya está usado en VISDOCUM para la sucursal 1: la "
                 "plantilla comparte el espacio de códigos de los tipos documentales."
             )
         _validate_accounts(connection, company_id, data)
@@ -419,8 +424,8 @@ def create_plantilla_contable(
         try:
             _execute(
                 connection,
-                f"INSERT INTO VISDOCUM ({', '.join(TEMPLATE_LEGACY_COLUMNS)}) "
-                f"VALUES ({', '.join('?' for _ in TEMPLATE_LEGACY_COLUMNS)})",
+                f"INSERT INTO VISDOCUM (SUC, {', '.join(TEMPLATE_LEGACY_COLUMNS)}) "
+                f"VALUES ({VISDOCUM_SUCURSAL}, {', '.join('?' for _ in TEMPLATE_LEGACY_COLUMNS)})",
                 _legacy_parameters(data),
             )
             connection.CommitTrans()
@@ -466,7 +471,7 @@ def update_plantilla_contable(
             _execute(
                 connection,
                 f"UPDATE VISDOCUM SET {', '.join(f'{column} = ?' for column in TEMPLATE_LEGACY_COLUMNS if column != 'CODIGO')} "
-                "WHERE CODIGO = ?",
+                f"WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
                 [
                     *_legacy_parameters(data)[1:],
                     (ADO_TYPE_VARCHAR, 2, code),
@@ -521,7 +526,7 @@ def delete_plantilla_contable(
                 _execute(
                     connection,
                     f"UPDATE VISDOCUM SET {', '.join(f'{column} = ?' for column in vacio)} "
-                    "WHERE CODIGO = ?",
+                    f"WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
                     [
                         *((ADO_TYPE_VARCHAR, sizes[columna], "") for columna in vacio),
                         (ADO_TYPE_VARCHAR, 2, code),
