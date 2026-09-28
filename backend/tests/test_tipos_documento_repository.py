@@ -54,7 +54,16 @@ def test_document_type_listing_reads_only_default_branch(monkeypatch) -> None:
 
     monkeypatch.setattr(tipos, "ads_connection", connection)
     monkeypatch.setattr(tipos, "_open_recordset", open_recordset)
-    monkeypatch.setattr(tipos, "_rows", lambda _recordset: iter([{"CODIGO": "NC", "NOMBRE": "Nota"}]))
+    monkeypatch.setattr(
+        tipos,
+        "_rows",
+        lambda _recordset: iter([
+            {"CODIGO": "NC", "NOMBRE": "Nota", "MODULO": 1},
+            {"CODIGO": "FV", "NOMBRE": "Factura", "MODULO": 2},
+            {"CODIGO": "CP", "NOMBRE": "Comprobante", "MODULO": 3},
+        ]),
+    )
 
-    assert tipos.list_document_types()[0]["codigo"] == "NC"
+    assert [item["codigo"] for item in tipos.list_document_types()] == ["NC", "FV", "CP"]
     assert "FROM VISDOCUM WHERE SUC = 1 ORDER BY CODIGO" in captured[0]
+    assert "MODULO =" not in captured[0]

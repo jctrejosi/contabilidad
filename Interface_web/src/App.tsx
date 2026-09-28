@@ -122,7 +122,7 @@ export default function App() {
         return <Nomina onNavigate={navigate} onCrearLote={crearLote} />;
 
       case 'movimientos/reembolsos':
-        return <Reembolsos onNavigate={navigate} onCrearLote={crearLote} />;
+        return <Reembolsos cia={companiaActiva.codigo} onNavigate={navigate} />;
 
       case 'consultas/documentos':
         return <ConsultaDocumentos cia={companiaActiva.codigo} onOpenDocumento={openDocumento} />;

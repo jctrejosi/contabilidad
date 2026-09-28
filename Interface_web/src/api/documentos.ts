@@ -47,6 +47,8 @@ export interface DocumentosResponse {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  totalDocumentos: number;
+  totalValor: number;
   source: 'CONDOCUM';
   sharedAcrossCompanies: false;
 }

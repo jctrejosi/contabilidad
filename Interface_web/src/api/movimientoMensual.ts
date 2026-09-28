@@ -43,6 +43,9 @@ export interface MovimientoMensualResponse {
   hasMore: boolean;
   pageDebit: number;
   pageCredit: number;
+  periodDebit: number;
+  periodCredit: number;
+  periodSaldo: number;
   source: 'MOV01';
   sharedAcrossCompanies: false;
 }

@@ -332,7 +332,9 @@ def list_lots(cia: str, *, page: int = 1, page_size: int = 100) -> dict[str, Any
         "BORRAR, DEBITOS, CREDITOS, ITEMS, ARCHOK, ID "
         "FROM CONMOVI WHERE CIA = ? ORDER BY LOTE"
     )
-    with ads_connection() as connection:
+    # Consulta de solo lectura usada por Inicio: ADO/ODBC evita el callback
+    # C0000005 que puede disparar el proveedor OLE DB al refrescar.
+    with ads_odbc_connection() as connection:
         if not _company_exists(connection, company):
             raise CompanyNotFound(f"La compañía {cia} no existe en CONEMP.")
         rows = _query_rows(connection, sql, [(ADO_TYPE_INTEGER, 0, company)])

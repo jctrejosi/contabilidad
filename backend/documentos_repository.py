@@ -25,6 +25,7 @@ from .ads_repository import (
     _rows,
     _text,
     ads_connection,
+    ads_odbc_connection,
     normalize_company_code,
 )
 
@@ -206,7 +207,9 @@ def list_documents(
         + " AND ".join(conditions)
         + " ORDER BY DFECHA DESC, ID DESC"
     )
-    with ads_connection() as connection:
+    # La lista alimenta el panel al iniciar sesión. ADO/ODBC mantiene la
+    # misma consulta sin activar el callback nativo inestable de OLE DB.
+    with ads_odbc_connection() as connection:
         if not _company_exists(connection, company):
             raise CompanyNotFound(f"La compañía {cia} no existe en CONEMP.")
         rows = _query_rows(connection, sql, parameters)

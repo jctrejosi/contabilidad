@@ -37,6 +37,7 @@ from .ads_repository import (
     _rows,
     _text,
     ads_connection,
+    ads_odbc_connection,
     normalize_company_code,
 )
 from .auditoria_repository import register_direct_posting
@@ -65,7 +66,9 @@ def get_accounting_period(company_code: str) -> dict[str, Any]:
     """
     company = normalize_company_code(company_code)
     month_fields = ", ".join(f"CT{month:02d}" for month in range(13))
-    with ads_connection() as connection:
+    # Esta lectura se ejecuta también al abrir Inicio. ODBC evita el callback
+    # nativo defectuoso del proveedor OLE DB 11.10 al refrescar el panel.
+    with ads_odbc_connection() as connection:
         company_row = _one(
             connection,
             "SELECT TOP 1 EMPCOD FROM CONEMP WHERE EMPCOD = ?",

@@ -460,7 +460,8 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         sheet = workbook.active
         sheet.title = "Informe"
         sheet.append([report["compania"]["nombre"]])
-        period_label = ("Catálogo de cuentas" if report["id"] == "listado-cuentas" else
+        period_label = (report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado"} else
+                        "Catálogo de cuentas" if report["id"] == "listado-cuentas" else
                         "Directorio general de terceros" if report.get("source") == "FADCLI" else
                         f"Mes o lote {report['mesDesde']:02d}" if report["id"] == "doc-formato" else
                         f"Año {report['anio']} · meses {report['mesDesde']:02d}–{report['mesHasta']:02d}")
@@ -468,6 +469,11 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         sheet.append(labels)
         for row in rows:
             sheet.append(row)
+        for row_number, kind in enumerate(report.get("tipos", []), start=4):
+            if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "apertura"}:
+                for cell in sheet[row_number]:
+                    cell.font = Font(bold=True, color="174E5A")
+                    cell.fill = PatternFill("solid", fgColor="EAF1F2")
         for cell in sheet[3]:
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill("solid", fgColor="174E5A")
@@ -542,9 +548,16 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F4F8F8")]),
         ]))
+        for row_number, kind in enumerate(report.get("tipos", []), start=1):
+            if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "apertura"}:
+                table.setStyle(TableStyle([
+                    ("BACKGROUND", (0, row_number), (-1, row_number), colors.HexColor("#EAF1F2")),
+                    ("TEXTCOLOR", (0, row_number), (-1, row_number), colors.HexColor("#174E5A")),
+                ]))
         styles = getSampleStyleSheet()
         heading = Paragraph(escape(report["compania"]["nombre"]), styles["Heading1"])
-        detail = ("Catálogo de cuentas" if report["id"] == "listado-cuentas" else
+        detail = (report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado"} else
+                  "Catálogo de cuentas" if report["id"] == "listado-cuentas" else
                   "Directorio general de terceros" if report.get("source") == "FADCLI" else
                   f"Año {report['anio']} · Meses {report['mesDesde']:02d}–{report['mesHasta']:02d}")
         subtitle = Paragraph(f"Informe {escape(report['id'])} · {detail}", styles["Normal"])

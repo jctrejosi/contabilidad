@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import type { NavPage } from '../components/Shell';
 import {
   consultarBalanceComprobacion,
@@ -10,7 +10,7 @@ import {
   type FiltrosBalanceComprobacion,
 } from '../api/balanceComprobacion';
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
-import { consultarInformeAdicional, exportarInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional } from '../api/informesAdicionales';
+import { consultarInformeAdicional, consultarPaginaInformeAdicional, exportarInformeAdicional, urlImpresionInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional } from '../api/informesAdicionales';
 
 // El formato de moneda es de presentación: no depende de los datos de demostración.
 const fmtCOP = (n: number): string => `$ ${n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -245,6 +245,7 @@ interface DatosInforme {
 }
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MESES_LIBRO = ['Mes 00', ...MESES];
 const MESES_BALANCE = [...MESES, 'Mes 13', 'Mes 14', 'Mes 15', 'Mes 16', 'Mes 17', 'Mes 18'];
 const BALANCE_IDS = new Set(['balance-comp', 'balance-mensual']);
 const ACCOUNT_BALANCE_IDS = new Set([
@@ -265,6 +266,8 @@ function mostrarFiltro(id: string, key: string): boolean {
   const third = ['cuentaDesde', 'cuentaHasta', 'nit', 'buscar'].includes(key);
   const center = ['cuentaDesde', 'cuentaHasta', 'nit', 'centro', 'buscar'].includes(key);
   if (id === 'listado-cuentas') return ['cuentaDesde', 'cuentaHasta'].includes(key);
+  if (id === 'aux-gral') return ['cuentaDesde', 'cuentaHasta'].includes(key);
+  if (id === 'aux-doc-afectado') return false;
   if (ACCOUNT_BALANCE_IDS.has(id)) return account;
   if (THIRD_DIRECTORY_IDS.has(id)) return ['nit', 'buscar'].includes(key);
   if (THIRD_SUMMARY_IDS.has(id)) return third;
@@ -272,6 +275,20 @@ function mostrarFiltro(id: string, key: string): boolean {
   if (id === 'doc-formato') return ['tipoDocumento', 'documentoDesde', 'documentoHasta'].includes(key);
   if (id === 'doc-planilla') return ['comprobante', 'comprobanteHasta', 'tipoDocumento', 'tipoDocumentoHasta', 'documentoDesde', 'documentoHasta'].includes(key);
   return true;
+}
+
+/** Enter recorre los filtros presentes; solo el botón final confirma el informe. */
+function avanzarFiltroConEnter(event: KeyboardEvent<HTMLFormElement>): void {
+  if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) return;
+  const fields = Array.from(event.currentTarget.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>(
+    'input:not([type="hidden"]), select, textarea, button[data-report-submit]',
+  )).filter(field => !field.disabled && field.getClientRects().length > 0);
+  const index = fields.indexOf(target);
+  if (index < 0) return;
+  event.preventDefault();
+  fields[index + 1]?.focus();
 }
 
 function fmtMonto(n: number): string {
@@ -342,12 +359,14 @@ interface PreviewState {
 }
 
 function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () => void }) {
+  const [reportPage, setReportPage] = useState(preview.report);
   const datos = useMemo<DatosInforme>(() => {
-    if (preview.report) return {
-      columnas: preview.report.columnas,
-      filas: preview.report.filas,
-      totales: preview.report.totales,
-      nota: preview.report.nota,
+    if (reportPage) return {
+      columnas: reportPage.columnas,
+      filas: reportPage.filas,
+      totales: reportPage.totales,
+      nota: reportPage.nota,
+      tipos: reportPage.tipos,
     };
     if (!preview.balance) return { columnas: [], filas: [] };
     const mensual = preview.balance.tipoInforme === 'mensual';
@@ -362,15 +381,38 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
       tipos: preview.balance.items.map(item => item.tipo),
       nota: `${mensual ? 'Movimiento del período' : 'Saldo acumulado'} · Activo: ${fmtMonto(preview.balance.totales.saldoActual)} · Pasivo y patrimonio: ${fmtMonto(preview.balance.totales.pasivoPatrimonio)} · Diferencia: ${fmtMonto(preview.balance.totales.diferencia)}.`,
     };
-  }, [preview.balance, preview.report]);
+  }, [preview.balance, reportPage]);
   const [pagina, setPagina] = useState(0);
+  const [cargandoPagina, setCargandoPagina] = useState(false);
   const [exportando, setExportando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
-  const paginas = Math.max(1, Math.ceil(datos.filas.length / PAGE_SIZE));
+  const paginadoServidor = !!preview.report?.snapshotId;
+  const totalFilas = paginadoServidor ? preview.report?.count ?? 0 : datos.filas.length;
+  const paginas = Math.max(1, Math.ceil(totalFilas / PAGE_SIZE));
   const inicio = pagina * PAGE_SIZE;
-  const visibles = datos.filas.slice(inicio, inicio + PAGE_SIZE);
+  const visibles = cargandoPagina ? [] : paginadoServidor ? datos.filas : datos.filas.slice(inicio, inicio + PAGE_SIZE);
+
+  useEffect(() => {
+    const snapshotId = preview.report?.snapshotId;
+    if (!snapshotId || pagina === 0) {
+      setReportPage(preview.report);
+      setCargandoPagina(false);
+      return;
+    }
+    let active = true;
+    setCargandoPagina(true);
+    consultarPaginaInformeAdicional(preview.inf.id, snapshotId, pagina)
+      .then(report => { if (active) setReportPage(report); })
+      .catch(error => {
+        if (!active) return;
+        setAviso(error instanceof Error ? error.message : 'No fue posible cargar esta página.');
+        setPagina(0);
+      })
+      .finally(() => { if (active) setCargandoPagina(false); });
+    return () => { active = false; };
+  }, [pagina, preview.inf.id, preview.report]);
 
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
 
@@ -394,7 +436,7 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
     }
     if (preview.report && preview.filtrosReport) {
       try {
-        await exportarInformeAdicional(preview.inf.id, preview.filtrosReport, formato.toLowerCase() as 'pdf' | 'xlsx' | 'csv');
+        await exportarInformeAdicional(preview.inf.id, preview.filtrosReport, formato.toLowerCase() as 'pdf' | 'xlsx' | 'csv', preview.report.snapshotId);
         setAviso(`Informe exportado en ${formato}.`);
       } catch (error) {
         setAviso(error instanceof Error ? error.message : `No fue posible exportar en ${formato}.`);
@@ -408,6 +450,11 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
   }
 
   function imprimir() {
+    if (preview.report?.snapshotId) {
+      const popup = window.open(urlImpresionInformeAdicional(preview.inf.id, preview.report.snapshotId), '_blank');
+      if (!popup) setAviso('El navegador bloqueó la impresión. Permita las ventanas emergentes.');
+      return;
+    }
     if (preview.inf.id === 'balance-mensual' && preview.filtrosBalance) {
       const popup = window.open(urlImpresionBalanceMensual(preview.filtrosBalance), '_blank');
       if (!popup) setAviso('El navegador bloqueó la impresión. Permita las ventanas emergentes.');
@@ -431,10 +478,17 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
       ? 'Directorio compartido por todas las compañías'
       : preview.inf.id === 'listado-cuentas'
         ? `${preview.report?.compania.nombre} · Catálogo de cuentas`
+      : preview.inf.id === 'aux-gral'
+        ? `${preview.report?.compania.nombre} · ${preview.report?.fechaDesde} a ${preview.report?.fechaHasta}`
       : preview.inf.id === 'doc-formato'
         ? `${preview.report?.compania.nombre} · Mes o lote ${String(preview.report?.mesDesde ?? '').padStart(2, '0')}`
       : `${preview.report?.compania.nombre ?? preview.balance?.compania.nombre} · Año ${preview.anio} · ${preview.mesDesde} a ${preview.mesHasta}`;
     doc.body.appendChild(subtitle);
+    if (datos.nota) {
+      const note = doc.createElement('p');
+      note.textContent = datos.nota;
+      doc.body.appendChild(note);
+    }
     const table = doc.createElement('table');
     const header = table.createTHead().insertRow();
     for (const column of datos.columnas) {
@@ -471,6 +525,7 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
             <div className="text-xs text-gray-500">
               {THIRD_DIRECTORY_IDS.has(preview.inf.id) ? 'Datos generales, sin filtro de período'
                 : preview.inf.id === 'listado-cuentas' ? 'Catálogo de cuentas'
+                : preview.inf.id === 'aux-gral' ? `${preview.report?.fechaDesde} a ${preview.report?.fechaHasta}`
                 : preview.inf.id === 'doc-formato' ? `Mes o lote ${String(preview.report?.mesDesde ?? '').padStart(2, '0')} · ${preview.mesDesde}`
                 : preview.balance ? `${preview.balance.periodo} · Nivel ${preview.balance.nombreNivel}`
                   : `Año ${preview.anio} · ${preview.mesDesde} a ${preview.mesHasta}`}
@@ -510,14 +565,16 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
               {visibles.length === 0 && (
                 <tr>
                   <td colSpan={Math.max(datos.columnas.length, 1)} className="px-3 py-10 text-center text-xs text-gray-500">
-                    No hay datos para los filtros seleccionados.
+                    {cargandoPagina ? 'Cargando página…' : 'No hay datos para los filtros seleccionados.'}
                   </td>
                 </tr>
               )}
               {visibles.map((fila, i) => (
-                <tr key={i} className={datos.tipos?.[inicio + i] === 'seccion' ? 'bg-petroleum-500 text-white font-semibold' :
-                  datos.tipos?.[inicio + i]?.startsWith('total') || datos.tipos?.[inicio + i] === 'resultado' ? 'bg-petroleum-50 font-semibold' : 'hoverable'}>
-                  {datos.tipos?.[inicio + i] === 'seccion'
+                <tr key={i} className={datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' && preview.inf.id !== 'aux-gral' ? 'bg-petroleum-500 text-white font-semibold' :
+                  datos.tipos?.[paginadoServidor ? i : inicio + i]?.startsWith('total') || datos.tipos?.[paginadoServidor ? i : inicio + i] === 'resultado' ||
+                  datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' || datos.tipos?.[paginadoServidor ? i : inicio + i] === 'subtotal' ||
+                  datos.tipos?.[paginadoServidor ? i : inicio + i] === 'apertura' ? 'bg-petroleum-50 font-semibold' : 'hoverable'}>
+                  {datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' && preview.inf.id !== 'aux-gral'
                     ? <td colSpan={datos.columnas.length} className="px-3 py-2 text-white font-semibold">{fila[2]}</td>
                     : fila.map((celda, j) => <CeldaValor key={j} valor={celda} money={!!datos.columnas[j]?.money} />)}
                 </tr>
@@ -538,7 +595,7 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
         {/* Pie con paginación */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 px-4 py-2.5">
           <div className="text-xs text-gray-500">
-            Mostrando {visibles.length ? `${inicio + 1}–${inicio + visibles.length}` : '0'} de {datos.filas.length} registros
+            Mostrando {visibles.length ? `${inicio + 1}–${inicio + visibles.length}` : '0'} de {totalFilas} registros
           </div>
           {datos.nota && <div className="text-xs text-gray-400">{datos.nota}</div>}
           <div className="flex items-center gap-2">
@@ -583,6 +640,8 @@ export default function Informes({ onNavigate, cia }: Props) {
     cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '', comprobanteHasta: '',
     tipoDocumento: '', tipoDocumentoHasta: '',
     documentoDesde: '', documentoHasta: '', buscar: '',
+    fechaDesde: '', fechaHasta: '', modalidad: 'detallado' as 'detallado' | 'resumido',
+    documentoAfectado: '',
   });
   const [generando, setGenerando] = useState(false);
   const [errorInforme, setErrorInforme] = useState<string | null>(null);
@@ -605,6 +664,8 @@ export default function Informes({ onNavigate, cia }: Props) {
       setParams(previous => ({
         ...previous, mesDesde: MESES[0],
         mesHasta: MESES[mesHasta - 1], mesLote: String(mesHasta),
+        fechaDesde: `${periodo.anio}-01-01`,
+        fechaHasta: `${periodo.anio}-12-31`,
       }));
     }).catch((error: unknown) => {
       if (active) setErrorPeriodo(error instanceof Error ? error.message : 'No fue posible consultar el período operativo.');
@@ -638,6 +699,7 @@ export default function Informes({ onNavigate, cia }: Props) {
       cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '',
       comprobanteHasta: '', tipoDocumento: '', tipoDocumentoHasta: '',
       documentoDesde: '', documentoHasta: '', buscar: '',
+      modalidad: 'detallado', documentoAfectado: '',
     }));
     setErrorInforme(null);
     setShowParams(inf);
@@ -682,8 +744,14 @@ export default function Informes({ onNavigate, cia }: Props) {
     const filtros: FiltrosInformeAdicional = {
       cia,
       anio: anioOperacion,
-      mesDesde: inf.id === 'doc-formato' ? mesSeleccionado : MESES.indexOf(params.mesDesde) + 1,
-      mesHasta: inf.id === 'doc-formato' ? mesSeleccionado : MESES.indexOf(params.mesHasta) + 1,
+      mesDesde: inf.id === 'doc-formato' ? mesSeleccionado
+        : inf.id === 'aux-doc-afectado' ? MESES_LIBRO.indexOf(params.mesDesde)
+        : inf.id === 'aux-gral' ? Number(params.fechaDesde.slice(5, 7))
+        : MESES.indexOf(params.mesDesde) + 1,
+      mesHasta: inf.id === 'doc-formato' ? mesSeleccionado
+        : inf.id === 'aux-doc-afectado' ? MESES_LIBRO.indexOf(params.mesHasta)
+        : inf.id === 'aux-gral' ? Number(params.fechaHasta.slice(5, 7))
+        : MESES.indexOf(params.mesHasta) + 1,
       cuentaDesde: params.cuentaDesde,
       cuentaHasta: params.cuentaHasta,
       nit: params.nit,
@@ -695,6 +763,10 @@ export default function Informes({ onNavigate, cia }: Props) {
       documentoDesde: params.documentoDesde,
       documentoHasta: params.documentoHasta,
       buscar: params.buscar,
+      fechaDesde: params.fechaDesde,
+      fechaHasta: params.fechaHasta,
+      modalidad: params.modalidad,
+      documentoAfectado: params.documentoAfectado,
       nivel: Number(params.nivel),
       incluirCeros: params.incluirCeros,
     };
@@ -864,7 +936,7 @@ export default function Informes({ onNavigate, cia }: Props) {
       {/* Modal de parámetros */}
       {showParams && (
         <Modal title={`Parámetros — ${showParams.nombre}`} onClose={() => setShowParams(null)}>
-          <form noValidate onSubmit={e => { e.preventDefault(); generar(showParams); }}>
+          <form noValidate onKeyDown={avanzarFiltroConEnter} onSubmit={e => { e.preventDefault(); generar(showParams); }}>
             <div className="px-5 py-4 grid grid-cols-2 gap-4">
               {showParams.id === 'doc-formato' && <div>
                 <label htmlFor="param-mes-lote" className="block text-xs font-medium text-gray-600 mb-1">Mes o lote</label>
@@ -872,17 +944,37 @@ export default function Informes({ onNavigate, cia }: Props) {
                   {MESES.map((mes, index) => <option key={mes} value={index + 1}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
                 </select>
               </div>}
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && <div>
+              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && <div>
                 <label htmlFor="param-mes-desde" className="block text-xs font-medium text-gray-600 mb-1">Mes desde</label>
                 <select id="param-mes-desde" data-initial-focus value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
-                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : MESES).map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && <div>
+              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && <div>
                 <label htmlFor="param-mes-hasta" className="block text-xs font-medium text-gray-600 mb-1">Mes hasta</label>
                 <select id="param-mes-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
-                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : MESES).map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
+              </div>}
+              {showParams.id === 'aux-gral' && <>
+                <div>
+                  <label htmlFor="param-fecha-desde" className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
+                  <input id="param-fecha-desde" data-initial-focus type="date" required value={params.fechaDesde} onChange={e => setParams(p => ({ ...p, fechaDesde: e.target.value }))} className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor="param-fecha-hasta" className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
+                  <input id="param-fecha-hasta" type="date" required value={params.fechaHasta} onChange={e => setParams(p => ({ ...p, fechaHasta: e.target.value }))} className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor="param-modalidad" className="block text-xs font-medium text-gray-600 mb-1">Detalle</label>
+                  <select id="param-modalidad" value={params.modalidad} onChange={e => setParams(p => ({ ...p, modalidad: e.target.value as 'detallado' | 'resumido' }))} className={INPUT}>
+                    <option value="detallado">Detallado</option><option value="resumido">Resumido</option>
+                  </select>
+                </div>
+              </>}
+              {showParams.id === 'aux-doc-afectado' && <div className="col-span-2">
+                <label htmlFor="param-documento-afectado" className="block text-xs font-medium text-gray-600 mb-1">Documento afectado</label>
+                <input id="param-documento-afectado" required maxLength={12} value={params.documentoAfectado} onChange={e => setParams(p => ({ ...p, documentoAfectado: e.target.value }))} className={INPUT} />
               </div>}
               {BALANCE_IDS.has(showParams.id) && (
                 <>
@@ -959,7 +1051,7 @@ export default function Informes({ onNavigate, cia }: Props) {
             {(errorInforme || errorPeriodo) && <p role="alert" className="px-5 pb-3 text-xs text-red-700">{errorInforme || errorPeriodo}</p>}
             <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
               <button type="button" onClick={() => setShowParams(null)} className={BUTTON_SECONDARY}>Cancelar</button>
-              <button type="submit" disabled={generando || anioOperacion === null} className={`${BUTTON_PRIMARY} disabled:opacity-60`}>
+              <button type="submit" data-report-submit disabled={generando || anioOperacion === null} className={`${BUTTON_PRIMARY} disabled:opacity-60`}>
                 {generando ? 'Consultando Advantage…' : anioOperacion === null && !errorPeriodo ? 'Consultando período…' : 'Generar informe'}
               </button>
             </div>

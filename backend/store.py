@@ -1040,6 +1040,24 @@ def build_additional_report(
     """
     from .flujo_caja_niif_repository import NUEVOS_INFORME_IDS
 
+    if report_id in {"aux-gral", "aux-doc-afectado"}:
+        from .libro_auxiliar_repository import build_auxiliary_book
+
+        return build_auxiliary_book(
+            report_id, cia, year, month_from, month_to,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            date_from=filtros.get("date_from", ""),
+            date_to=filtros.get("date_to", ""),
+            detail_mode=filtros.get("detail_mode", "detallado"),
+            affected_document=filtros.get("affected_document", ""),
+        )
+
+    # Parámetros exclusivos del libro auxiliar no forman parte del contrato
+    # de los demás informes; mantener su comportamiento previo intacto.
+    for auxiliary_key in ("date_from", "date_to", "detail_mode", "affected_document"):
+        filtros.pop(auxiliary_key, None)
+
     if report_id in NUEVOS_INFORME_IDS and is_postgres():
         from .postgres_repository import build_additional_report as implementation
     elif report_id in NUEVOS_INFORME_IDS:

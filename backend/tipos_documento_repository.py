@@ -244,7 +244,11 @@ def _document_type_from_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def list_document_types() -> list[dict[str, Any]]:
-    """Devuelve los tipos de la sucursal predeterminada, sin filtro de CIA."""
+    """Devuelve todos los tipos de la sucursal, sin filtrar CIA ni MODULO.
+
+    Contabilidad usa este catálogo en captura directa, lotes y reembolsos,
+    incluidos los tipos que otros módulos crearon o administran.
+    """
     sql = (
         "SELECT CODIGO, NOMBRE, MODULO, TIPO, CONSE, MODICONSE, PREFIJO, "
         "COMPRO, ICONTAB, ICXP, BANCOS, CONVER, DOCCONVER, FPAGO, DOCOFI, "

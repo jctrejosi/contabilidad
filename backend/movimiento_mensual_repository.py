@@ -18,7 +18,7 @@ from .ads_repository import (
     _open_recordset,
     _rows,
     _text,
-    ads_connection,
+    ads_odbc_connection,
     normalize_company_code,
 )
 
@@ -199,7 +199,9 @@ def list_monthly_movements(
         f"{where}"
     )
 
-    with ads_connection() as connection:
+    # El panel solicita los totales al abrir. ODBC evita el callback nativo
+    # C0000005 del proveedor OLE DB sin cambiar filtros ni importes.
+    with ads_odbc_connection() as connection:
         if not _company_exists(connection, company_id):
             raise CompanyNotFound(f"La compañía {cia} no existe en CONEMP.")
         recordset = _open_recordset(connection, sql)

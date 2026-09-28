@@ -119,6 +119,7 @@ from .balance_mensual_repository import (
     export_monthly_balance_xlsx,
 )
 from .informes_adicionales_repository import export_additional_report
+from .report_snapshots import SnapshotNotFound, load as load_report_snapshot, save as save_report_snapshot
 from .reproceso_mensual_repository import (
     MonthlyReprocessValidationError,
 )
@@ -182,6 +183,14 @@ from .reembolsos_repository import (
     RefundLegacyNotSupported,
     RefundNotFound,
     RefundValidationError,
+)
+from .reembolsos_ads_repository import (
+    ReembolsoConflicto,
+    ReembolsoNoEncontrado,
+    confirmar_reembolso as confirmar_reembolso_ads,
+    get_reembolso as get_reembolso_ads,
+    list_reembolsos as list_reembolsos_ads,
+    save_reembolso as save_reembolso_ads,
 )
 from .reasignacion_repository import (
     ReassignmentConflict,
@@ -1079,6 +1088,7 @@ def _service_error(exc: Exception) -> HTTPException:
             MaintenanceConflict,
             EspecialesConflict,
             RefundConflict,
+            ReembolsoConflicto,
             ReassignmentConflict,
         ),
     ):
@@ -1114,6 +1124,7 @@ def _service_error(exc: Exception) -> HTTPException:
             MaintenanceNotFound,
             EspecialesNotFound,
             RefundNotFound,
+            ReembolsoNoEncontrado,
             ReassignmentNotFound,
         ),
     ):
@@ -2540,8 +2551,8 @@ def additional_report_endpoint(
     report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
     cia: str = Query(pattern=r"^[0-9]{1,3}$"),
     anio: int = Query(ge=1900, le=2100),
-    mes_desde: int = Query(1, alias="mesDesde", ge=1, le=12),
-    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+    mes_desde: int = Query(1, alias="mesDesde", ge=0, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=0, le=12),
     cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
     cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
     nit: str = Query("", max_length=15),
@@ -2552,9 +2563,14 @@ def additional_report_endpoint(
       tipo_documento_hasta: str = Query("", alias="tipoDocumentoHasta", max_length=2),
     documento_desde: str = Query("", alias="documentoDesde", max_length=12),
     documento_hasta: str = Query("", alias="documentoHasta", max_length=12),
+    fecha_desde: str = Query("", alias="fechaDesde", max_length=10),
+    fecha_hasta: str = Query("", alias="fechaHasta", max_length=10),
+    modalidad: Literal["detallado", "resumido"] = Query("detallado"),
+    documento_afectado: str = Query("", alias="documentoAfectado", max_length=12),
     buscar: str = Query("", max_length=60),
     nivel: int = Query(6, ge=4, le=12),
     incluir_ceros: bool = Query(False, alias="incluirCeros"),
+    vista_paginada: bool = Query(False, alias="vistaPaginada"),
 ) -> dict[str, object]:
     """Lee el motor activo con los parámetros originales; no modifica tablas.
 
@@ -2563,16 +2579,68 @@ def additional_report_endpoint(
     informes de A5 eligen rama según el motor.
     """
     try:
-        return store.build_additional_report(
+        report = store.build_additional_report(
             report_id, cia, anio, mes_desde, mes_hasta,
             account_from=cuenta_desde, account_to=cuenta_hasta, nit=nit,
               center=centro, voucher=comprobante, voucher_to=comprobante_hasta,
               document_type=tipo_documento, document_type_to=tipo_documento_hasta,
             document_from=documento_desde, document_to=documento_hasta,
+            date_from=fecha_desde, date_to=fecha_hasta,
+            detail_mode=modalidad,
+            affected_document=documento_afectado,
             search=buscar, level=nivel, include_zero=incluir_ceros,
         )
+        if vista_paginada and report_id in {"aux-gral", "aux-doc-afectado"}:
+            snapshot_id = save_report_snapshot(report)
+            return load_report_snapshot(snapshot_id, page=0)
+        return report
     except Exception as exc:
         raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/adicionales/{report_id}/instantanea/{snapshot_id}/pagina")
+def additional_report_snapshot_page(
+    report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
+    snapshot_id: str = Path(pattern=r"^[0-9a-f]{32}$"),
+    pagina: int = Query(ge=0),
+) -> dict[str, object]:
+    """Devuelve únicamente ocho filas del libro previamente generado."""
+    try:
+        report = load_report_snapshot(snapshot_id, page=pagina)
+    except SnapshotNotFound as exc:
+        raise HTTPException(status_code=410, detail="El informe expiró. Genérelo de nuevo.") from exc
+    if report["id"] != report_id:
+        raise HTTPException(status_code=404, detail="No se encontró el informe.")
+    return report
+
+
+@app.get("/api/informes/adicionales/{report_id}/instantanea/{snapshot_id}/exportar")
+def export_additional_report_snapshot(
+    report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
+    snapshot_id: str = Path(pattern=r"^[0-9a-f]{32}$"),
+    formato: Literal["pdf", "xlsx", "csv"] = Query(),
+    visualizar: bool = Query(False),
+) -> Response:
+    """Exporta el resultado congelado, sin consultar Advantage otra vez."""
+    try:
+        report = load_report_snapshot(snapshot_id)
+    except SnapshotNotFound as exc:
+        raise HTTPException(status_code=410, detail="El informe expiró. Genérelo de nuevo.") from exc
+    if report["id"] != report_id:
+        raise HTTPException(status_code=404, detail="No se encontró el informe.")
+    try:
+        content = export_additional_report(report, formato)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    media = {
+        "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "csv": "text/csv; charset=utf-8",
+    }[formato]
+    disposition = "inline" if visualizar and formato == "pdf" else "attachment"
+    return Response(content=content, media_type=media,
+                    headers={"Content-Disposition":
+                             f'{disposition}; filename="{report_id}_{report["anio"]}.{formato}"'})
 
 
 @app.get("/api/informes/adicionales/{report_id}/exportar", summary="Exportar informe contable adicional")
@@ -3791,7 +3859,58 @@ def tercero_reasignar(
 
 
 # ===========================================================================
-# Bloque E2 · Reembolsos (solo PostgreSQL: CONREMAE/CONREITE sin estructura)
+# Reembolsos del sistema original sobre CONREMAE/CONREITE de Advantage.
+# La confirmación genera un lote en borrador; no contabiliza MOV01 directamente.
+# ===========================================================================
+@app.get("/api/reembolsos-contables", summary="Listar reembolsos de la compañía")
+def reembolsos_contables_listar(cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return {"items": list_reembolsos_ads(cia)}
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/reembolsos-contables/{lote}", summary="Consultar un reembolso")
+def reembolsos_contables_detalle(lote: str, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return {"item": get_reembolso_ads(cia, lote)}
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/reembolsos-contables", status_code=status.HTTP_201_CREATED, summary="Guardar reembolso")
+def reembolsos_contables_crear(payload: dict[str, Any], cia: str = _CIA_QUERY, dry_run: bool = Query(False, alias="dryRun")) -> dict[str, object]:
+    try:
+        return {"item": save_reembolso_ads(cia, payload, dry_run=dry_run)}
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/reembolsos-contables/{lote}", summary="Modificar reembolso no confirmado")
+def reembolsos_contables_modificar(lote: str, payload: dict[str, Any], cia: str = _CIA_QUERY, dry_run: bool = Query(False, alias="dryRun")) -> dict[str, object]:
+    try:
+        return {"item": save_reembolso_ads(cia, payload, original=lote, dry_run=dry_run)}
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/reembolsos-contables/{lote}/confirmar", summary="Generar lote desde un reembolso")
+def reembolsos_contables_confirmar(
+    lote: str,
+    payload: dict[str, Any],
+    cia: str = _CIA_QUERY,
+    dry_run: bool = Query(False, alias="dryRun"),
+) -> dict[str, object]:
+    try:
+        return {"item": confirmar_reembolso_ads(
+            cia, lote, str(payload.get("loteContable", "")), str(payload.get("usuario", "WEB")),
+            dry_run=dry_run,
+        )}
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+# Contrato anterior PostgreSQL, conservado para compatibilidad.
 # ===========================================================================
 class RefundLineWrite(BaseModel):
     """Partida de un reembolso (E2)."""

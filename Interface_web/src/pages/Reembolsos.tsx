@@ -1,126 +1,199 @@
-import { useId, useRef, useState, useEffect, type ReactNode } from 'react';
-import { CENTROS, CUENTAS, EMPRESA, TERCEROS, fmtCOP } from '../data/mock';
-import type { Lote, LoteLinea } from '../types';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { listarCentros } from '../api/centros';
+import { listarComprobantes, type ComprobanteReal } from '../api/comprobantes';
+import { consultarPeriodoOperacion, type PeriodoOperacion } from '../api/periodoOperacion';
+import {
+  confirmarReembolso, consultarReembolso, guardarReembolso, listarReembolsos,
+  type ReembolsoContable, type ReembolsoEncabezado, type ReembolsoItem,
+  type ResumenReembolso, type ResultadoConfirmacion,
+} from '../api/reembolsosContables';
+import { listarTerceros } from '../api/terceros';
+import { listarTiposDocumento, type TipoDocumentoReal } from '../api/tiposDocumento';
+import CrearTerceroModal from '../components/CrearTerceroModal';
+import ConfirmarCrearTerceroModal from '../components/ConfirmarCrearTerceroModal';
 import type { NavPage } from '../components/Shell';
+import type { Tercero } from '../types';
 
-const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const SELECT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 disabled:cursor-not-allowed disabled:opacity-50';
-const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 disabled:cursor-not-allowed disabled:opacity-50';
+const INPUT = 'w-full min-w-0 rounded border border-gray-300 bg-white px-2.5 py-2 text-xs text-gray-800 outline-none focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
+const BUTTON = 'rounded border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50';
+const PRIMARY = 'rounded bg-petroleum-600 px-4 py-2 text-xs font-semibold text-white hover:bg-petroleum-700 disabled:cursor-not-allowed disabled:bg-gray-300';
+const money = (value: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 }).format(value);
+const emptyItem = (): ReembolsoItem => ({ tercero: '', centro: '', centroCruce: '', concepto: '', valor: 0 });
 
-const STORAGE_KEY = `contabdsi:reembolsos:v1:${EMPRESA.codigo}`;
-const CAJAS = ['CAJA-ADM — Caja menor Administración', 'CAJA-VEN — Caja menor Ventas', 'CAJA-OPE — Caja menor Operaciones'];
-
-interface Props {
-  onNavigate: (p: NavPage) => void;
-  onCrearLote: (l: Lote) => void;
-}
-
-interface DetalleReembolso {
-  id: string;
-  concepto: string;
-  cuenta: string;
-  centro: string;
-  debito: number;
-  credito: number;
-}
-
-interface EncabezadoReembolso {
-  tercero: string;
-  periodo: string;
-  fecha: string;
-  comprobante: string;
-  caja: string;
-  documento: string;
-}
-
-interface ReembolsoGuardado {
-  encabezado: EncabezadoReembolso;
-  detalle: DetalleReembolso[];
-}
-
-function esDetalle(v: unknown): v is DetalleReembolso {
-  if (typeof v !== 'object' || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return typeof o.id === 'string' && typeof o.concepto === 'string' && typeof o.cuenta === 'string' &&
-    typeof o.centro === 'string' && typeof o.debito === 'number' && typeof o.credito === 'number';
-}
-
-function esGuardado(v: unknown): v is ReembolsoGuardado {
-  if (typeof v !== 'object' || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return typeof o.encabezado === 'object' && o.encabezado !== null && Array.isArray(o.detalle) && o.detalle.every(esDetalle);
-}
-
-function inicial(): ReembolsoGuardado {
+function initialHeader(periodo: PeriodoOperacion | null, count: number): ReembolsoEncabezado {
+  const today = new Date();
+  const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const available = periodo?.anio === today.getFullYear() && periodo.mesesHabilitados.includes(today.getMonth() + 1);
+  const fecha = available ? localToday : periodo?.fechaSugerida ?? localToday;
   return {
-    encabezado: {
-      tercero: '12.345.678',
-      periodo: '2026-02',
-      fecha: '2026-02-18',
-      comprobante: 'CE',
-      caja: CAJAS[0],
-      documento: 'RB-2026-001',
-    },
-    detalle: [
-      { id: 'R01', concepto: 'Transporte urbano personal', cuenta: '510506', centro: 'ADM', debito: 240000, credito: 0 },
-      { id: 'R02', concepto: 'Papelería y útiles reembolso', cuenta: '510506', centro: 'OPE', debito: 150000, credito: 0 },
-      { id: 'R03', concepto: 'Reembolso caja menor', cuenta: '110505', centro: '', debito: 0, credito: 390000 },
-    ],
+    lote: `RB${fecha.slice(5, 7)}${String(count + 1).padStart(3, '0')}`,
+    documentoCaja: '', fecha, valorGeneral: 0, concepto: '', documentoCruce: '', comprobante: '',
   };
 }
 
-function cargar(): ReembolsoGuardado {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const value: unknown = JSON.parse(raw);
-      if (esGuardado(value)) return value;
-    }
-  } catch {
-    // Dato dañado o almacenamiento deshabilitado: usar borrador inicial.
-  }
-  return inicial();
+function advanceOnEnter(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== 'Enter' || event.shiftKey) return;
+  const current = event.target as HTMLElement;
+  if (current.matches('button[type="submit"],button[data-enter-action]')) return;
+  event.preventDefault();
+  const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+    'input:not(:disabled),select:not(:disabled),textarea:not(:disabled),button[data-enter-action]:not(:disabled),button[type="submit"]:not(:disabled)',
+  ));
+  controls[controls.indexOf(current) + 1]?.focus();
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <label className="block min-w-0"><span className="mb-1 block text-xs font-medium text-gray-600">{label}</span>{children}</label>;
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    dialog?.showModal();
-    dialog?.querySelector<HTMLElement>('[data-initial-focus]')?.focus();
-    return () => dialog?.close();
-  }, []);
-  return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
-      <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-        <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
-        <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
+  return <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-2xl">
+      <div className="flex items-center justify-between border-b px-5 py-3"><h2 className="text-sm font-semibold text-gray-800">{title}</h2><button type="button" onClick={onClose} aria-label="Cerrar" className="text-xl text-gray-500">×</button></div>
+      <div className="p-5">{children}</div>
+    </div>
+  </div>;
+}
+
+function EditorItem({ initial, centers, onSave, onClose }: {
+  initial: ReembolsoItem;
+  centers: Array<{ codigo: string; nombre: string }>;
+  onSave: (item: ReembolsoItem) => void;
+  onClose: () => void;
+}) {
+  const [item, setItem] = useState<ReembolsoItem>(initial);
+  const [search, setSearch] = useState(initial.tercero);
+  const [results, setResults] = useState<Tercero[]>([]);
+  const [selected, setSelected] = useState<Tercero | null>(null);
+  const [choice, setChoice] = useState(0);
+  const [searching, setSearching] = useState(false);
+  const [showCreateQuestion, setShowCreateQuestion] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [error, setError] = useState('');
+  const centerRef = useRef<HTMLInputElement>(null);
+
+  function set<K extends keyof ReembolsoItem>(field: K, value: ReembolsoItem[K]) {
+    setItem(previous => ({ ...previous, [field]: value }));
+    setError('');
+  }
+
+  async function searchThird() {
+    const term = search.trim();
+    if (term.length < 2) { setError('Digite al menos dos caracteres del tercero.'); return; }
+    setSearching(true);
+    setError('');
+    try {
+      const response = await listarTerceros({ page: 1, pageSize: 30, search: term });
+      setResults(response.items);
+      setChoice(0);
+      if (!response.items.length) setShowCreateQuestion(term);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No fue posible buscar el tercero.');
+    } finally { setSearching(false); }
+  }
+
+  function selectThird(third: Tercero) {
+    if (third.estado !== 'Activo') { setError('El tercero está inactivo y no permite movimientos.'); return; }
+    setSelected(third);
+    set('tercero', third.nit);
+    setSearch(`${third.nit} — ${third.nombre}`);
+    setResults([]);
+    requestAnimationFrame(() => centerRef.current?.focus());
+  }
+
+  function submit() {
+    const nit = selected?.nit ?? item.tercero;
+    if (!nit || search.trim() !== `${selected?.nit} — ${selected?.nombre}`) {
+      setError('Busque y seleccione un tercero válido antes de guardar el ítem.'); return;
+    }
+    if (!centers.some(center => center.codigo === item.centro) || !centers.some(center => center.codigo === item.centroCruce)) {
+      setError('Seleccione centros de costo y de cruce existentes.'); return;
+    }
+    if (!item.concepto.trim() || item.concepto.length > 100) { setError('El concepto admite de 1 a 100 caracteres.'); return; }
+    if (!(item.valor > 0)) { setError('El valor debe ser mayor que cero.'); return; }
+    onSave({ ...item, tercero: nit, concepto: item.concepto.trim() });
+  }
+
+  return <><Modal title={initial.tercero ? 'Modificar ítem del reembolso' : 'Agregar ítem al reembolso'} onClose={onClose}>
+    <form onKeyDown={advanceOnEnter} onSubmit={event => { event.preventDefault(); submit(); }} className="space-y-3">
+      {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
+      <datalist id="reembolso-centros">{centers.map(center => <option key={center.codigo} value={center.codigo}>{center.nombre}</option>)}</datalist>
+      <div className="relative">
+        <Field label="Tercero · identificación o nombre">
+          <div className="flex gap-2">
+            <input autoFocus value={search} onChange={event => { setSearch(event.target.value); setSelected(null); setResults([]); set('tercero', ''); }}
+              onKeyDown={event => {
+                if (event.key === 'ArrowDown' && results.length) { event.preventDefault(); event.stopPropagation(); setChoice(current => Math.min(results.length - 1, current + 1)); }
+                if (event.key === 'ArrowUp' && results.length) { event.preventDefault(); event.stopPropagation(); setChoice(current => Math.max(0, current - 1)); }
+                if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); if (results[choice]) selectThird(results[choice]); else void searchThird(); }
+              }} className={INPUT} placeholder="Buscar tercero" />
+            <button type="button" disabled={searching} onClick={() => void searchThird()} className={BUTTON}>{searching ? 'Buscando…' : 'Buscar'}</button>
+          </div>
+        </Field>
+        {results.length > 0 && <div className="absolute left-0 top-full z-20 mt-1 max-h-48 w-full overflow-auto rounded border border-gray-200 bg-white shadow-lg">
+          <div className="px-3 py-1 text-[11px] text-gray-500">Use ↑/↓ y Enter para seleccionar</div>
+          {results.map((third, index) => <button type="button" key={third.nit} onMouseDown={event => event.preventDefault()} onClick={() => selectThird(third)} className={`block w-full px-3 py-2 text-left text-xs ${choice === index ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+            {third.nit} — {third.nombre} {third.estado !== 'Activo' ? '(inactivo)' : ''}
+          </button>)}
+        </div>}
       </div>
-      {children}
-    </dialog>
-  );
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Centro de costo"><input ref={centerRef} list="reembolso-centros" maxLength={7} value={item.centro} onChange={event => set('centro', event.target.value.toUpperCase())} className={INPUT} required /></Field>
+        <Field label="Centro de costo de cruce"><input list="reembolso-centros" maxLength={7} value={item.centroCruce} onChange={event => set('centroCruce', event.target.value.toUpperCase())} className={INPUT} required /></Field>
+        <Field label="Valor"><input type="number" min="0.01" step="0.01" value={item.valor || ''} onChange={event => set('valor', Number(event.target.value))} className={INPUT} required /></Field>
+        <Field label="Concepto del ítem"><input maxLength={100} value={item.concepto} onChange={event => set('concepto', event.target.value)} className={INPUT} required /></Field>
+      </div>
+      <div className="flex justify-end gap-2 border-t pt-4"><button type="button" onClick={onClose} className={BUTTON}>Cancelar</button><button type="submit" className={PRIMARY}>Guardar ítem</button></div>
+    </form>
+  </Modal>
+    {showCreateQuestion && <ConfirmarCrearTerceroModal termino={showCreateQuestion} onCancel={() => setShowCreateQuestion('')} onConfirm={() => { setShowCreateQuestion(''); setShowCreate(true); }} />}
+    {showCreate && <CrearTerceroModal initialTerm={search} onClose={() => setShowCreate(false)} onCreated={third => { selectThird(third); setShowCreate(false); }} />}
+  </>;
 }
 
-function parseMonto(texto: string): number {
-  const n = Number(texto.replace(/[^0-9]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-}
+export default function Reembolsos({ cia, onNavigate }: { cia: string; onNavigate: (page: NavPage) => void }) {
+  const [periodo, setPeriodo] = useState<PeriodoOperacion | null>(null);
+  const [headers, setHeaders] = useState<ResumenReembolso[]>([]);
+  const [centers, setCenters] = useState<Array<{ codigo: string; nombre: string }>>([]);
+  const [types, setTypes] = useState<TipoDocumentoReal[]>([]);
+  const [vouchers, setVouchers] = useState<ComprobanteReal[]>([]);
+  const [current, setCurrent] = useState<ReembolsoContable>({ encabezado: initialHeader(null, 0), items: [], estado: 'Borrador' });
+  const [original, setOriginal] = useState<string | null>(null);
+  const [savedSignature, setSavedSignature] = useState('');
+  const [editing, setEditing] = useState<number | null>(null);
+  const [lotCode, setLotCode] = useState('R001');
+  const [preview, setPreview] = useState<ResultadoConfirmacion | null>(null);
+  const [discardAction, setDiscardAction] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const dirty = JSON.stringify({ encabezado: current.encabezado, items: current.items }) !== savedSignature;
+  const itemTotal = current.items.reduce((sum, item) => sum + item.valor, 0);
 
-export default function Reembolsos({ onNavigate, onCrearLote }: Props) {
-  const [guardado, setGuardado] = useState<ReembolsoGuardado>(cargar);
-  const [encabezado, setEncabezado] = useState<EncabezadoReembolso>(() => structuredClone(cargar().encabezado));
-  const [detalle, setDetalle] = useState<DetalleReembolso[]>(() => structuredClone(cargar().detalle));
-  const [mensaje, setMensaje] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
-  const [aviso, setAviso] = useState(false);
-  const [loteCreado, setLoteCreado] = useState<Lote | null>(null);
-  const dirty = JSON.stringify({ encabezado, detalle }) !== JSON.stringify(guardado);
-
-  const cuentasAfectables = CUENTAS.filter(c => c.afectable);
-  const totalDeb = detalle.reduce((s, d) => s + d.debito, 0);
-  const totalCred = detalle.reduce((s, d) => s + d.credito, 0);
-  const cuadrado = totalDeb === totalCred;
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true); setError('');
+      try {
+        // Las lecturas se hacen en secuencia para no abrir varias sesiones ADS a la vez.
+        const period = await consultarPeriodoOperacion(cia);
+        const centerRows = await listarCentros(cia);
+        const typeRows = await listarTiposDocumento();
+        const voucherRows = await listarComprobantes(cia);
+        const existing = await listarReembolsos(cia);
+        if (!active) return;
+        setPeriodo(period); setCenters(centerRows.items); setTypes(typeRows.items);
+        setVouchers(voucherRows.items.filter(row => !row.historico)); setHeaders(existing);
+        const initial = { encabezado: initialHeader(period, existing.length), items: [], estado: 'Borrador' } as ReembolsoContable;
+        setCurrent(initial); setSavedSignature(JSON.stringify({ encabezado: initial.encabezado, items: initial.items }));
+        setLotCode(`R${String(existing.length + 1).padStart(3, '0')}`);
+      } catch (cause) { if (active) setError(cause instanceof Error ? cause.message : 'No fue posible cargar los datos.'); }
+      finally { if (active) setLoading(false); }
+    }
+    void load();
+    return () => { active = false; };
+  }, [cia]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -129,268 +202,119 @@ export default function Reembolsos({ onNavigate, onCrearLote }: Props) {
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
-  function actualizarEncabezado(field: keyof EncabezadoReembolso, value: string) {
-    setEncabezado(prev => ({ ...prev, [field]: value }));
-    setMensaje(null);
+  function setHeader<K extends keyof ReembolsoEncabezado>(key: K, value: ReembolsoEncabezado[K]) {
+    setCurrent(previous => ({ ...previous, encabezado: { ...previous.encabezado, [key]: value } }));
+    setError(''); setMessage('');
   }
 
-  function actualizarDetalle(id: string, field: keyof DetalleReembolso, value: string | number) {
-    setDetalle(prev => prev.map(d => {
-      if (d.id !== id) return d;
-      const siguiente = { ...d, [field]: value };
-      if (field === 'cuenta') {
-        const cuenta = CUENTAS.find(c => c.codigo === String(value));
-        siguiente.centro = cuenta?.requiereCentro ? d.centro : d.centro;
-      }
-      if (field === 'debito' && Number(value) > 0) siguiente.credito = 0;
-      if (field === 'credito' && Number(value) > 0) siguiente.debito = 0;
-      return siguiente;
-    }));
-    setMensaje(null);
+  function newRefund(force = false) {
+    if (dirty && !force) { setDiscardAction('new'); return; }
+    const next = { encabezado: initialHeader(periodo, headers.length), items: [], estado: 'Borrador' } as ReembolsoContable;
+    setCurrent(next); setOriginal(null); setSavedSignature(JSON.stringify({ encabezado: next.encabezado, items: next.items }));
+    setError(''); setMessage(''); setPreview(null);
   }
 
-  function agregarLinea() {
-    setDetalle(prev => [...prev, {
-      id: `R${String(prev.length + 1).padStart(2, '0')}`,
-      concepto: '',
-      cuenta: cuentasAfectables[0]?.codigo ?? '',
-      centro: '',
-      debito: 0,
-      credito: 0,
-    }]);
-  }
-
-  function eliminarLinea(id: string) {
-    setDetalle(prev => prev.filter(d => d.id !== id));
-  }
-
-  function cancelar() {
-    setEncabezado(structuredClone(guardado.encabezado));
-    setDetalle(structuredClone(guardado.detalle));
-    setMensaje(null);
-  }
-
-  function guardar() {
-    const siguiente: ReembolsoGuardado = { encabezado, detalle };
+  async function openRefund(code: string, force = false) {
+    if (dirty && !force) { setDiscardAction(code); return; }
+    setBusy(true); setError(''); setMessage('');
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(siguiente));
-      setGuardado(structuredClone(siguiente));
-      setMensaje({ tipo: 'success', texto: 'Reembolso guardado como borrador en este navegador.' });
-    } catch {
-      setMensaje({ tipo: 'error', texto: 'El navegador no permitió guardar. Habilite el almacenamiento e intente de nuevo.' });
-    }
+      const item = await consultarReembolso(cia, code);
+      setCurrent(item); setOriginal(code);
+      setSavedSignature(JSON.stringify({ encabezado: item.encabezado, items: item.items }));
+      setLotCode(`R${String(headers.findIndex(row => row.lote === code) + 1).padStart(3, '0')}`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No fue posible abrir el reembolso.'); }
+    finally { setBusy(false); }
   }
 
-  function crearLote() {
-    if (!cuadrado) return;
-    const tercero = TERCEROS.find(t => t.nit === encabezado.tercero);
-    const lineas: LoteLinea[] = detalle.map((d, i) => {
-      const cuenta = CUENTAS.find(c => c.codigo === d.cuenta);
-      return {
-        id: `L${String(i + 1).padStart(2, '0')}`,
-        cuenta: d.cuenta,
-        nombreCuenta: cuenta?.nombre ?? d.cuenta,
-        nit: encabezado.tercero,
-        tercero: tercero?.nombre ?? '',
-        centro: d.centro,
-        comprobante: `${encabezado.comprobante}-000247`,
-        documento: encabezado.documento,
-        fecha: encabezado.fecha,
-        debito: d.debito,
-        credito: d.credito,
-        base: 0,
-        clase: '',
-        docAfectado: '',
-        concepto: d.concepto,
-        errores: [],
-      };
+  function saveItem(item: ReembolsoItem) {
+    setCurrent(previous => {
+      const items = [...previous.items];
+      if (editing !== null && editing < items.length) items[editing] = item;
+      else items.push(item);
+      return { ...previous, items, encabezado: { ...previous.encabezado, valorGeneral: Number(items.reduce((sum, row) => sum + row.valor, 0).toFixed(2)) } };
     });
-    const lote: Lote = {
-      id: `lote-${Date.now()}`,
-      codigo: 'REB1',
-      nombre: 'Reembolso caja menor febrero 2026',
-      periodo: encabezado.periodo,
-      usuario: 'Laura Gómez',
-      origen: 'Manual',
-      fecha: encabezado.fecha,
-      lineasCount: lineas.length,
-      debito: totalDeb,
-      credito: totalCred,
-      diferencia: 0,
-      erroresCount: 0,
-      estado: 'Borrador',
-      lineas,
-    };
-    onCrearLote(lote);
-    setLoteCreado(lote);
-    setAviso(true);
+    setEditing(null); setError(''); setMessage('');
   }
 
-  return (
-    <div className="mx-auto max-w-6xl space-y-3 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="mb-1 text-xs text-gray-400">Movimientos / Reembolsos</div>
-          <h1 className="text-lg font-semibold text-gray-800">Reembolsos</h1>
-          <p className="mt-1 text-xs text-gray-500">Registro de reembolsos de caja menor con encabezado y detalle editable.</p>
-        </div>
-        <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
-      </div>
+  async function save() {
+    setError(''); setMessage('');
+    if (!current.items.length) { setError('Agregue al menos un ítem antes de guardar.'); return; }
+    if (Math.abs(current.encabezado.valorGeneral - itemTotal) > 0.005) { setError('El valor general debe coincidir con la suma de los ítems.'); return; }
+    setBusy(true);
+    try {
+      await guardarReembolso(cia, current, original ?? undefined);
+      setOriginal(current.encabezado.lote);
+      setSavedSignature(JSON.stringify({ encabezado: current.encabezado, items: current.items }));
+      setHeaders(await listarReembolsos(cia));
+      setMessage('Reembolso guardado. Puede continuar editándolo o confirmar para crear el lote.');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No fue posible guardar el reembolso.'); }
+    finally { setBusy(false); }
+  }
 
-      {mensaje && (
-        <div className={`rounded-md border px-3 py-2 text-xs ${mensaje.tipo === 'success' ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-          {mensaje.texto}
-        </div>
-      )}
+  async function prepareConfirmation() {
+    setError(''); setMessage('');
+    if (!original || dirty) { setError('Guarde el reembolso antes de confirmarlo.'); return; }
+    setBusy(true);
+    try { setPreview(await confirmarReembolso(cia, original, lotCode, true)); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'No fue posible validar la confirmación.'); }
+    finally { setBusy(false); }
+  }
 
-      <form onSubmit={e => { e.preventDefault(); guardar(); }}>
-        <fieldset className="rounded-md border border-gray-200 bg-white px-3 pb-3">
-          <legend className="px-2 text-xs font-semibold text-petroleum-800">Encabezado del reembolso</legend>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Tercero</label>
-              <select value={encabezado.tercero} onChange={e => actualizarEncabezado('tercero', e.target.value)} className={SELECT}>
-                {TERCEROS.map(t => <option key={t.nit} value={t.nit}>{t.nit} — {t.nombre}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Período</label>
-              <select value={encabezado.periodo} onChange={e => actualizarEncabezado('periodo', e.target.value)} className={SELECT}>
-                <option value="2026-02">2026-02 Febrero</option>
-                <option value="2026-01">2026-01 Enero</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Fecha</label>
-              <input type="date" value={encabezado.fecha} onChange={e => actualizarEncabezado('fecha', e.target.value)} className={`${INPUT} font-mono`} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Comprobante</label>
-              <select value={encabezado.comprobante} onChange={e => actualizarEncabezado('comprobante', e.target.value)} className={SELECT}>
-                <option value="CE">CE — Comprobante de Egreso</option>
-                <option value="CI">CI — Comprobante de Ingreso</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Caja menor</label>
-              <select value={encabezado.caja} onChange={e => actualizarEncabezado('caja', e.target.value)} className={SELECT}>
-                {CAJAS.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-gray-600">Documento</label>
-              <input value={encabezado.documento} onChange={e => actualizarEncabezado('documento', e.target.value)} className={`${INPUT} font-mono`} />
-            </div>
-          </div>
-        </fieldset>
+  async function confirm() {
+    if (!original) return;
+    setBusy(true); setError('');
+    try {
+      const result = await confirmarReembolso(cia, original, lotCode, false);
+      setPreview(null);
+      setCurrent(previous => ({ ...previous, estado: 'Lote generado' }));
+      setHeaders(await listarReembolsos(cia));
+      setMessage(`Lote ${result.loteContable} creado con ${result.partidas} partidas. Revíselo y actualícelo desde Lotes.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No fue posible generar el lote.'); setPreview(null); }
+    finally { setBusy(false); }
+  }
 
-        <fieldset className="mt-3 rounded-md border border-gray-200 bg-white px-3 pb-3">
-          <legend className="px-2 text-xs font-semibold text-petroleum-800">Detalle del reembolso</legend>
-          <div className="table-fixed-header overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Concepto</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Cuenta</th>
-                  <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Centro</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Débito</th>
-                  <th className="px-3 py-2.5 text-right font-semibold text-gray-600">Crédito</th>
-                  <th className="px-3 py-2.5 w-10" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {detalle.map(d => (
-                  <tr key={d.id} className="hoverable">
-                    <td className="px-3 py-2">
-                      <input value={d.concepto} onChange={e => actualizarDetalle(d.id, 'concepto', e.target.value)} placeholder="Concepto del gasto" className={INPUT} />
-                    </td>
-                    <td className="px-3 py-2">
-                      <select value={d.cuenta} onChange={e => actualizarDetalle(d.id, 'cuenta', e.target.value)} className={SELECT}>
-                        {cuentasAfectables.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nombre}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2">
-                      <select value={d.centro} onChange={e => actualizarDetalle(d.id, 'centro', e.target.value)} className={SELECT}>
-                        <option value="">—</option>
-                        {CENTROS.map(c => <option key={c.codigo} value={c.codigo}>{c.codigo}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        inputMode="numeric"
-                        value={d.debito > 0 ? String(d.debito) : ''}
-                        onChange={e => actualizarDetalle(d.id, 'debito', parseMonto(e.target.value))}
-                        placeholder="0"
-                        className={`${INPUT} text-right font-mono`}
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        inputMode="numeric"
-                        value={d.credito > 0 ? String(d.credito) : ''}
-                        onChange={e => actualizarDetalle(d.id, 'credito', parseMonto(e.target.value))}
-                        placeholder="0"
-                        className={`${INPUT} text-right font-mono`}
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <button type="button" onClick={() => eliminarLinea(d.id)} aria-label={`Eliminar línea ${d.id}`} className="text-gray-400 hover:text-red-600">×</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-gray-50 border-t border-gray-200">
-                <tr>
-                  <td colSpan={3} className="px-3 py-2 text-xs font-semibold text-gray-700">TOTALES</td>
-                  <td className="px-3 py-2 text-right font-mono font-bold text-gray-800">{fmtCOP(totalDeb)}</td>
-                  <td className="px-3 py-2 text-right font-mono font-bold text-gray-800">{fmtCOP(totalCred)}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <button type="button" onClick={agregarLinea} className={BUTTON_SECONDARY}>+ Agregar línea</button>
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cuadrado ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {cuadrado ? 'Cuadrado' : `Descuadrado ${fmtCOP(Math.abs(totalDeb - totalCred))}`}
-            </span>
-            {!cuadrado && <span className="text-xs text-red-600">Iguale débitos y créditos antes de crear el lote.</span>}
-          </div>
-        </fieldset>
-
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs text-gray-400">{dirty ? 'Cambios sin guardar' : 'Todo guardado'}</span>
-          <div className="flex gap-2">
-            <button type="button" onClick={cancelar} className={BUTTON_SECONDARY}>Cancelar</button>
-            <button type="submit" className={BUTTON_SECONDARY}>Guardar</button>
-            <button type="button" disabled={!cuadrado} onClick={crearLote} className={BUTTON_PRIMARY}>
-              Crear lote
-            </button>
-          </div>
-        </div>
-      </form>
-
-      {aviso && loteCreado && (
-        <Modal title="Lote creado" onClose={() => setAviso(false)}>
-          <div className="px-5 py-4 space-y-3">
-            <p className="text-xs text-gray-600">
-              Se creó el lote <span className="font-mono font-semibold text-gray-800">{loteCreado.codigo}</span> — {loteCreado.nombre} con{' '}
-              <span className="font-mono">{loteCreado.lineasCount}</span> líneas, cuadrado, en estado Borrador.
-            </p>
-            <div className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-600">
-              Débitos <span className="font-mono font-semibold text-gray-800">{fmtCOP(loteCreado.debito)}</span> · Créditos{' '}
-              <span className="font-mono font-semibold text-gray-800">{fmtCOP(loteCreado.credito)}</span> · Diferencia{' '}
-              <span className="font-mono font-semibold text-green-700">$ 0</span>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
-            <button type="button" onClick={() => setAviso(false)} className={BUTTON_SECONDARY}>Cerrar</button>
-            <button type="button" data-initial-focus onClick={() => onNavigate('movimientos/lotes')} className={BUTTON_PRIMARY}>
-              Abrir lotes
-            </button>
-          </div>
-        </Modal>
-      )}
+  return <div className="mx-auto max-w-screen-xl space-y-4 p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><div className="text-xs text-gray-400">Movimientos / Reembolsos · Compañía {cia}</div><h1 className="text-lg font-semibold text-gray-800">Reembolsos</h1><p className="mt-1 text-xs text-gray-500">Registre gastos y genere un lote para su revisión contable.</p></div>
+      <button type="button" onClick={() => newRefund()} disabled={loading || busy} className={BUTTON}>Nuevo reembolso</button>
     </div>
-  );
+    {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>}
+    {message && <div role="status" className="rounded border border-green-200 bg-green-50 px-4 py-3 text-xs text-green-800">{message}</div>}
+    {loading ? <div className="rounded border bg-white p-6 text-center text-sm text-gray-500">Cargando reembolsos y catálogos…</div> : <>
+      <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
+        <aside className="rounded border border-gray-200 bg-white">
+          <div className="border-b px-4 py-3 text-sm font-semibold text-gray-800">Reembolsos guardados</div>
+          {headers.length ? <div className="max-h-80 overflow-auto">{headers.map(row => <button type="button" key={row.lote} onClick={() => void openRefund(row.lote)} className={`block w-full border-b px-4 py-2.5 text-left text-xs hover:bg-gray-50 ${original === row.lote ? 'bg-petroleum-50' : ''}`}>
+            <span className="block font-semibold text-gray-800">{row.lote} · {money(row.valor)}</span><span className="block truncate text-gray-500">{row.fecha} · {row.concepto}</span><span className="block text-gray-500">{row.estado}</span>
+          </button>)}</div> : <div className="px-4 py-5 text-xs text-gray-500">No hay reembolsos de esta compañía.</div>}
+        </aside>
+        <div className="space-y-4">
+          <form onKeyDown={advanceOnEnter} onSubmit={event => { event.preventDefault(); void save(); }} className="rounded border border-gray-200 bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold text-gray-800">Encabezado</h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <Field label="Código del reembolso"><input autoFocus maxLength={12} disabled={Boolean(original)} value={current.encabezado.lote} onChange={event => setHeader('lote', event.target.value.toUpperCase())} className={`${INPUT} disabled:bg-gray-100`} required /></Field>
+              <Field label="Tipo de documento de caja"><select disabled={current.estado !== 'Borrador'} value={current.encabezado.documentoCaja} onChange={event => setHeader('documentoCaja', event.target.value)} className={INPUT} required><option value="">Seleccione…</option>{types.map(row => <option key={row.codigo} value={row.codigo}>{row.codigo} — {row.nombre}</option>)}</select></Field>
+              <Field label="Fecha"><input type="date" disabled={current.estado !== 'Borrador'} value={current.encabezado.fecha} onChange={event => setHeader('fecha', event.target.value)} className={INPUT} required /></Field>
+              <Field label="Valor general"><input type="number" step="0.01" min="0.01" disabled={current.estado !== 'Borrador'} value={current.encabezado.valorGeneral || ''} onChange={event => setHeader('valorGeneral', Number(event.target.value))} className={INPUT} required /></Field>
+              <Field label="Tipo de documento de cruce"><select disabled={current.estado !== 'Borrador'} value={current.encabezado.documentoCruce} onChange={event => setHeader('documentoCruce', event.target.value)} className={INPUT} required><option value="">Seleccione…</option>{types.map(row => <option key={row.codigo} value={row.codigo}>{row.codigo} — {row.nombre}</option>)}</select></Field>
+              <Field label="Comprobante"><select disabled={current.estado !== 'Borrador'} value={current.encabezado.comprobante} onChange={event => setHeader('comprobante', event.target.value)} className={INPUT} required><option value="">Seleccione…</option>{vouchers.map(row => <option key={row.codigo} value={row.codigo}>{row.codigo} — {row.nombre}</option>)}</select></Field>
+              <div className="sm:col-span-2 lg:col-span-3"><Field label="Concepto general"><input maxLength={50} disabled={current.estado !== 'Borrador'} value={current.encabezado.concepto} onChange={event => setHeader('concepto', event.target.value)} className={INPUT} required /></Field></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500">Ejercicio {periodo?.anio ?? '—'} · Solo se aceptan fechas de meses habilitados.</p>
+            {current.estado === 'Borrador' && <div className="mt-4 flex justify-end"><button type="submit" disabled={busy} className={PRIMARY}>{busy ? 'Guardando…' : 'Guardar reembolso'}</button></div>}
+          </form>
+          <section className="rounded border border-gray-200 bg-white">
+            <div className="flex items-center justify-between border-b px-4 py-3"><h2 className="text-sm font-semibold text-gray-800">Ítems del reembolso</h2>{current.estado === 'Borrador' && <button type="button" onClick={() => setEditing(current.items.length)} className={BUTTON}>Agregar ítem</button>}</div>
+            <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50 text-gray-600"><tr><th className="px-3 py-2 text-left">Tercero</th><th className="px-3 py-2 text-left">Centro</th><th className="px-3 py-2 text-left">Centro cruce</th><th className="px-3 py-2 text-left">Concepto</th><th className="px-3 py-2 text-right">Valor</th><th className="px-3 py-2" /></tr></thead><tbody className="divide-y divide-gray-100">{current.items.map((item, index) => <tr key={index}><td className="px-3 py-2 font-mono">{item.tercero}</td><td className="px-3 py-2">{item.centro}</td><td className="px-3 py-2">{item.centroCruce}</td><td className="max-w-xs truncate px-3 py-2">{item.concepto}</td><td className="px-3 py-2 text-right font-mono">{money(item.valor)}</td><td className="whitespace-nowrap px-3 py-2 text-right">{current.estado === 'Borrador' && <><button type="button" onClick={() => setEditing(index)} className="mr-2 text-petroleum-700 hover:underline">Editar</button><button type="button" onClick={() => setCurrent(previous => ({ ...previous, items: previous.items.filter((_, i) => i !== index), encabezado: { ...previous.encabezado, valorGeneral: Number(previous.items.filter((_, i) => i !== index).reduce((sum, row) => sum + row.valor, 0).toFixed(2)) } }))} className="text-red-600 hover:underline">Quitar</button></>}</td></tr>)}</tbody><tfoot className="border-t bg-gray-50"><tr><td colSpan={4} className="px-3 py-2 font-semibold">Total de ítems</td><td className="px-3 py-2 text-right font-mono font-semibold">{money(itemTotal)}</td><td /></tr></tfoot></table></div>
+            {!current.items.length && <div className="p-5 text-center text-xs text-gray-500">Agregue al menos un ítem de gasto.</div>}
+          </section>
+          {current.estado === 'Borrador' && original && <section className="rounded border border-gray-200 bg-white p-4"><h2 className="text-sm font-semibold text-gray-800">Generar lote contable</h2><p className="mt-1 text-xs text-gray-500">El lote se crea para revisión; luego podrá verificarlo y actualizarlo desde Lotes.</p><div className="mt-3 flex flex-wrap items-end gap-3"><Field label="Código del lote (4 caracteres)"><input maxLength={4} value={lotCode} onChange={event => setLotCode(event.target.value.toUpperCase())} className={INPUT} /></Field><button type="button" data-enter-action onClick={() => void prepareConfirmation()} disabled={busy || dirty} className={PRIMARY}>{busy ? 'Validando…' : 'Confirmar reembolso'}</button></div>{dirty && <p className="mt-2 text-xs text-amber-700">Guarde los cambios antes de confirmar.</p>}</section>}
+          {current.estado === 'Lote generado' && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className={PRIMARY}>Ir a lotes</button>}
+        </div>
+      </div>
+    </>}
+    {editing !== null && <EditorItem key={editing} initial={current.items[editing] ?? emptyItem()} centers={centers} onSave={saveItem} onClose={() => setEditing(null)} />}
+    {preview && <Modal title="Confirmar generación del lote" onClose={() => setPreview(null)}><p className="text-sm text-gray-700">Se generará el lote <strong>{preview.loteContable}</strong> con {preview.partidas} partidas y {preview.documentos} documentos. Débitos: {money(preview.debito)}. Créditos: {money(preview.credito)}.</p><p className="mt-2 text-xs text-gray-500">Quedará en borrador para verificarlo antes de contabilizar.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setPreview(null)} className={BUTTON}>Cancelar</button><button type="button" disabled={busy} onClick={() => void confirm()} className={PRIMARY}>{busy ? 'Generando…' : 'Generar lote'}</button></div></Modal>}
+    {discardAction && <Modal title="Cambios sin guardar" onClose={() => setDiscardAction(null)}><p className="text-sm text-gray-700">Tiene cambios pendientes. Si continúa, se perderán los cambios que aún no ha guardado.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setDiscardAction(null)} className={BUTTON}>Seguir editando</button><button type="button" onClick={() => { const action = discardAction; setDiscardAction(null); if (action === 'new') newRefund(true); else void openRefund(action, true); }} className={PRIMARY}>Descartar cambios</button></div></Modal>}
+  </div>;
 }
