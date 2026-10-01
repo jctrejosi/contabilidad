@@ -11,6 +11,7 @@ import {
 } from '../api/balanceComprobacion';
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
 import { consultarInformeAdicional, consultarPaginaInformeAdicional, exportarInformeAdicional, procesarAcumulacionIva, urlImpresionInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional } from '../api/informesAdicionales';
+import IvaAnalisis from './IvaAnalisis';
 
 // El formato de moneda es de presentación: no depende de los datos de demostración.
 const fmtCOP = (n: number): string => `$ ${n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -84,6 +85,7 @@ const CATEGORIAS: Categoria[] = [
     icon: '%',
     informes: [
       { id: 'iva-acumulacion', nombre: 'Acumulación general', desc: 'Reconstruye los acumulados de IVA por cuenta y tercero para el período elegido' },
+      { id: 'iva-analisis', nombre: 'Análisis acumulados y certificados', desc: 'Consulta y corrige los valores mensuales; emite certificados de IVA' },
     ],
   },
   {
@@ -177,7 +179,7 @@ const MENU_INFORMES: EntradaMenuInforme[] = [
   ] },
   { numero: '7', nombre: 'Informe de IVA', opciones: [
     { numero: '1', nombre: 'Acumulación general', id: 'iva-acumulacion' },
-    { numero: '2', nombre: 'Análisis acumulados y certificados' },
+    { numero: '2', nombre: 'Análisis acumulados y certificados', id: 'iva-analisis' },
     { numero: '3', nombre: 'Relación acumulados' },
     { numero: '4', nombre: 'Relación totales por cuenta' },
     { numero: '5', nombre: 'Soportes y anexos' },
@@ -640,6 +642,7 @@ function entradasConInforme(entries: EntradaMenuInforme[], path = ''): Array<Inf
 export default function Informes({ onNavigate, cia }: Props) {
   const [searchInforme, setSearchInforme] = useState('');
   const [showParams, setShowParams] = useState<Informe | null>(null);
+  const [showIvaAnalisis, setShowIvaAnalisis] = useState(false);
   const [favoritos, setFavoritos] = useState<string[]>(() => leerLista(STORAGE_FAVS));
   const [recientes, setRecientes] = useState<string[]>(() => leerLista(STORAGE_RECIENTES));
   const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -698,6 +701,12 @@ export default function Informes({ onNavigate, cia }: Props) {
     : [];
 
   function abrirInforme(inf: Informe) {
+    if (inf.id === 'iva-analisis') {
+      setShowIvaAnalisis(true);
+      setShowParams(null);
+      setPreview(null);
+      return;
+    }
     if (inf.page) {
       onNavigate(inf.page);
       return;
@@ -880,8 +889,10 @@ export default function Informes({ onNavigate, cia }: Props) {
         <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">No fue posible consultar el período operativo: {errorPeriodo}</div>
       )}
 
+      {showIvaAnalisis && anioOperacion !== null && <IvaAnalisis cia={cia} anio={anioOperacion} onClose={() => setShowIvaAnalisis(false)} />}
+
       {/* Búsqueda transversal y accesos frecuentes */}
-      <div className="bg-white rounded border border-gray-200 p-3 space-y-2.5">
+      {!showIvaAnalisis && <div className="bg-white rounded border border-gray-200 p-3 space-y-2.5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 max-w-lg">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">⌕</span>
@@ -920,10 +931,10 @@ export default function Informes({ onNavigate, cia }: Props) {
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Resultados de búsqueda */}
-      {searchInforme && (
+      {!showIvaAnalisis && searchInforme && (
         <div className="bg-white rounded border border-gray-200">
           <div className="px-4 py-2.5 border-b border-gray-100 text-xs text-gray-500">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</div>
           {filtered.map(inf => (
@@ -958,7 +969,7 @@ export default function Informes({ onNavigate, cia }: Props) {
       )}
 
       {/* Numeración y jerarquía literal del menú Harbour MENU_INFOR. */}
-      {!searchInforme && (
+      {!showIvaAnalisis && !searchInforme && (
         <section className="overflow-hidden rounded border border-gray-200 bg-white" aria-label="Informes del 1 al R">
           {MENU_INFORMES.map(entry => renderEntrada(entry))}
         </section>

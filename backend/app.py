@@ -39,6 +39,11 @@ from .terceros_repository import (
     ThirdPartyNotFound,
     ThirdPartyValidationError,
 )
+from .terceros_mantenimiento_repository import (
+    ThirdMaintenanceConflict, default_form as default_third_form,
+    get_form as get_third_form, reference_options as third_reference_options,
+    save_form as save_third_form,
+)
 from .centros_repository import (
     CostCenterAlreadyExists,
     CostCenterNotFound,
@@ -114,6 +119,10 @@ from .balance_comprobacion_repository import (
     export_trial_balance_xlsx,
 )
 from .iva_acumulacion_repository import rebuild_iva_accumulation
+from .iva_analisis_repository import (
+    IvaAnalysisConflict, build_iva_certificates, export_iva_certificates,
+    get_iva_analysis_item, list_iva_analysis, update_iva_analysis_item,
+)
 from .balance_mensual_repository import (
     build_monthly_balance,
     export_monthly_balance_pdf,
@@ -1091,6 +1100,8 @@ def _service_error(exc: Exception) -> HTTPException:
             RefundConflict,
             ReembolsoConflicto,
             ReassignmentConflict,
+            IvaAnalysisConflict,
+            ThirdMaintenanceConflict,
         ),
     ):
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
@@ -1319,6 +1330,46 @@ def third_parties(
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "FADCLI", "sharedAcrossCompanies": True}
+
+
+@app.get("/api/terceros/mantenimiento/nuevo", summary="Formulario completo para crear un tercero")
+def new_third_maintenance() -> dict[str, Any]:
+    return default_third_form()
+
+
+@app.get("/api/terceros/mantenimiento/catalogos/{campo}", summary="Buscar códigos del formulario de terceros")
+def third_maintenance_catalog(campo: str, buscar: str = Query("", max_length=40)) -> list[dict[str, str]]:
+    try:
+        return third_reference_options(campo, buscar)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/terceros/mantenimiento/{nit}", summary="Consultar la ficha completa de un tercero")
+def get_third_maintenance(nit: str = Path(pattern=r"^[A-Za-z0-9]{1,10}$")) -> dict[str, Any]:
+    try:
+        return get_third_form(nit)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/terceros/mantenimiento", status_code=status.HTTP_201_CREATED,
+          summary="Crear un tercero con la ficha completa")
+def create_third_maintenance(payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return save_third_form(str(payload.get("CCODIGO", "")).strip(), payload, create=True)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/terceros/mantenimiento/{nit}", summary="Modificar la ficha completa de un tercero")
+def update_third_maintenance(payload: dict[str, Any], nit: str = Path(pattern=r"^[A-Za-z0-9]{1,10}$")) -> dict[str, Any]:
+    try:
+        if "CCODIGO" in payload and payload["CCODIGO"] != nit:
+            raise ValueError("La identificación no se cambia en el mantenimiento de terceros.")
+        return save_third_form(nit, payload, create=False)
+    except Exception as exc:
+        raise _service_error(exc) from exc
 
 
 @app.post("/api/terceros", status_code=status.HTTP_201_CREATED, summary="Crear tercero")
@@ -2559,6 +2610,108 @@ def rebuild_iva_accumulation_endpoint(
         return rebuild_iva_accumulation(cia, anio, mes_desde, mes_hasta)
     except Exception as exc:
         raise _service_error(exc) from exc
+
+
+class IvaAnalysisSave(BaseModel):
+    """Los importes de los doce meses y la versión vista por el usuario."""
+    version: str = Field(pattern=r"^[0-9a-f]{64}$")
+    meses: list[dict[str, Any]] = Field(min_length=12, max_length=12)
+
+
+@app.get("/api/informes/iva/analisis", summary="Consultar acumulados de IVA")
+def iva_analysis_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    buscar: str = Query("", max_length=12),
+    cursor_cuenta: str = Query("", alias="cursorCuenta", max_length=12),
+    cursor_tercero: str = Query("", alias="cursorTercero", max_length=15),
+) -> dict[str, Any]:
+    try:
+        return list_iva_analysis(cia, anio, account_from=cuenta_desde, account_to=cuenta_hasta,
+                                 nit_from=nit_desde, nit_to=nit_hasta, search=buscar,
+                                 cursor_account=cursor_cuenta, cursor_nit=cursor_tercero)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/iva/analisis/detalle", summary="Ver los doce meses de un acumulado de IVA")
+def iva_analysis_detail_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12), nit: str = Query(max_length=15),
+) -> dict[str, Any]:
+    try:
+        return get_iva_analysis_item(cia, anio, cuenta, nit)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.patch("/api/informes/iva/analisis/detalle", summary="Corregir acumulados mensuales de IVA")
+def iva_analysis_save_endpoint(
+    payload: IvaAnalysisSave,
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12), nit: str = Query(max_length=15),
+) -> dict[str, Any]:
+    try:
+        return update_iva_analysis_item(cia, anio, cuenta, nit, payload.version, payload.meses)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+def _iva_certificate_report(cia: str, anio: int, cuenta_desde: str, cuenta_hasta: str,
+                            nit_desde: str, nit_hasta: str, periodicidad: str,
+                            periodo: str, incluir_porcentaje: bool) -> dict[str, Any]:
+    return build_iva_certificates(cia, anio, account_from=cuenta_desde,
+                                  account_to=cuenta_hasta, nit_from=nit_desde,
+                                  nit_to=nit_hasta, frequency=periodicidad,
+                                  period=periodo, include_rate=incluir_porcentaje)
+
+
+@app.get("/api/informes/iva/certificados", summary="Previsualizar certificados de IVA")
+def iva_certificates_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    periodicidad: Literal["mensual", "bimestral", "anual"] = Query("anual"),
+    periodo: str = Query("todos", max_length=5),
+    incluir_porcentaje: bool = Query(False, alias="incluirPorcentaje"),
+) -> dict[str, Any]:
+    try:
+        return _iva_certificate_report(cia, anio, cuenta_desde, cuenta_hasta,
+                                       nit_desde, nit_hasta, periodicidad, periodo, incluir_porcentaje)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/iva/certificados/exportar", summary="Exportar certificados de IVA")
+def iva_certificates_export_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    periodicidad: Literal["mensual", "bimestral", "anual"] = Query("anual"),
+    periodo: str = Query("todos", max_length=5),
+    incluir_porcentaje: bool = Query(False, alias="incluirPorcentaje"),
+    formato: Literal["pdf", "xlsx"] = Query("pdf"),
+) -> Response:
+    try:
+        report = _iva_certificate_report(cia, anio, cuenta_desde, cuenta_hasta,
+                                         nit_desde, nit_hasta, periodicidad, periodo, incluir_porcentaje)
+        if not report["certificados"]:
+            raise ValueError("No hay importes de IVA para emitir certificados con estos filtros.")
+        content = export_iva_certificates(report, formato)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    media = "application/pdf" if formato == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    disposition = "inline" if formato == "pdf" else "attachment"
+    filename = f"certificados_iva_{int(cia):03d}_{anio}.{formato}"
+    return Response(content=content, media_type=media,
+                    headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})
 
 
 @app.get("/api/informes/adicionales/{report_id}", summary="Generar informe contable adicional")

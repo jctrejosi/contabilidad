@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fmtCOP } from '../data/mock';
 import { listarTerceros } from '../api/terceros';
+import TerceroMantenimiento from '../components/TerceroMantenimiento';
 import type { Tercero } from '../types';
 
 const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100 aria-[invalid=true]:border-red-400';
@@ -69,6 +70,8 @@ export default function TercerosPage() {
   const [searchAplicado, setSearchAplicado] = useState('');
   const [filterEstado, setFilterEstado] = useState<'todos' | 'Activo' | 'Bloqueado'>('todos');
   const [selectedNit, setSelectedNit] = useState<string | null>(null);
+  const [maintenanceNit, setMaintenanceNit] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [aviso, setAviso] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
 
   const [showNew, setShowNew] = useState(false);
@@ -92,6 +95,16 @@ export default function TercerosPage() {
   const [reasignStep, setReasignStep] = useState(0);
   const [nitActual, setNitActual] = useState('860.050.010');
   const [nitNuevo, setNitNuevo] = useState('');
+
+  useEffect(() => {
+    if (maintenanceNit !== null) return;
+    const shortcut = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'F2') { event.preventDefault(); setMaintenanceNit(''); }
+      if (event.key === 'F3' && selectedNit) { event.preventDefault(); setMaintenanceNit(selectedNit); }
+    };
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, [maintenanceNit, selectedNit]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -120,13 +133,13 @@ export default function TercerosPage() {
       .catch(error => {
         if (!vigente) return;
         setTerceros([]);
-        setErrorConexion(error instanceof Error ? error.message : 'No fue posible consultar FADCLI.');
+        setErrorConexion(error instanceof Error ? error.message : 'No fue posible consultar los terceros.');
       })
       .finally(() => {
         if (vigente) setCargando(false);
       });
     return () => { vigente = false; };
-  }, [filterEstado, pagina, searchAplicado]);
+  }, [filterEstado, pagina, searchAplicado, refreshKey]);
 
   const selected = terceros.find(t => t.nit === selectedNit) || null;
 
@@ -291,7 +304,7 @@ export default function TercerosPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className={`rounded-full border px-3 py-1 text-xs font-medium ${errorConexion ? 'border-red-200 bg-red-50 text-red-700' : cargando ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-green-200 bg-green-50 text-green-700'}`}>
-            {errorConexion ? 'Sin conexión a Advantage' : cargando ? 'Consultando FADCLI…' : `FADCLI global · ${total.toLocaleString('es-CO')} terceros`}
+            {errorConexion ? 'Sin conexión' : cargando ? 'Consultando terceros…' : `${total.toLocaleString('es-CO')} terceros`}
           </span>
           <button disabled title="Se habilitará al implementar la importación real" className={`${BUTTON_SECONDARY} cursor-not-allowed opacity-50`}>↑ Importar</button>
           <button onClick={exportarCSV} disabled={cargando || !!errorConexion} className={`${BUTTON_SECONDARY} disabled:cursor-not-allowed disabled:opacity-50`}>↓ Exportar página</button>
@@ -303,7 +316,7 @@ export default function TercerosPage() {
           >
             ⚠ Reasignar NIT
           </button>
-          <button disabled title="La creación real se implementará en la siguiente fase" className={`${BUTTON_PRIMARY} cursor-not-allowed opacity-50`}>+ Nuevo tercero</button>
+          <button onClick={() => setMaintenanceNit('')} disabled={!!errorConexion} className={`${BUTTON_PRIMARY} disabled:opacity-50`}>+ Nuevo tercero</button>
         </div>
       </div>
 
@@ -383,7 +396,7 @@ export default function TercerosPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {cargando && (
-                        <tr><td colSpan={13} className="px-4 py-12 text-center text-sm text-gray-500">Consultando terceros en FADCLI…</td></tr>
+                        <tr><td colSpan={13} className="px-4 py-12 text-center text-sm text-gray-500">Consultando terceros…</td></tr>
                       )}
                       {!cargando && !errorConexion && filtered.length === 0 && (
                         <tr><td colSpan={13} className="px-4 py-12 text-center text-sm text-gray-500">No se encontraron terceros con estos criterios.</td></tr>
@@ -420,7 +433,7 @@ export default function TercerosPage() {
                           <td className="px-3 py-2.5 font-mono text-gray-500">{t.fechaCreacion}</td>
                           <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
-                              <span className="text-xs text-gray-400">Solo consulta</span>
+                              <button type="button" className="text-xs font-medium text-petroleum-700 hover:underline" onClick={() => setMaintenanceNit(t.nit)}>Modificar</button>
                             </div>
                           </td>
                         </tr>
@@ -472,9 +485,7 @@ export default function TercerosPage() {
                     ))}
                   </div>
 
-                  <div className="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700">
-                    Consulta real de FADCLI. La modificación, eliminación y bloqueo se habilitarán con sus validaciones contables y auditoría.
-                  </div>
+                  <button type="button" className={BUTTON_PRIMARY} onClick={() => setMaintenanceNit(selected.nit)}>Modificar ficha</button>
                 </div>
               </div>
             )}
@@ -632,6 +643,15 @@ export default function TercerosPage() {
       )}
 
       {/* Nuevo tercero */}
+      {maintenanceNit !== null && <TerceroMantenimiento nit={maintenanceNit || undefined} onClose={() => setMaintenanceNit(null)} onSaved={code => {
+        setMaintenanceNit(null);
+        setPagina(1);
+        setSearch(code);
+        setSearchAplicado(code);
+        setSelectedNit(code);
+        setRefreshKey(value => value + 1);
+        setAviso({ tipo: 'success', texto: `Tercero ${code} guardado correctamente.` });
+      }} />}
       {showNew && (
         <Modal title="Nuevo tercero" onClose={() => setShowNew(false)}>
           <form noValidate onSubmit={e => { e.preventDefault(); guardarNuevo(); }}>

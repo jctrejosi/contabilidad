@@ -67,9 +67,6 @@ export default function Comprobantes({ cia }: ComprobantesProps) {
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Advantage · CIA {cia} · {comprobantes.length} comprobantes</span>
       </div>
 
-      <div className="rounded border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-        El tipo documental y su consecutivo se administran en VISDOCUM. CONTICOM define únicamente el código y nombre del comprobante para esta compañía.
-      </div>
       {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="flex flex-wrap items-center gap-3 rounded border border-gray-200 bg-white p-3">
