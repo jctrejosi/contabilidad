@@ -168,6 +168,7 @@ export default function Reembolsos({ cia, onNavigate }: { cia: string; onNavigat
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const addItemButtonRef = useRef<HTMLButtonElement>(null);
   const dirty = JSON.stringify({ encabezado: current.encabezado, items: current.items }) !== savedSignature;
   const itemTotal = current.items.reduce((sum, item) => sum + item.valor, 0);
 
@@ -184,7 +185,9 @@ export default function Reembolsos({ cia, onNavigate }: { cia: string; onNavigat
         const existing = await listarReembolsos(cia);
         if (!active) return;
         setPeriodo(period); setCenters(centerRows.items); setTypes(typeRows.items);
-        setVouchers(voucherRows.items.filter(row => !row.historico)); setHeaders(existing);
+        // En contabilidad se pueden seleccionar todos los comprobantes de
+        // CONTICOM de la compañía activa; HIST no los excluye del reembolso.
+        setVouchers(voucherRows.items); setHeaders(existing);
         const initial = { encabezado: initialHeader(period, existing.length), items: [], estado: 'Borrador' } as ReembolsoContable;
         setCurrent(initial); setSavedSignature(JSON.stringify({ encabezado: initial.encabezado, items: initial.items }));
         setLotCode(`R${String(existing.length + 1).padStart(3, '0')}`);
@@ -234,6 +237,8 @@ export default function Reembolsos({ cia, onNavigate }: { cia: string; onNavigat
       return { ...previous, items, encabezado: { ...previous.encabezado, valorGeneral: Number(items.reduce((sum, row) => sum + row.valor, 0).toFixed(2)) } };
     });
     setEditing(null); setError(''); setMessage('');
+    // Tras guardar, Enter sobre el botón permite iniciar inmediatamente otro ítem.
+    requestAnimationFrame(() => addItemButtonRef.current?.focus());
   }
 
   async function save() {
@@ -273,6 +278,22 @@ export default function Reembolsos({ cia, onNavigate }: { cia: string; onNavigat
     finally { setBusy(false); }
   }
 
+  useEffect(() => {
+    function shortcut(event: globalThis.KeyboardEvent) {
+      if (event.repeat || event.altKey || event.ctrlKey || event.metaKey ||
+          (event.key !== 'F4' && event.key !== 'F2')) return;
+      // Un editor o una confirmación abierta deben terminarse antes de usar
+      // atajos del encabezado; así no se pierden cambios de un ítem.
+      if (editing !== null || preview || discardAction || loading || busy || current.estado !== 'Borrador') return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'F4') void save();
+      else void prepareConfirmation();
+    }
+    window.addEventListener('keydown', shortcut, true);
+    return () => window.removeEventListener('keydown', shortcut, true);
+  }, [editing, preview, discardAction, loading, busy, current, original, dirty, lotCode, cia]);
+
   return <div className="mx-auto max-w-screen-xl space-y-4 p-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><div className="text-xs text-gray-400">Movimientos / Reembolsos · Compañía {cia}</div><h1 className="text-lg font-semibold text-gray-800">Reembolsos</h1><p className="mt-1 text-xs text-gray-500">Registre gastos y genere un lote para su revisión contable.</p></div>
@@ -298,23 +319,27 @@ export default function Reembolsos({ cia, onNavigate }: { cia: string; onNavigat
               <Field label="Valor general"><input type="number" step="0.01" min="0.01" disabled={current.estado !== 'Borrador'} value={current.encabezado.valorGeneral || ''} onChange={event => setHeader('valorGeneral', Number(event.target.value))} className={INPUT} required /></Field>
               <Field label="Tipo de documento de cruce"><select disabled={current.estado !== 'Borrador'} value={current.encabezado.documentoCruce} onChange={event => setHeader('documentoCruce', event.target.value)} className={INPUT} required><option value="">Seleccione…</option>{types.map(row => <option key={row.codigo} value={row.codigo}>{row.codigo} — {row.nombre}</option>)}</select></Field>
               <Field label="Comprobante"><select disabled={current.estado !== 'Borrador'} value={current.encabezado.comprobante} onChange={event => setHeader('comprobante', event.target.value)} className={INPUT} required><option value="">Seleccione…</option>{vouchers.map(row => <option key={row.codigo} value={row.codigo}>{row.codigo} — {row.nombre}</option>)}</select></Field>
-              <div className="sm:col-span-2 lg:col-span-3"><Field label="Concepto general"><input maxLength={50} disabled={current.estado !== 'Borrador'} value={current.encabezado.concepto} onChange={event => setHeader('concepto', event.target.value)} className={INPUT} required /></Field></div>
+              <div className="sm:col-span-2 lg:col-span-3"><Field label="Concepto general"><input maxLength={50} disabled={current.estado !== 'Borrador'} value={current.encabezado.concepto} onChange={event => setHeader('concepto', event.target.value)} onKeyDown={event => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                event.preventDefault(); event.stopPropagation();
+                if (!busy) setEditing(current.items.length);
+              }} className={INPUT} required /></Field></div>
             </div>
             <p className="mt-3 text-xs text-gray-500">Ejercicio {periodo?.anio ?? '—'} · Solo se aceptan fechas de meses habilitados.</p>
-            {current.estado === 'Borrador' && <div className="mt-4 flex justify-end"><button type="submit" disabled={busy} className={PRIMARY}>{busy ? 'Guardando…' : 'Guardar reembolso'}</button></div>}
+            {current.estado === 'Borrador' && <div className="mt-4 flex justify-end"><button type="submit" disabled={busy} className={PRIMARY}>{busy ? 'Guardando…' : 'Guardar reembolso (F4)'}</button></div>}
           </form>
           <section className="rounded border border-gray-200 bg-white">
-            <div className="flex items-center justify-between border-b px-4 py-3"><h2 className="text-sm font-semibold text-gray-800">Ítems del reembolso</h2>{current.estado === 'Borrador' && <button type="button" onClick={() => setEditing(current.items.length)} className={BUTTON}>Agregar ítem</button>}</div>
+            <div className="flex items-center justify-between border-b px-4 py-3"><h2 className="text-sm font-semibold text-gray-800">Ítems del reembolso</h2>{current.estado === 'Borrador' && <button ref={addItemButtonRef} type="button" onClick={() => setEditing(current.items.length)} className={BUTTON}>Agregar ítem</button>}</div>
             <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50 text-gray-600"><tr><th className="px-3 py-2 text-left">Tercero</th><th className="px-3 py-2 text-left">Centro</th><th className="px-3 py-2 text-left">Centro cruce</th><th className="px-3 py-2 text-left">Concepto</th><th className="px-3 py-2 text-right">Valor</th><th className="px-3 py-2" /></tr></thead><tbody className="divide-y divide-gray-100">{current.items.map((item, index) => <tr key={index}><td className="px-3 py-2 font-mono">{item.tercero}</td><td className="px-3 py-2">{item.centro}</td><td className="px-3 py-2">{item.centroCruce}</td><td className="max-w-xs truncate px-3 py-2">{item.concepto}</td><td className="px-3 py-2 text-right font-mono">{money(item.valor)}</td><td className="whitespace-nowrap px-3 py-2 text-right">{current.estado === 'Borrador' && <><button type="button" onClick={() => setEditing(index)} className="mr-2 text-petroleum-700 hover:underline">Editar</button><button type="button" onClick={() => setCurrent(previous => ({ ...previous, items: previous.items.filter((_, i) => i !== index), encabezado: { ...previous.encabezado, valorGeneral: Number(previous.items.filter((_, i) => i !== index).reduce((sum, row) => sum + row.valor, 0).toFixed(2)) } }))} className="text-red-600 hover:underline">Quitar</button></>}</td></tr>)}</tbody><tfoot className="border-t bg-gray-50"><tr><td colSpan={4} className="px-3 py-2 font-semibold">Total de ítems</td><td className="px-3 py-2 text-right font-mono font-semibold">{money(itemTotal)}</td><td /></tr></tfoot></table></div>
             {!current.items.length && <div className="p-5 text-center text-xs text-gray-500">Agregue al menos un ítem de gasto.</div>}
           </section>
-          {current.estado === 'Borrador' && original && <section className="rounded border border-gray-200 bg-white p-4"><h2 className="text-sm font-semibold text-gray-800">Generar lote contable</h2><p className="mt-1 text-xs text-gray-500">El lote se crea para revisión; luego podrá verificarlo y actualizarlo desde Lotes.</p><div className="mt-3 flex flex-wrap items-end gap-3"><Field label="Código del lote (4 caracteres)"><input maxLength={4} value={lotCode} onChange={event => setLotCode(event.target.value.toUpperCase())} className={INPUT} /></Field><button type="button" data-enter-action onClick={() => void prepareConfirmation()} disabled={busy || dirty} className={PRIMARY}>{busy ? 'Validando…' : 'Confirmar reembolso'}</button></div>{dirty && <p className="mt-2 text-xs text-amber-700">Guarde los cambios antes de confirmar.</p>}</section>}
+          {current.estado === 'Borrador' && original && <section className="rounded border border-gray-200 bg-white p-4"><h2 className="text-sm font-semibold text-gray-800">Generar lote contable</h2><p className="mt-1 text-xs text-gray-500">El lote se crea para revisión; luego podrá verificarlo y actualizarlo desde Lotes.</p><div className="mt-3 flex flex-wrap items-end gap-3"><Field label="Código del lote (4 caracteres)"><input maxLength={4} value={lotCode} onChange={event => setLotCode(event.target.value.toUpperCase())} className={INPUT} /></Field><button type="button" data-enter-action onClick={() => void prepareConfirmation()} disabled={busy || dirty} className={PRIMARY}>{busy ? 'Validando…' : 'Actualizar reembolso (F2)'}</button></div>{dirty && <p className="mt-2 text-xs text-amber-700">Guarde los cambios antes de confirmar.</p>}</section>}
           {current.estado === 'Lote generado' && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className={PRIMARY}>Ir a lotes</button>}
         </div>
       </div>
     </>}
     {editing !== null && <EditorItem key={editing} initial={current.items[editing] ?? emptyItem()} centers={centers} onSave={saveItem} onClose={() => setEditing(null)} />}
-    {preview && <Modal title="Confirmar generación del lote" onClose={() => setPreview(null)}><p className="text-sm text-gray-700">Se generará el lote <strong>{preview.loteContable}</strong> con {preview.partidas} partidas y {preview.documentos} documentos. Débitos: {money(preview.debito)}. Créditos: {money(preview.credito)}.</p><p className="mt-2 text-xs text-gray-500">Quedará en borrador para verificarlo antes de contabilizar.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setPreview(null)} className={BUTTON}>Cancelar</button><button type="button" disabled={busy} onClick={() => void confirm()} className={PRIMARY}>{busy ? 'Generando…' : 'Generar lote'}</button></div></Modal>}
+    {preview && <Modal title="Confirmar generación del lote" onClose={() => setPreview(null)}><p className="text-sm text-gray-700">Se generará el lote <strong>{preview.loteContable}</strong> con {preview.partidas} partidas y {preview.documentos} documentos. Débitos: {money(preview.debito)}. Créditos: {money(preview.credito)}.</p><p className="mt-2 text-xs text-gray-500">Quedará en borrador para verificarlo antes de contabilizar.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setPreview(null)} className={BUTTON}>Cancelar</button><button autoFocus type="button" disabled={busy} onClick={() => void confirm()} className={PRIMARY}>{busy ? 'Generando…' : 'Generar lote'}</button></div></Modal>}
     {discardAction && <Modal title="Cambios sin guardar" onClose={() => setDiscardAction(null)}><p className="text-sm text-gray-700">Tiene cambios pendientes. Si continúa, se perderán los cambios que aún no ha guardado.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setDiscardAction(null)} className={BUTTON}>Seguir editando</button><button type="button" onClick={() => { const action = discardAction; setDiscardAction(null); if (action === 'new') newRefund(true); else void openRefund(action, true); }} className={PRIMARY}>Descartar cambios</button></div></Modal>}
   </div>;
 }

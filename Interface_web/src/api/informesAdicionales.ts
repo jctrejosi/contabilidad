@@ -21,6 +21,8 @@ export interface FiltrosInformeAdicional {
   buscar?: string;
   nivel?: number;
   incluirCeros?: boolean;
+  incluirResultados?: boolean;
+  incluirTerceros?: boolean;
 }
 
 export interface InformeAdicional {
@@ -52,7 +54,8 @@ function query(f: FiltrosInformeAdicional): URLSearchParams {
     incluirCeros: String(f.incluirCeros ?? false),
   });
   for (const [key, value] of Object.entries(f)) {
-    if (!(key in { cia: 1, anio: 1, mesDesde: 1, mesHasta: 1, nivel: 1, incluirCeros: 1 }) && value) {
+    if (!(key in { cia: 1, anio: 1, mesDesde: 1, mesHasta: 1, nivel: 1, incluirCeros: 1 }) &&
+        (value || (typeof value === 'boolean' && key === 'incluirResultados'))) {
       params.set(key, String(value));
     }
   }
@@ -66,6 +69,20 @@ export async function consultarInformeAdicional(id: string, filtros: FiltrosInfo
   const body = await response.json().catch(() => null) as InformeAdicional | { detail?: string } | null;
   if (!response.ok || !body || !('filas' in body)) {
     throw new Error(body && 'detail' in body ? body.detail : 'No fue posible generar el informe.');
+  }
+  return body;
+}
+
+/** Rehace, por compañía y meses, los acumulados que el informe de IVA consulta. */
+export async function procesarAcumulacionIva(filtros: FiltrosInformeAdicional): Promise<InformeAdicional> {
+  const params = new URLSearchParams({
+    cia: filtros.cia, anio: String(filtros.anio),
+    mesDesde: String(filtros.mesDesde), mesHasta: String(filtros.mesHasta),
+  });
+  const response = await fetch(`/api/informes/iva-acumulacion?${params}`, { method: 'POST' });
+  const body = await response.json().catch(() => null) as InformeAdicional | { detail?: string } | null;
+  if (!response.ok || !body || !('filas' in body)) {
+    throw new Error(body && 'detail' in body ? body.detail : 'No fue posible acumular el IVA.');
   }
   return body;
 }

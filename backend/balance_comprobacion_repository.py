@@ -97,6 +97,7 @@ def build_trial_balance(
     include_centers: bool = False,
     detail_from: str = "",
     detail_to: str = "",
+    detail_limit: int | None = MAX_DETAIL_ROWS,
 ) -> dict[str, Any]:
     """Consulta CONMAE y entrega el balance acumulado de una compañía."""
     company = normalize_company_code(company_code)
@@ -153,11 +154,13 @@ def build_trial_balance(
             and (not detail_from or (code >= detail_from if detail_to else code.startswith(detail_from)))
             and (not detail_to or code <= detail_to)
         ]
-        third_rows = _load_thirds(connection, company, level, detail_from, detail_to, detail_codes) if include_thirds else []
+        third_rows = _load_thirds(connection, company, level, detail_from, detail_to, detail_codes,
+                                  month_to=month_to, max_rows=detail_limit) if include_thirds else []
         center_rows = _load_centers(connection, company, level, detail_from, detail_to, detail_codes) if include_centers else []
         if month_to > 12:
             if include_thirds:
-                _add_detail_extra_months(connection, company, year, month_to, third_rows, "NIT", detail_codes)
+                _add_detail_extra_months(connection, company, year, month_to, third_rows, "NIT", detail_codes,
+                                         max_rows=detail_limit)
             if include_centers:
                 _add_detail_extra_months(connection, company, year, month_to, center_rows, "CENTRO", detail_codes)
 
@@ -230,13 +233,40 @@ def _code_condition(level: int, first: str, last: str, codes: list[str]) -> str:
 
 
 def _load_thirds(connection: Any, company: int, level: int, first: str, last: str,
-                 codes: list[str]) -> list[dict[str, Any]]:
-    fields = ", ".join(f"MACMDEB{m:02d}, MACMCRE{m:02d}" for m in range(1, 13))
-    rows = _read(connection,
-        f"SELECT TOP {MAX_DETAIL_ROWS + 1} CODIGO, NIT, MNOMBRE, MSALDO, {fields} "
-        f"FROM CONTERCE WHERE CIA = {company}{_code_condition(level, first, last, codes)} "
-        "ORDER BY CODIGO, NIT")
-    if len(rows) > MAX_DETAIL_ROWS:
+                 codes: list[str], *, month_to: int = 12,
+                 max_rows: int | None = MAX_DETAIL_ROWS) -> list[dict[str, Any]]:
+    # CONSALDO solo necesita los meses hasta el solicitado. En un informe con
+    # muchos terceros esto evita transferir columnas posteriores innecesarias.
+    fields = ", ".join(f"MACMDEB{m:02d}, MACMCRE{m:02d}"
+                       for m in range(1, min(12, month_to) + 1))
+    limit = f"TOP {max_rows + 1} " if max_rows is not None else ""
+    # En el informe sin tope, una lista IN extensa fuerza a Advantage a
+    # comparar cada registro con cientos de códigos. El filtro por nivel
+    # recorre la compañía una sola vez; el armado final usa solo códigos reales.
+    code_filter = (f" AND LENGTH(TRIM(CODIGO)) <= {level}{_detail_where(first, last)}"
+                   if max_rows is None else _code_condition(level, first, last, codes))
+    sql = (
+        f"SELECT {limit}CODIGO, NIT, MNOMBRE, MSALDO, {fields} "
+        f"FROM CONTERCE WHERE CIA = {company}{code_filter} "
+        "ORDER BY CODIGO, NIT"
+    )
+    if max_rows is None:
+        # El informe original no tiene límite; GetRows por bloques evita una
+        # sola matriz ADO gigantesca antes de construir las filas del informe.
+        recordset = _open_recordset(connection, sql)
+        try:
+            names = [recordset.Fields.Item(index).Name for index in range(recordset.Fields.Count)]
+            rows = []
+            while not recordset.EOF:
+                columns = recordset.GetRows(1000)
+                if not columns or not columns[0]:
+                    break
+                rows.extend(dict(zip(names, values)) for values in zip(*columns))
+        finally:
+            recordset.Close()
+    else:
+        rows = _read(connection, sql)
+    if max_rows is not None and len(rows) > max_rows:
         raise ValueError("Hay demasiados detalles de terceros. Indique un rango de cuentas más pequeño.")
     return rows
 
@@ -258,7 +288,7 @@ def _load_centers(connection: Any, company: int, level: int, first: str, last: s
 
 def _add_detail_extra_months(connection: Any, company: int, year: int, last_month: int,
                              rows: list[dict[str, Any]], kind: str,
-                             allowed_codes: list[str]) -> None:
+                             allowed_codes: list[str], *, max_rows: int | None = MAX_DETAIL_ROWS) -> None:
     source_field = "NIT" if kind == "NIT" else "TFASE"
     indexed = {(_text(row.get("CODIGO")).strip(), _text(row.get(kind)).strip()): row for row in rows}
     allowed = set(allowed_codes)
@@ -281,7 +311,7 @@ def _add_detail_extra_months(connection: Any, company: int, year: int, last_mont
                 continue
             row = indexed.get((parent_code, detail))
             if row is None:
-                if len(indexed) >= MAX_DETAIL_ROWS:
+                if max_rows is not None and len(indexed) >= max_rows:
                     raise ValueError("Hay demasiados detalles en los períodos especiales. Acote el rango de cuentas.")
                 row = {"CODIGO": parent_code, kind: detail, "MNOMBRE": detail, "MSALDO": 0}
                 rows.append(row)

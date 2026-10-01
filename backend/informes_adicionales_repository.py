@@ -26,7 +26,8 @@ from .ads_repository import (
     CATALOG_ACCOUNT_FILTER, CompanyNotFound, _company_exists, _number,
     _open_recordset, _rows, _text, ads_odbc_connection, normalize_company_code,
 )
-from .balance_comprobacion_repository import build_trial_balance
+from .balance_comprobacion_repository import MONTH_NAMES, build_trial_balance
+from .iva_acumulacion_repository import read_iva_accumulation
 
 MAX_ROWS = 5000
 CODE = re.compile(r"^[A-Za-z0-9.\-/]*$")
@@ -118,8 +119,6 @@ def _balance_report(
     """Variantes de INFOR02/INFOR09/INFOR10/INFOR13 sobre CONMAE."""
     balance = build_trial_balance(cia, year, first, last, level=level, include_zero=include_zero)
     items = balance["items"]
-    if report_id == "bal-gral-resultados":
-        items = [row for row in items if row["cuenta"][0] in "1234567"]
     if report_id == "balance-prueba-anual":
         title = "Balance de prueba anual"
     else:
@@ -132,12 +131,6 @@ def _balance_report(
     control_totals = ["", "TOTALES", balance["totales"]["saldoAnterior"],
                       balance["totales"]["debito"], balance["totales"]["credito"],
                       balance["totales"]["saldoActual"]]
-    if report_id == "bal-gral-resultados":
-        class_rows = [item for item in items if len(item["cuenta"]) == 1]
-        control_totals = ["", "TOTALES"] + [
-            round(sum(float(item[key]) for item in class_rows), 2)
-            for key in ("saldoAnterior", "debito", "credito", "saldoActual")
-        ]
     return {
         "id": report_id, "compania": balance["compania"], "anio": year,
         "mesDesde": first, "mesHasta": last,
@@ -145,6 +138,61 @@ def _balance_report(
         "filas": [[row[key] for key, _, _ in columns] for row in items],
         "count": len(items), "source": "CONMAE", "nota": title,
         "totales": control_totals,
+    }
+
+
+def _general_balance_report(
+    cia: str, year: int, month: int, level: int, include_zero: bool,
+    include_results: bool, include_thirds: bool,
+) -> dict[str, Any]:
+    """INFOR04/INFOR41A-B: resultados y balance a un único mes de cierre.
+
+    El motor acumulado ya reproduce CONSALDO, el traslado del resultado a la
+    clase 3 y los signos de presentación. Aquí se conserva el orden de las
+    dos secciones y se adapta la impresión al formato web/PDF/XLSX actual.
+    """
+    if not 1 <= month <= 18:
+        raise ValueError("Seleccione un mes entre 1 y 18.")
+    balance = build_trial_balance(
+        cia, year, month, month, level=level, include_zero=include_zero,
+        include_results=include_results, include_thirds=include_thirds,
+        detail_limit=None,  # INFOR04 no limitaba las cuentas por tercero.
+    )
+    month_name = MONTH_NAMES[(month - 1) % 12].upper()
+    period = f"{month_name} {year}" + (f" (MES {month:02d})" if month > 12 else "")
+    rows: list[list[str | float]] = []
+    kinds: list[str] = []
+    indents = {1: 0, 2: 1, 4: 2, 6: 3, 9: 4, 12: 5}
+    for item in balance["items"]:
+        kind = item["tipo"]
+        if kind == "seccion":
+            title = ("ESTADO DE RESULTADOS" if item["seccion"] == "resultados" else "BALANCE GENERAL")
+            rows.append(["", "", f"{title} A {period}", ""])
+            kinds.append("seccion")
+            continue
+        code = item["cuenta"] if kind in {"cuenta", "tercero"} else ""
+        nit = item["nit"] if kind == "tercero" else ""
+        name = item["nombre"]
+        if kind in {"cuenta", "tercero"}:
+            depth = indents.get(len(code), 0) + (1 if kind == "tercero" else 0)
+            name = "\u00a0" * (depth * 3) + name
+        elif kind == "total-clase":
+            name = f"TOTAL {name}"
+        rows.append([code, nit, name, round(float(item["saldoActual"]), 2)])
+        kinds.append({
+            "resultado": "subtotal", "total-clase": "total-cuenta",
+            "total-estado": "total-general", "total-balance": "total-general",
+        }.get(kind, kind))
+    return {
+        "id": "bal-gral-resultados", "compania": balance["compania"], "anio": year,
+        "mesDesde": month, "mesHasta": month,
+        "columnas": [
+            {"label": "Código", "money": False}, {"label": "NIT", "money": False},
+            {"label": "Cuenta", "money": False}, {"label": "Saldo actual", "money": True},
+        ],
+        "filas": rows, "tipos": kinds, "count": len(rows),
+        "source": "CONMAE/CONTERCE" if include_thirds else "CONMAE",
+        "nota": f"Saldos al cierre de {period}. Nivel: {balance['nombreNivel']}.",
     }
 
 
@@ -168,8 +216,17 @@ def build_additional_report(
     document_type_to: str = "", document_from: str = "",
     document_to: str = "", search: str = "", level: int = 6,
     include_zero: bool = False,
+    include_results: bool = True, include_thirds: bool = False,
 ) -> dict[str, Any]:
     """Genera una opción visible de impresión sin cambiar ningún acumulado."""
+    if report_id == "iva-acumulacion":
+        return read_iva_accumulation(cia, year, month_from, month_to)
+    if report_id == "bal-gral-resultados":
+        if month_from != month_to:
+            raise ValueError("El balance general solicita un solo mes, no un rango.")
+        return _general_balance_report(
+            cia, year, month_to, level, include_zero, include_results, include_thirds,
+        )
     company = normalize_company_code(cia)
     if not 1900 <= year <= 2100 or not 1 <= month_from <= month_to <= 12:
         raise ValueError("Seleccione un año y un rango de meses válido.")
@@ -193,7 +250,7 @@ def build_additional_report(
 
     balance_ids = {
         "balance-mensual", "balance-prueba-anual", "inventario-bal", "mayor-bal",
-        "saldos-cuenta", "bal-gral-resultados", "analisis-anual-acum",
+        "saldos-cuenta", "analisis-anual-acum",
         "bal-comparativo-mensual",
     }
     if report_id in balance_ids:
@@ -453,6 +510,8 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         writer = csv.writer(output, delimiter=";")
         writer.writerow(labels)
         writer.writerows(rows)
+        if report["id"] == "iva-acumulacion":
+            writer.writerow(report["totales"])
         return ("\ufeff" + output.getvalue()).encode("utf-8")
 
     if format_name == "xlsx":
@@ -460,7 +519,7 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         sheet = workbook.active
         sheet.title = "Informe"
         sheet.append([report["compania"]["nombre"]])
-        period_label = (report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado"} else
+        period_label = (report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado", "bal-gral-resultados", "iva-acumulacion"} else
                         "Catálogo de cuentas" if report["id"] == "listado-cuentas" else
                         "Directorio general de terceros" if report.get("source") == "FADCLI" else
                         f"Mes o lote {report['mesDesde']:02d}" if report["id"] == "doc-formato" else
@@ -469,6 +528,11 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         sheet.append(labels)
         for row in rows:
             sheet.append(row)
+        if report["id"] == "iva-acumulacion":
+            sheet.append(report["totales"])
+            for cell in sheet[sheet.max_row]:
+                cell.font = Font(bold=True, color="174E5A")
+                cell.fill = PatternFill("solid", fgColor="EAF1F2")
         for row_number, kind in enumerate(report.get("tipos", []), start=4):
             if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "apertura"}:
                 for cell in sheet[row_number]:
@@ -490,6 +554,52 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         from reportlab.lib.utils import simpleSplit
 
         output = BytesIO()
+        if report["id"] == "bal-gral-resultados":
+            document = SimpleDocTemplate(output, pagesize=landscape(A3),
+                                         leftMargin=24, rightMargin=24,
+                                         topMargin=25, bottomMargin=25)
+            styles = getSampleStyleSheet()
+            width = landscape(A3)[0] - 48
+            story = []
+            sections: list[tuple[str, list[tuple[list[Any], str]]]] = []
+            for row, kind in zip(rows, report.get("tipos", [])):
+                if kind == "seccion":
+                    sections.append((str(row[2]), []))
+                elif sections:
+                    sections[-1][1].append((row, kind))
+            for index, (title, section_rows) in enumerate(sections):
+                if index:
+                    story.append(PageBreak())
+                story.extend([
+                    Paragraph(escape(report["compania"]["nombre"]), styles["Heading1"]),
+                    Paragraph(f"NIT {escape(report['compania']['nit'])}", styles["Normal"]),
+                    Paragraph(escape(title), styles["Heading2"]),
+                    Spacer(1, 12),
+                ])
+                data = [[str(label) for label in labels]]
+                data.extend([[str(row[0]), str(row[1]), str(row[2]),
+                              f"{float(row[3]):,.2f}"] for row, _ in section_rows])
+                commands = [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174E5A")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.2, colors.lightgrey),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ALIGN", (-1, 1), (-1, -1), "RIGHT"),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+                     [colors.white, colors.HexColor("#F4F8F8")]),
+                ]
+                for position, (_, kind) in enumerate(section_rows, start=1):
+                    if kind in {"subtotal", "total-cuenta", "total-general"}:
+                        commands.extend([
+                            ("BACKGROUND", (0, position), (-1, position), colors.HexColor("#EAF1F2")),
+                            ("TEXTCOLOR", (0, position), (-1, position), colors.HexColor("#174E5A")),
+                        ])
+                table = LongTable(data, colWidths=[100, 110, width - 340, 130], repeatRows=1)
+                table.setStyle(TableStyle(commands))
+                story.append(table)
+            document.build(story or [Paragraph("Sin saldos para el período seleccionado.", styles["Normal"])])
+            return output.getvalue()
         if report["id"] == "doc-formato":
             doc = SimpleDocTemplate(output, pagesize=landscape(letter), leftMargin=28, rightMargin=28)
             styles = getSampleStyleSheet()
@@ -539,6 +649,8 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         data = [[str(label) for label in labels]]
         for row in rows:
             data.append(["\n".join(simpleSplit(str(value), "Helvetica", 7, cell_width - 8)[:3]) for value in row])
+        if report["id"] == "iva-acumulacion":
+            data.append([str(value) for value in report["totales"]])
         table = LongTable(data, colWidths=[cell_width] * len(labels), repeatRows=1)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174E5A")),
@@ -554,9 +666,14 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
                     ("BACKGROUND", (0, row_number), (-1, row_number), colors.HexColor("#EAF1F2")),
                     ("TEXTCOLOR", (0, row_number), (-1, row_number), colors.HexColor("#174E5A")),
                 ]))
+        if report["id"] == "iva-acumulacion":
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EAF1F2")),
+                ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#174E5A")),
+            ]))
         styles = getSampleStyleSheet()
         heading = Paragraph(escape(report["compania"]["nombre"]), styles["Heading1"])
-        detail = (report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado"} else
+        detail = (report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado", "iva-acumulacion"} else
                   "Catálogo de cuentas" if report["id"] == "listado-cuentas" else
                   "Directorio general de terceros" if report.get("source") == "FADCLI" else
                   f"Año {report['anio']} · Meses {report['mesDesde']:02d}–{report['mesHasta']:02d}")

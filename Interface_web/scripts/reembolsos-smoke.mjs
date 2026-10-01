@@ -33,6 +33,12 @@ try {
   if (errors.length || state.title !== 'Reembolsos' || state.hasDemo || state.hasLoadError || focus !== 'SELECT') {
     throw new Error(JSON.stringify({ state, focus, errors }));
   }
+  // Sin guardar ni tocar Advantage: ambos atajos deben llegar a sus
+  // validaciones, no ejecutar una escritura con el formulario incompleto.
+  await page.keyboard.press('F2');
+  await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent.includes('Guarde el reembolso'));
+  await page.keyboard.press('F4');
+  await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent.includes('Agregue al menos un ítem'));
   await page.evaluate(() => [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'Agregar ítem')?.click());
   await page.waitForSelector('input[placeholder="Buscar tercero"]');
   await page.type('input[placeholder="Buscar tercero"]', '111222333');

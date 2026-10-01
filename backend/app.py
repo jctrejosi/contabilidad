@@ -113,6 +113,7 @@ from .balance_comprobacion_repository import (
     export_trial_balance_pdf,
     export_trial_balance_xlsx,
 )
+from .iva_acumulacion_repository import rebuild_iva_accumulation
 from .balance_mensual_repository import (
     build_monthly_balance,
     export_monthly_balance_pdf,
@@ -2546,13 +2547,27 @@ def export_monthly_trial_balance(
                     headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})
 
 
+@app.post("/api/informes/iva-acumulacion", summary="Reconstruir la acumulación general de IVA")
+def rebuild_iva_accumulation_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+) -> dict[str, object]:
+    """Procesa solo el rango solicitado; el repositorio protege el cambio con transacción."""
+    try:
+        return rebuild_iva_accumulation(cia, anio, mes_desde, mes_hasta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
 @app.get("/api/informes/adicionales/{report_id}", summary="Generar informe contable adicional")
 def additional_report_endpoint(
     report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
     cia: str = Query(pattern=r"^[0-9]{1,3}$"),
     anio: int = Query(ge=1900, le=2100),
-    mes_desde: int = Query(1, alias="mesDesde", ge=0, le=12),
-    mes_hasta: int = Query(alias="mesHasta", ge=0, le=12),
+    mes_desde: int = Query(1, alias="mesDesde", ge=0, le=18),
+    mes_hasta: int = Query(alias="mesHasta", ge=0, le=18),
     cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
     cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
     nit: str = Query("", max_length=15),
@@ -2570,6 +2585,8 @@ def additional_report_endpoint(
     buscar: str = Query("", max_length=60),
     nivel: int = Query(6, ge=4, le=12),
     incluir_ceros: bool = Query(False, alias="incluirCeros"),
+    incluir_resultados: bool = Query(True, alias="incluirResultados"),
+    incluir_terceros: bool = Query(False, alias="incluirTerceros"),
     vista_paginada: bool = Query(False, alias="vistaPaginada"),
 ) -> dict[str, object]:
     """Lee el motor activo con los parámetros originales; no modifica tablas.
@@ -2589,6 +2606,8 @@ def additional_report_endpoint(
             detail_mode=modalidad,
             affected_document=documento_afectado,
             search=buscar, level=nivel, include_zero=incluir_ceros,
+            **({"include_results": incluir_resultados, "include_thirds": incluir_terceros}
+               if report_id == "bal-gral-resultados" else {}),
         )
         if vista_paginada and report_id in {"aux-gral", "aux-doc-afectado"}:
             snapshot_id = save_report_snapshot(report)

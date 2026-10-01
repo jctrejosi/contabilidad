@@ -10,7 +10,7 @@ import {
   type FiltrosBalanceComprobacion,
 } from '../api/balanceComprobacion';
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
-import { consultarInformeAdicional, consultarPaginaInformeAdicional, exportarInformeAdicional, urlImpresionInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional } from '../api/informesAdicionales';
+import { consultarInformeAdicional, consultarPaginaInformeAdicional, exportarInformeAdicional, procesarAcumulacionIva, urlImpresionInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional } from '../api/informesAdicionales';
 
 // El formato de moneda es de presentación: no depende de los datos de demostración.
 const fmtCOP = (n: number): string => `$ ${n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -79,6 +79,14 @@ const CATEGORIAS: Categoria[] = [
     ],
   },
   {
+    id: 'iva',
+    nombre: 'IVA',
+    icon: '%',
+    informes: [
+      { id: 'iva-acumulacion', nombre: 'Acumulación general', desc: 'Reconstruye los acumulados de IVA por cuenta y tercero para el período elegido' },
+    ],
+  },
+  {
     id: 'terceros',
     nombre: 'Terceros',
     icon: '👤',
@@ -133,8 +141,8 @@ const CATEGORIAS: Categoria[] = [
   },
 ];
 
-/** Orden y submenús de MENU_INFOR en CONTABDSI.PRG. Las acciones de
- * mantenimiento (limpiar/generar acumulados) no son informes y se omiten.
+/** Orden y submenús de MENU_INFOR en CONTABDSI.PRG. La acumulación de IVA
+ * se habilita como proceso explícito porque alimenta sus informes posteriores.
  * Una opción sin id sigue visible, pero no promete una consulta aún no migrada.
  */
 interface EntradaMenuInforme {
@@ -168,7 +176,7 @@ const MENU_INFORMES: EntradaMenuInforme[] = [
     { numero: '7', nombre: 'Plano reporte anual retenciones' },
   ] },
   { numero: '7', nombre: 'Informe de IVA', opciones: [
-    { numero: '1', nombre: 'Acumulación general' },
+    { numero: '1', nombre: 'Acumulación general', id: 'iva-acumulacion' },
     { numero: '2', nombre: 'Análisis acumulados y certificados' },
     { numero: '3', nombre: 'Relación acumulados' },
     { numero: '4', nombre: 'Relación totales por cuenta' },
@@ -249,7 +257,7 @@ const MESES_LIBRO = ['Mes 00', ...MESES];
 const MESES_BALANCE = [...MESES, 'Mes 13', 'Mes 14', 'Mes 15', 'Mes 16', 'Mes 17', 'Mes 18'];
 const BALANCE_IDS = new Set(['balance-comp', 'balance-mensual']);
 const ACCOUNT_BALANCE_IDS = new Set([
-  'inventario-bal', 'mayor-bal', 'saldos-cuenta', 'bal-gral-resultados',
+  'inventario-bal', 'mayor-bal', 'saldos-cuenta',
   'bal-comparativo-mensual', 'analisis-anual-acum', 'analisis-anual-mens', 'balance-prueba-anual',
 ]);
 const CENTER_REPORT_IDS = new Set([
@@ -268,6 +276,8 @@ function mostrarFiltro(id: string, key: string): boolean {
   if (id === 'listado-cuentas') return ['cuentaDesde', 'cuentaHasta'].includes(key);
   if (id === 'aux-gral') return ['cuentaDesde', 'cuentaHasta'].includes(key);
   if (id === 'aux-doc-afectado') return false;
+  if (id === 'bal-gral-resultados') return false;
+  if (id === 'iva-acumulacion') return false;
   if (ACCOUNT_BALANCE_IDS.has(id)) return account;
   if (THIRD_DIRECTORY_IDS.has(id)) return ['nit', 'buscar'].includes(key);
   if (THIRD_SUMMARY_IDS.has(id)) return third;
@@ -693,13 +703,20 @@ export default function Informes({ onNavigate, cia }: Props) {
       return;
     }
     setParams(p => ({
-      ...p, nivel: BALANCE_IDS.has(inf.id) ? '4' : p.nivel,
-      mesDesde: BALANCE_IDS.has(inf.id) ? p.mesDesde : (MESES.includes(p.mesDesde) ? p.mesDesde : 'Enero'),
-      mesHasta: BALANCE_IDS.has(inf.id) ? p.mesHasta : (MESES.includes(p.mesHasta) ? p.mesHasta : 'Diciembre'),
+      ...p, nivel: BALANCE_IDS.has(inf.id) || inf.id === 'bal-gral-resultados' ? '4' : p.nivel,
+      mesDesde: inf.id === 'iva-acumulacion' ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
+        : BALANCE_IDS.has(inf.id) ? p.mesDesde : (MESES.includes(p.mesDesde) ? p.mesDesde : 'Enero'),
+      mesHasta: inf.id === 'iva-acumulacion' ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
+        : BALANCE_IDS.has(inf.id) || inf.id === 'bal-gral-resultados'
+        ? (MESES_BALANCE.includes(p.mesHasta) ? p.mesHasta : 'Diciembre')
+        : (MESES.includes(p.mesHasta) ? p.mesHasta : 'Diciembre'),
       cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '',
       comprobanteHasta: '', tipoDocumento: '', tipoDocumentoHasta: '',
       documentoDesde: '', documentoHasta: '', buscar: '',
       modalidad: 'detallado', documentoAfectado: '',
+      ...(inf.id === 'bal-gral-resultados' ? {
+        incluirResultados: true, incluirCeros: false, incluirTerceros: false,
+      } : {}),
     }));
     setErrorInforme(null);
     setShowParams(inf);
@@ -744,11 +761,13 @@ export default function Informes({ onNavigate, cia }: Props) {
     const filtros: FiltrosInformeAdicional = {
       cia,
       anio: anioOperacion,
-      mesDesde: inf.id === 'doc-formato' ? mesSeleccionado
+      mesDesde: inf.id === 'bal-gral-resultados' ? MESES_BALANCE.indexOf(params.mesHasta) + 1
+        : inf.id === 'doc-formato' ? mesSeleccionado
         : inf.id === 'aux-doc-afectado' ? MESES_LIBRO.indexOf(params.mesDesde)
         : inf.id === 'aux-gral' ? Number(params.fechaDesde.slice(5, 7))
         : MESES.indexOf(params.mesDesde) + 1,
-      mesHasta: inf.id === 'doc-formato' ? mesSeleccionado
+      mesHasta: inf.id === 'bal-gral-resultados' ? MESES_BALANCE.indexOf(params.mesHasta) + 1
+        : inf.id === 'doc-formato' ? mesSeleccionado
         : inf.id === 'aux-doc-afectado' ? MESES_LIBRO.indexOf(params.mesHasta)
         : inf.id === 'aux-gral' ? Number(params.fechaHasta.slice(5, 7))
         : MESES.indexOf(params.mesHasta) + 1,
@@ -769,16 +788,28 @@ export default function Informes({ onNavigate, cia }: Props) {
       documentoAfectado: params.documentoAfectado,
       nivel: Number(params.nivel),
       incluirCeros: params.incluirCeros,
+      ...(inf.id === 'bal-gral-resultados' ? {
+        incluirResultados: params.incluirResultados,
+        incluirTerceros: params.incluirTerceros,
+      } : {}),
     };
+    if (inf.id === 'iva-acumulacion' && filtros.mesDesde > filtros.mesHasta) {
+      setErrorInforme('El mes inicial no puede ser posterior al mes final.');
+      return;
+    }
     setGenerando(true);
     try {
-      const report = await consultarInformeAdicional(inf.id, filtros);
+      const report = inf.id === 'iva-acumulacion'
+        ? await procesarAcumulacionIva(filtros)
+        : await consultarInformeAdicional(inf.id, filtros);
       setShowParams(null);
       setRecientes(prev => [inf.id, ...prev.filter(id => id !== inf.id)].slice(0, 6));
         setPreview({
           inf, ...params, anio: String(anioOperacion),
           ...(inf.id === 'doc-formato' ? {
             mesDesde: MESES[mesSeleccionado - 1], mesHasta: MESES[mesSeleccionado - 1],
+          } : inf.id === 'bal-gral-resultados' ? {
+            mesDesde: params.mesHasta, mesHasta: params.mesHasta,
           } : {}),
           report, filtrosReport: filtros,
         });
@@ -938,24 +969,47 @@ export default function Informes({ onNavigate, cia }: Props) {
         <Modal title={`Parámetros — ${showParams.nombre}`} onClose={() => setShowParams(null)}>
           <form noValidate onKeyDown={avanzarFiltroConEnter} onSubmit={e => { e.preventDefault(); generar(showParams); }}>
             <div className="px-5 py-4 grid grid-cols-2 gap-4">
+              {showParams.id === 'iva-acumulacion' && <p className="col-span-2 text-xs text-gray-600">
+                Se recalcularán los acumulados de IVA de los meses elegidos para la compañía actual. Los demás meses no se modificarán.
+              </p>}
               {showParams.id === 'doc-formato' && <div>
                 <label htmlFor="param-mes-lote" className="block text-xs font-medium text-gray-600 mb-1">Mes o lote</label>
                 <select id="param-mes-lote" data-initial-focus value={params.mesLote} onChange={e => setParams(p => ({ ...p, mesLote: e.target.value }))} className={INPUT}>
                   {MESES.map((mes, index) => <option key={mes} value={index + 1}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
                 </select>
               </div>}
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && <div>
+              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && showParams.id !== 'bal-gral-resultados' && <div>
                 <label htmlFor="param-mes-desde" className="block text-xs font-medium text-gray-600 mb-1">Mes desde</label>
                 <select id="param-mes-desde" data-initial-focus value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
                   {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && <div>
+              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && showParams.id !== 'bal-gral-resultados' && <div>
                 <label htmlFor="param-mes-hasta" className="block text-xs font-medium text-gray-600 mb-1">Mes hasta</label>
                 <select id="param-mes-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
                   {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
+              {showParams.id === 'bal-gral-resultados' && <>
+                <div className="col-span-2">
+                  <label htmlFor="param-mes-balance-general" className="block text-xs font-medium text-gray-600 mb-1">Mes del informe</label>
+                  <select id="param-mes-balance-general" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="param-nivel-balance-general" className="block text-xs font-medium text-gray-600 mb-1">Nivel</label>
+                  <select id="param-nivel-balance-general" value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                    <option value="4">Cuenta</option><option value="6">Subcuenta</option>
+                    <option value="9">Auxiliar 1</option><option value="12">Auxiliar 2</option>
+                  </select>
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirResultados} onChange={e => setParams(p => ({ ...p, incluirResultados: e.target.checked }))} />Imprimir Estado de resultados</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />Incluir saldos en cero</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />Incluir terceros</label>
+                </div>
+              </>}
               {showParams.id === 'aux-gral' && <>
                 <div>
                   <label htmlFor="param-fecha-desde" className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
@@ -1016,7 +1070,7 @@ export default function Informes({ onNavigate, cia }: Props) {
                   </>}
                 </>
               )}
-              {!BALANCE_IDS.has(showParams.id) && (
+              {!BALANCE_IDS.has(showParams.id) && showParams.id !== 'bal-gral-resultados' && (
                 <>
                   {([
                     ['cuentaDesde', 'Cuenta desde'], ['cuentaHasta', 'Cuenta hasta'],
@@ -1052,7 +1106,9 @@ export default function Informes({ onNavigate, cia }: Props) {
             <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
               <button type="button" onClick={() => setShowParams(null)} className={BUTTON_SECONDARY}>Cancelar</button>
               <button type="submit" data-report-submit disabled={generando || anioOperacion === null} className={`${BUTTON_PRIMARY} disabled:opacity-60`}>
-                {generando ? 'Consultando Advantage…' : anioOperacion === null && !errorPeriodo ? 'Consultando período…' : 'Generar informe'}
+                {generando ? (showParams.id === 'iva-acumulacion' ? 'Acumulando IVA…' : 'Consultando Advantage…')
+                  : anioOperacion === null && !errorPeriodo ? 'Consultando período…'
+                  : showParams.id === 'iva-acumulacion' ? 'Procesar acumulación' : 'Generar informe'}
               </button>
             </div>
           </form>
