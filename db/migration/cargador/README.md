@@ -99,7 +99,7 @@ registrados en `migracion_filas`. Todo el detalle en
   la fecha se carga vacía y el cambio queda en `migracion_ajustes`. Hay 2.972
   filas de `FADCLI` con ese problema.
 - **`terceros.estado`** sólo admite `Activo`/`Bloqueado`: `CESTADO='1'` es activo y
-  el resto bloqueado, como documenta `docs/TERCEROS_ADS.md`.
+  el resto bloqueado, como documenta `docs/maestros/TERCEROS_ADS.md`.
 - **`tipos_documento.numeracion`** sólo admite `Manual`/`Automatica` (sin tilde).
 - **El libro, y lo que las fichas anteriores decían de él.** La ficha del contrato
   describía `CONDOCUM.DVALOR` como un control de cuadre que se recalcula sumando

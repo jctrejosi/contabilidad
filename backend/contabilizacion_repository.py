@@ -37,10 +37,12 @@ from .ads_repository import (
     _rows,
     _text,
     ads_connection,
+    ads_odbc_connection,
     normalize_company_code,
 )
 from .auditoria_repository import register_direct_posting
 from .accounting_lock import accounting_write_lock
+from .visdocum_sucursal import VISDOCUM_SUCURSAL
 
 
 MONEY = Decimal("0.01")
@@ -64,7 +66,9 @@ def get_accounting_period(company_code: str) -> dict[str, Any]:
     """
     company = normalize_company_code(company_code)
     month_fields = ", ".join(f"CT{month:02d}" for month in range(13))
-    with ads_connection() as connection:
+    # Esta lectura se ejecuta también al abrir Inicio. ODBC evita el callback
+    # nativo defectuoso del proveedor OLE DB 11.10 al refrescar el panel.
+    with ads_odbc_connection() as connection:
         company_row = _one(
             connection,
             "SELECT TOP 1 EMPCOD FROM CONEMP WHERE EMPCOD = ?",
@@ -264,7 +268,8 @@ def _validate_masters(connection: Any, data: dict[str, Any]) -> tuple[dict[str, 
 
     document_type = _one(
         connection,
-        "SELECT TOP 1 CODIGO, CONSE, MODICONSE, PREFIJO FROM VISDOCUM WHERE CODIGO = ?",
+        f"SELECT TOP 1 CODIGO, CONSE, MODICONSE, PREFIJO FROM VISDOCUM "
+        f"WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
         [(ADO_TYPE_VARCHAR, 2, data["tipoDocumento"])],
     )
     if document_type is None:
@@ -346,12 +351,14 @@ def _document_number(connection: Any, data: dict[str, Any], document_type: dict[
     # transacción. La lectura posterior recibe el consecutivo ya reservado.
     _execute(
         connection,
-        "UPDATE VISDOCUM SET CONSE = CONSE + 1 WHERE CODIGO = ?",
+        f"UPDATE VISDOCUM SET CONSE = CONSE + 1 "
+        f"WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
         [(ADO_TYPE_VARCHAR, 2, data["tipoDocumento"])],
     )
     updated = _one(
         connection,
-        "SELECT TOP 1 CONSE, PREFIJO FROM VISDOCUM WHERE CODIGO = ?",
+        f"SELECT TOP 1 CONSE, PREFIJO FROM VISDOCUM "
+        f"WHERE SUC = {VISDOCUM_SUCURSAL} AND CODIGO = ?",
         [(ADO_TYPE_VARCHAR, 2, data["tipoDocumento"])],
     )
     if updated is None:

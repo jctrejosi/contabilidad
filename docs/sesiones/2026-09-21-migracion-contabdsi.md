@@ -177,7 +177,7 @@ contabilidad\backend\tipos_documento_repository.py
     17	La pantalla **Configuración → Plan de cuentas** ya consulta la tabla real
     18	`CONMAE` y permite crear o modificar cuentas maestras. Su diseño, mapeo de
     19	campos, reglas contables y flujo técnico están documentados en
-    20	[`docs/PLAN_CUENTAS_ADS.md`](docs/PLAN_CUENTAS_ADS.md).
+    20	[`docs/maestros/PLAN_CUENTAS_ADS.md`](docs/maestros/PLAN_CUENTAS_ADS.md).
     21	
     22	Al abrir la aplicación se debe seleccionar una compañía real de `CONEMP`. Ese
     23	código queda como contexto de sesión y el Plan de cuentas consulta y escribe
@@ -186,11 +186,11 @@ contabilidad\backend\tipos_documento_repository.py
     26	La opción **Configuración → Terceros** consulta el maestro global `FADCLI` con
     27	búsqueda y paginación en Advantage. Esta tabla es compartida por todas las
     28	compañías. El alcance y las reglas pendientes de escritura están documentados
-    29	en [`docs/TERCEROS_ADS.md`](docs/TERCEROS_ADS.md).
+    29	en [`docs/maestros/TERCEROS_ADS.md`](docs/maestros/TERCEROS_ADS.md).
     30	
     31	La opción **Movimientos → Importaciones** lee archivos XLSX, CSV, TXT o ADT y crea
     32	un lote Borrador que debe verificarse antes de actualizarse. Su flujo y reglas
-    33	están documentados en [`docs/IMPORTACIONES_ADS.md`](docs/IMPORTACIONES_ADS.md).
+    33	están documentados en [`docs/movimientos/IMPORTACIONES_ADS.md`](docs/movimientos/IMPORTACIONES_ADS.md).
     34	
     35	## Ejecución local
     36	
@@ -606,7 +606,7 @@ Date:   Thu Sep 17 08:14:15 2026 -0500
  backend/importaciones_repository.py                   |   7 +++++--
  ...ortaciones_repository.cpython-313-pytest-8.4.2.pyc | Bin 5117 -> 6442 bytes
  backend/tests/test_importaciones_repository.py        |  12 +++++++++++-
- docs/IMPORTACIONES_ADS.md                             |   2 +-
+ docs/movimientos/IMPORTACIONES_ADS.md                             |   2 +-
  5 files changed, 18 insertions(+), 5 deletions(-)
 ```
 ````
@@ -13736,7 +13736,7 @@ Para eso tengo que mirar contra qué versión se desarrolló el backend, porque 
 **Herramienta `read_file`** — entrada:
 
 ```json
-{"end_line": 205, "path": "contabilidad/docs/PLAN_CUENTAS_ADS.md", "start_line": 170}
+{"end_line": 205, "path": "contabilidad/docs/maestros/PLAN_CUENTAS_ADS.md", "start_line": 170}
 ```
 
 **Resultado de `read_file`:**
@@ -33739,20 +33739,20 @@ Voy a mirar las dos carpetas primero, para dimensionar qué hay.
 ````
 ```
 === docs ===
-docs/BALANCE_COMPROBACION_ACUMULADO_ADS.md
-docs/CAPTURA_DIRECTA_MAESTROS_ADS.md
-docs/CENTROS_COSTO_ADS.md
-docs/COMPROBANTES_ADS.md
-docs/CONSULTA_DOCUMENTOS_ADS.md
-docs/CONTABILIZACION_DIRECTA_ADS.md
-docs/IMPORTACIONES_ADS.md
-docs/LOTES_ADS.md
-docs/MOVIMIENTO_MENSUAL_ADS.md
-docs/NAVEGACION_INFORMES.md
-docs/PLAN_CUENTAS_ADS.md
-docs/REPROCESO_MENSUAL_ADS.md
-docs/TERCEROS_ADS.md
-docs/TIPOS_DOCUMENTO_ADS.md
+docs/informes/BALANCE_COMPROBACION_ACUMULADO_ADS.md
+docs/maestros/CAPTURA_DIRECTA_MAESTROS_ADS.md
+docs/maestros/CENTROS_COSTO_ADS.md
+docs/maestros/COMPROBANTES_ADS.md
+docs/movimientos/CONSULTA_DOCUMENTOS_ADS.md
+docs/movimientos/CONTABILIZACION_DIRECTA_ADS.md
+docs/movimientos/IMPORTACIONES_ADS.md
+docs/movimientos/LOTES_ADS.md
+docs/movimientos/MOVIMIENTO_MENSUAL_ADS.md
+docs/informes/NAVEGACION_INFORMES.md
+docs/maestros/PLAN_CUENTAS_ADS.md
+docs/procesos/REPROCESO_MENSUAL_ADS.md
+docs/maestros/TERCEROS_ADS.md
+docs/maestros/TIPOS_DOCUMENTO_ADS.md
 ... total:
 14
 72K	docs
@@ -34725,7 +34725,7 @@ Y en `VISDOCUM`, los que los documentos y la interfaz sí usan (`MODULO`, `TIPO`
 **Herramienta `edit_file`** — entrada:
 
 ```json
-{"edits": [{"new_text": "    _r(\"VISDOCUM\", \"^MODULO$\", DIRECTO, \"tipos_documento.modulo\",\n       \"Módulo de origen (Cartera 1, Inventarios 2, CxP 3, Contabilidad 9). Citado en \"\n       \"`docs/TIPOS_DOCUMENTO_ADS.md`.\"),\n    _r(\"VISDOCUM\", \"^TIPO$\", DIRECTO, \"tipos_documento.naturaleza\",\n       \"Naturaleza del movimiento según el módulo. Se llama `naturaleza` para no \"\n       \"confundirla con el «tipo de documento» que es la tabla entera.\"),\n    _r(\"VISDOCUM\", \"^PREFIJO$\", DIRECTO, \"tipos_documento.prefijo\",\n       \"Prefijo documental. Citado en `docs/TIPOS_DOCUMENTO_ADS.md`.\"),\n    _r(\"VISDOCUM\", \"^COMPRO$\", DERIVADO, \"tipos_documento.comprobante_id\",\n       \"Comprobante contable relacionado → `comprobantes.codigo`. La interfaz lo usa para \"\n       \"ordenar los tipos que coinciden con el comprobante elegido.\"),\n    _r(\"VISDOCUM\", \"^ICONTAB$\", DIRECTO, \"tipos_documento.genera_contabilizacion\",\n       \"«Genera contabilización»: citado en `docs/TIPOS_DOCUMENTO_ADS.md`.\"),\n    _r(\"VISDOCUM\", \"^CONVER$\", DIRECTO, \"tipos_documento.permite_conversion\"),\n    _r(\"VISDOCUM\", \"^DOCCONVER$\", DIRECTO, \"tipos_documento.conversion_codigo\",\n       \"Tipo documental al que convierte. Documentado en `docs/TIPOS_DOCUMENTO_ADS.md`.\"),\n    _r(\"VISDOCUM\", \"^CLAVE$|^CLAVE2$\", PROCEDENCIA, \"tipos_documento.legado\",\n       \"**Corrección:** `CLAVE` es `LOGICAL(1)`, o sea una bandera (¿pide clave para usar \"\n       \"
+{"edits": [{"new_text": "    _r(\"VISDOCUM\", \"^MODULO$\", DIRECTO, \"tipos_documento.modulo\",\n       \"Módulo de origen (Cartera 1, Inventarios 2, CxP 3, Contabilidad 9). Citado en \"\n       \"`docs/maestros/TIPOS_DOCUMENTO_ADS.md`.\"),\n    _r(\"VISDOCUM\", \"^TIPO$\", DIRECTO, \"tipos_documento.naturaleza\",\n       \"Naturaleza del movimiento según el módulo. Se llama `naturaleza` para no \"\n       \"confundirla con el «tipo de documento» que es la tabla entera.\"),\n    _r(\"VISDOCUM\", \"^PREFIJO$\", DIRECTO, \"tipos_documento.prefijo\",\n       \"Prefijo documental. Citado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`.\"),\n    _r(\"VISDOCUM\", \"^COMPRO$\", DERIVADO, \"tipos_documento.comprobante_id\",\n       \"Comprobante contable relacionado → `comprobantes.codigo`. La interfaz lo usa para \"\n       \"ordenar los tipos que coinciden con el comprobante elegido.\"),\n    _r(\"VISDOCUM\", \"^ICONTAB$\", DIRECTO, \"tipos_documento.genera_contabilizacion\",\n       \"«Genera contabilización»: citado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`.\"),\n    _r(\"VISDOCUM\", \"^CONVER$\", DIRECTO, \"tipos_documento.permite_conversion\"),\n    _r(\"VISDOCUM\", \"^DOCCONVER$\", DIRECTO, \"tipos_documento.conversion_codigo\",\n       \"Tipo documental al que convierte. Documentado en `docs/maestros/TIPOS_DOCUMENTO_ADS.md`.\"),\n    _r(\"VISDOCUM\", \"^CLAVE$|^CLAVE2$\", PROCEDENCIA, \"tipos_documento.legado\",\n       \"**Corrección:** `CLAVE` es `LOGICAL(1)`, o sea una bandera (¿pide clave para usar \"\n       \"
 
 [... recortado: 3811 caracteres en total ...]
 ```
@@ -35246,7 +35246,7 @@ Let me write it.
 **Herramienta `write_file`** — entrada:
 
 ```json
-{"content": "-- =====================================================================\n-- CONTABDSI · 13_campos_contrato.sql\n-- Columnas que el contrato campo → destino exige y el esquema no tenía.\n--\n-- No son conjeturas: cada una la pide una funcionalidad implementada, y el\n-- contrato de campos (`db/migration/06_referencia_campos.md`) dice de qué campo\n-- del legado sale. La evidencia está en la interfaz web:\n--\n--   * `terceros`        → `TerceroCreate` (src/api/terceros.ts) pide\n--                          nombreComercial, primer/segundo nombre,\n--                          primer/segundo apellido y codigoCiudad.\n--   * `tipos_documento` → `docs/TIPOS_DOCUMENTO_ADS.md` documenta módulo,\n--                          naturaleza, prefijo, comprobante, ICONTAB y conversión.\n--   * `comprobantes`    → `descripcionAuxiliar` (src/api/comprobantes.ts).\n--   * `centros_costos`  → `CentroJerarquico` (src/data/configCentros.ts).\n--\n-- Todo lo demás que el legado trae y ninguna funcionalidad consume **no se\n-- descarta**: se conserva completo en `migracion_filas.valores_originales`\n-- (clase `procedencia` del contrato), que es el mecanismo que el plan define\n-- para lo que no tiene semántica acreditada.\n-- =====================================================================\n\nBEGIN;\n\n-- -------------------------------------------------------------------\n-- Terceros: identidad desglosada y contacto, tal como la pide la interfaz.\n-- -----------------------------
+{"content": "-- =====================================================================\n-- CONTABDSI · 13_campos_contrato.sql\n-- Columnas que el contrato campo → destino exige y el esquema no tenía.\n--\n-- No son conjeturas: cada una la pide una funcionalidad implementada, y el\n-- contrato de campos (`db/migration/06_referencia_campos.md`) dice de qué campo\n-- del legado sale. La evidencia está en la interfaz web:\n--\n--   * `terceros`        → `TerceroCreate` (src/api/terceros.ts) pide\n--                          nombreComercial, primer/segundo nombre,\n--                          primer/segundo apellido y codigoCiudad.\n--   * `tipos_documento` → `docs/maestros/TIPOS_DOCUMENTO_ADS.md` documenta módulo,\n--                          naturaleza, prefijo, comprobante, ICONTAB y conversión.\n--   * `comprobantes`    → `descripcionAuxiliar` (src/api/comprobantes.ts).\n--   * `centros_costos`  → `CentroJerarquico` (src/data/configCentros.ts).\n--\n-- Todo lo demás que el legado trae y ninguna funcionalidad consume **no se\n-- descarta**: se conserva completo en `migracion_filas.valores_originales`\n-- (clase `procedencia` del contrato), que es el mecanismo que el plan define\n-- para lo que no tiene semántica acreditada.\n-- =====================================================================\n\nBEGIN;\n\n-- -------------------------------------------------------------------\n-- Terceros: identidad desglosada y contacto, tal como la pide la interfaz.\n-- -----------------------------
 
 [... recortado: 4649 caracteres en total ...]
 ```
@@ -35950,7 +35950,7 @@ Dos mecanismos, según lo que exija la funcionalidad:
 | Tabla | Columnas | Quién las pide |
 |---|---:|---|
 | `terceros` | 6 | `TerceroCreate` |
-| `tipos_documento` | 7 | `docs/TIPOS_DOCUMENTO_ADS.md` |
+| `tipos_documento` | 7 | `docs/maestros/TIPOS_DOCUMENTO_ADS.md` |
 | `centros_costos` | 9 | `CentroJerarquico` |
 | `comprobantes` | 1 | `descripcionAuxiliar` |
 
@@ -36569,7 +36569,7 @@ Dominios claros: `estado` sólo admite `Activo`/`Bloqueado`. Mapeo los códigos 
 **Herramienta `edit_file`** — entrada:
 
 ```json
-{"edits": [{"new_text": "        # `docs/TERCEROS_ADS.md`: CESTADO = 1 activo, el resto bloqueado; y\n        # CTIPOCLI = 1 natural, 2 jurídica. Cualquier otro valor cae al DEFAULT del\n        # destino ('Juridica'), que es también lo que hace la interfaz al crear.\n        tipo = {\"1\": \"Natural\", \"2\": \"Juridica\"}.get((texto(fila[\"CTIPOCLI\"]) or \"\")[:1], \"Juridica\")\n        if tipo == \"Juridica\" and (texto(fila[\"CTIPOCLI\"]) or \"\")[:1] not in (\"2\",):\n            ambiguos += 1\n        estado = \"Activo\" if (texto(fila[\"CESTADO\"]) or \"\") == \"1\" else \"Bloqueado\"\n        nuevos.append((\n            carga.compania_id, nit, texto(fila[\"CDIGITO\"]) or \"\", texto(fila[\"CNOMBRE\"]) or nit,\n            tipo, texto(fila[\"CTIPDOC\"]) or \"NIT\", texto(fila[\"CDIREC\"]), texto(fila[\"CTELEF\"]),\n            texto(fila[\"CCIUDAD\"]), texto(fila[\"CCODCIU\"]), texto(fila[\"CZONA\"]), texto(fila[\"CEMAIL\"]),\n            estado, texto(fila[\"CMOTIVO\"]), fecha_aaaammdd(fila[\"CFCHCREA\"]),\n            texto(fila[\"CSALDO\"]) or 0, texto(fila[\"CCUPO\"]) or 0, texto(fila[\"CSOCIAL\"]),\n            texto(fila[\"CNOM1\"]), texto(fila[\"CNOM2\"]), texto(fila[\"CAPE1\"]), texto(fila[\"CAPE2\"]),\n            texto(fila[\"CCODIGO\"]),\n        ))", "old_text": "        tipo = {\"1\": \"Natural\", \"2\": \"Juridica\", \"N\": \"Natural\", \"J\": \"Juridica\"}.get(\n            (texto(fila[\"CTIPOCLI\"]) or \"\")[:1].upper(), \"Juridica\")\n        nuevos
+{"edits": [{"new_text": "        # `docs/maestros/TERCEROS_ADS.md`: CESTADO = 1 activo, el resto bloqueado; y\n        # CTIPOCLI = 1 natural, 2 jurídica. Cualquier otro valor cae al DEFAULT del\n        # destino ('Juridica'), que es también lo que hace la interfaz al crear.\n        tipo = {\"1\": \"Natural\", \"2\": \"Juridica\"}.get((texto(fila[\"CTIPOCLI\"]) or \"\")[:1], \"Juridica\")\n        if tipo == \"Juridica\" and (texto(fila[\"CTIPOCLI\"]) or \"\")[:1] not in (\"2\",):\n            ambiguos += 1\n        estado = \"Activo\" if (texto(fila[\"CESTADO\"]) or \"\") == \"1\" else \"Bloqueado\"\n        nuevos.append((\n            carga.compania_id, nit, texto(fila[\"CDIGITO\"]) or \"\", texto(fila[\"CNOMBRE\"]) or nit,\n            tipo, texto(fila[\"CTIPDOC\"]) or \"NIT\", texto(fila[\"CDIREC\"]), texto(fila[\"CTELEF\"]),\n            texto(fila[\"CCIUDAD\"]), texto(fila[\"CCODCIU\"]), texto(fila[\"CZONA\"]), texto(fila[\"CEMAIL\"]),\n            estado, texto(fila[\"CMOTIVO\"]), fecha_aaaammdd(fila[\"CFCHCREA\"]),\n            texto(fila[\"CSALDO\"]) or 0, texto(fila[\"CCUPO\"]) or 0, texto(fila[\"CSOCIAL\"]),\n            texto(fila[\"CNOM1\"]), texto(fila[\"CNOM2\"]), texto(fila[\"CAPE1\"]), texto(fila[\"CAPE2\"]),\n            texto(fila[\"CCODIGO\"]),\n        ))", "old_text": "        tipo = {\"1\": \"Natural\", \"2\": \"Juridica\", \"N\": \"Natural\", \"J\": \"Juridica\"}.get(\n            (texto(fila[\"CTIPOCLI\"]) or \"\")[:1].upper(), \"Juridica\")\n        nuevos
 
 [... recortado: 2766 caracteres en total ...]
 ```
@@ -41841,8 +41841,8 @@ CAPTURA_DIRECTA_MAESTROS_ADS.md        IMPORTACIONES_ADS.md	       REPROCESO_MEN
 CENTROS_COSTO_ADS.md		       LOTES_ADS.md		       TERCEROS_ADS.md
 COMPROBANTES_ADS.md		       MOVIMIENTO_MENSUAL_ADS.md       TIPOS_DOCUMENTO_ADS.md
 CONSULTA_DOCUMENTOS_ADS.md	       NAVEGACION_INFORMES.md
-docs/CONSULTA_DOCUMENTOS_ADS.md
-docs/CONTABILIZACION_DIRECTA_ADS.md
+docs/movimientos/CONSULTA_DOCUMENTOS_ADS.md
+docs/movimientos/CONTABILIZACION_DIRECTA_ADS.md
 ```
 ````
 
@@ -41899,7 +41899,7 @@ Wait — actually hold on. `db/advantage/` might be the *new* schema in Advantag
 
 So changing `documentos_contabilizado_uk` means changing it in 3+ places (postgres schema, advantage schema, ansi reference). Hmm. That's a bigger change but doable.
 
-Let me now read `docs/CONSULTA_DOCUMENTOS_ADS.md` to see how the UI queries documents — it will tell me whether `documento` is a user-facing key and whether the uniqueness matters.
+Let me now read `docs/movimientos/CONSULTA_DOCUMENTOS_ADS.md` to see how the UI queries documents — it will tell me whether `documento` is a user-facing key and whether the uniqueness matters.
 
 Let me also read the Advantage index file around line 180.
 
@@ -41943,9 +41943,9 @@ Excellent report. Very useful. Key points:
 
 - `documento` is a user-facing label, used in filters and display, and **required non-empty** for the detail/annulment endpoints (`min_length=1`). So option (c) (NULL) breaks the UI for migrated data. Hmm, although the detail endpoint takes `documento` as a *filter to find lines* (`MOV01.TDOCUM`), so it's a query parameter — for migrated rows it must match what the lines carry.
 
-Wait, important: `documentos_repository.py:216-223` joins detail by documento+comprobante+tipo+fecha. So the API's `documento` param is matched against the *new* DB's `documentos.documento` AND `documento_lineas`' document. If we store DDOCUM there, the UI works with the same filters as the legacy (which is what the user wants: "funcionando igual"). Note `docs/CONSULTA_DOCUMENTOS_ADS.md:36-37` says detail joins by compañía, año, mes, documento, comprobante y tipo documental — the legacy's own UI uses those 6 fields. So `documento` = DDOCUM preserves legacy query semantics. 
+Wait, important: `documentos_repository.py:216-223` joins detail by documento+comprobante+tipo+fecha. So the API's `documento` param is matched against the *new* DB's `documentos.documento` AND `documento_lineas`' document. If we store DDOCUM there, the UI works with the same filters as the legacy (which is what the user wants: "funcionando igual"). Note `docs/movimientos/CONSULTA_DOCUMENTOS_ADS.md:36-37` says detail joins by compañía, año, mes, documento, comprobante y tipo documental — the legacy's own UI uses those 6 fields. So `documento` = DDOCUM preserves legacy query semantics. 
 
-- The backend's own anti-duplicate check `_assert_document_is_new` uses **4 fields**: (CIA, DDOCUM, DCOMPRO, DTIPODOC). So the *application rule* is "unique per (compañía, documento, comprobante, tipo)". That's evidence-backed by `docs/CONTABILIZACION_DIRECTA_ADS.md:52-54`.
+- The backend's own anti-duplicate check `_assert_document_is_new` uses **4 fields**: (CIA, DDOCUM, DCOMPRO, DTIPODOC). So the *application rule* is "unique per (compañía, documento, comprobante, tipo)". That's evidence-backed by `docs/movimientos/CONTABILIZACION_DIRECTA_ADS.md:52-54`.
 
 - The postgres index `(compania_id, anio, documento)` is a *new* decision without support in rule 6.2 or in the app's own check. And it's actually **more permissive** in one way (no comprobante/tipo) and **stricter** in another (adds anio, which the app check ignores). Interesting: the app check has NO year, so it's stricter over time.
 
@@ -42459,7 +42459,7 @@ Los datos ya no dejan dudas. Reviso convenciones del esquema antes de implementa
      9	--   * `terceros`        → `TerceroCreate` (src/api/terceros.ts) pide
     10	--                          nombreComercial, primer/segundo nombre,
     11	--                          primer/segundo apellido y codigoCiudad.
-    12	--   * `tipos_documento` → `docs/TIPOS_DOCUMENTO_ADS.md` documenta módulo,
+    12	--   * `tipos_documento` → `docs/maestros/TIPOS_DOCUMENTO_ADS.md` documenta módulo,
     13	--                          naturaleza, prefijo, comprobante, ICONTAB y conversión.
     14	--   * `comprobantes`    → `descripcionAuxiliar` (src/api/comprobantes.ts).
     15	--   * `centros_costos`  → `CentroJerarquico` (src/data/configCentros.ts).

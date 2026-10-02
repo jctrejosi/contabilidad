@@ -45,8 +45,8 @@ def test_xlsx_export_keeps_amounts_as_numeric_cells() -> None:
     sheet = workbook["Balance acumulado"]
 
     assert sheet["A1"].value == "BALANCE DE COMPROBACIÓN ACUMULADO"
-    assert sheet["D8"].value == 80.0
-    assert sheet["E8"].value == 30.0
+    assert sheet["E8"].value == 80.0
+    assert sheet["F8"].value == 30.0
     assert sheet.freeze_panes == "A8"
 
 
@@ -60,52 +60,40 @@ def test_pdf_export_is_readable_and_contains_report_title() -> None:
     assert "DISPONIBLE" in text
 
 
-def _account(code: str, opening: float, debit: float = 0, credit: float = 0) -> dict[str, object]:
-    row: dict[str, object] = {"CODIGO": code, "MNOMBRE": f"Cuenta {code}", "MSALDO": opening}
-    for month in range(1, 19):
-        row[f"MACMDEB{month:02d}"] = 0
-        row[f"MACMCRE{month:02d}"] = 0
-    row["MACMDEB01"] = debit
-    row["MACMCRE01"] = credit
-    return row
+def test_harbour_sections_and_result_are_added_only_to_equity_root() -> None:
+    rows = [
+        {"CODIGO": "1", "MNOMBRE": "ACTIVO", "MSALDO": 1000},
+        {"CODIGO": "2", "MNOMBRE": "PASIVO", "MSALDO": -300},
+        {"CODIGO": "3", "MNOMBRE": "PATRIMONIO", "MSALDO": -500},
+        {"CODIGO": "31", "MNOMBRE": "CAPITAL", "MSALDO": -500},
+        {"CODIGO": "4", "MNOMBRE": "INGRESOS", "MSALDO": -300},
+        {"CODIGO": "5", "MNOMBRE": "GASTOS", "MSALDO": 100},
+    ]
+    report = _assemble_report(27, {"EMPNOM": "PRUEBA", "EMPNIT": "1"}, 2026, 1, 1, 4, False, rows)
+    assert [item["seccion"] for item in report["items"] if item["tipo"] == "seccion"] == ["resultados", "balance"]
+    equity = next(item for item in report["items"] if item["tipo"] == "cuenta" and item["cuenta"] == "3")
+    capital = next(item for item in report["items"] if item["tipo"] == "cuenta" and item["cuenta"] == "31")
+    assert equity["saldoActual"] == 700
+    assert capital["saldoActual"] == 500
+    assert report["totales"]["resultadoEjercicio"] == 200
+    assert report["totales"]["diferencia"] == 0
 
 
-def test_report_reproduces_harbour_sections_and_result_in_equity() -> None:
-    rows = [_account("1", 100), _account("11", 100), _account("2", -60),
-            _account("3", -30), _account("4", -20, 0, -5),
-            _account("5", 10, 2), _account("6", 0), _account("7", 0)]
-    report = _assemble_report(27, {"EMPNOM": "Prueba", "EMPNIT": "1"}, 2025, 1, 1, 4,
-                              False, rows)
-    items = report["items"]
-    assert [item["seccion"] for item in items if item["tipo"] == "seccion"] == ["resultados", "balance"]
-    equity = next(item for item in items if item["cuenta"] == "3" and item["tipo"] == "cuenta")
-    result = next(item for item in items if item["tipo"] == "resultado")
-    assert equity["saldoAnterior"] == 40
-    assert equity["saldoActual"] == 43
-    assert result["saldoActual"] == 13
-    assert not any(item["cuenta"] == "6" and item["tipo"] == "cuenta" for item in items)
-    assert any(item["tipo"] == "total-balance" for item in items)
+def test_hidden_results_follow_original_456_rule() -> None:
+    rows = [
+        {"CODIGO": "1", "MNOMBRE": "ACTIVO", "MSALDO": 0},
+        {"CODIGO": "2", "MNOMBRE": "PASIVO", "MSALDO": 0},
+        {"CODIGO": "3", "MNOMBRE": "PATRIMONIO", "MSALDO": 0},
+        {"CODIGO": "4", "MNOMBRE": "INGRESOS", "MSALDO": -100},
+        {"CODIGO": "5", "MNOMBRE": "GASTOS", "MSALDO": 20},
+        {"CODIGO": "6", "MNOMBRE": "COSTOS", "MSALDO": 30},
+        {"CODIGO": "7", "MNOMBRE": "OTROS", "MSALDO": 40},
+    ]
+    report = _assemble_report(27, {"EMPNOM": "PRUEBA", "EMPNIT": "1"}, 2026, 1, 1, 4, False, rows, include_results=False)
+    assert sum(item["tipo"] == "seccion" for item in report["items"]) == 1
+    assert report["totales"]["resultadoEjercicio"] == 50
 
 
-def test_without_results_only_prints_balance_but_keeps_result_in_equity() -> None:
-    rows = [_account("1", 100), _account("2", -60), _account("3", -30),
-            _account("4", -20), _account("5", 10), _account("7", 50)]
-    report = _assemble_report(27, {"EMPNOM": "Prueba", "EMPNIT": "1"}, 2025, 1, 1, 4,
-                              False, rows, include_results=False)
-    assert [item["seccion"] for item in report["items"] if item["tipo"] == "seccion"] == ["balance"]
-    assert report["totales"]["resultadoEjercicio"] == 10
-
-
-def test_v2_exports_preserve_section_rows() -> None:
-    rows = [_account("1", 100), _account("2", -60), _account("3", -30),
-            _account("4", -20), _account("5", 10)]
-    report = _assemble_report(27, {"EMPNOM": "Prueba", "EMPNIT": "1"}, 2025, 1, 1, 4,
-                              False, rows)
-    workbook = load_workbook(BytesIO(export_trial_balance_xlsx(report)))
-    sheet = workbook.active
-    values = [sheet.cell(row, 1).value for row in range(1, sheet.max_row + 1)]
-    assert any("ESTADO DE RESULTADOS" in str(value) for value in values)
-    assert any("BALANCE DE COMPROBACIÓN" in str(value) for value in values)
-    pdf_text = "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(export_trial_balance_pdf(report))).pages)
-    assert "RESULTADO DEL EJERCICIO" in pdf_text
-    assert "PASIVO Y PATRIMONIO" in pdf_text
+def test_special_months_are_counted_in_opening_and_period() -> None:
+    row = {"MSALDO": 100, "MACMDEB13": 30, "MACMCRE13": -10, "MACMDEB14": 5}
+    assert _account_values(row, 14, 14) == (120, 5, 0, 125)

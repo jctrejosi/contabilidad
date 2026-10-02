@@ -12,6 +12,24 @@ DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com")
 DEEPSEEK_TIMEOUT = float(os.getenv("DEEPSEEK_TIMEOUT", "60"))
 
+# API del backend de CONTABDSI (FastAPI, puerto 8001 en desarrollo). El asistente
+# NO consulta la base de datos: usa estos endpoints, que resuelven el motor de
+# datos (Advantage o PostgreSQL) y centralizan las reglas por compañía.
+# Se aceptan los dos nombres de variable que hubo durante el desarrollo paralelo:
+# BACKEND_API_URL (este servicio) e IA_SERVICE_BACKEND_URL (el plan del asistente).
+BACKEND_API_URL = (
+    os.getenv("BACKEND_API_URL") or os.getenv("IA_SERVICE_BACKEND_URL") or "http://127.0.0.1:8001"
+).rstrip("/")
+BACKEND_TIMEOUT = float(os.getenv("BACKEND_TIMEOUT") or os.getenv("IA_SERVICE_BACKEND_TIMEOUT", "30"))
+# Sondeo de `/health` del backend: corto, para que una comprobación de estado no
+# se quede esperando cuando el backend está caído.
+BACKEND_HEALTH_TIMEOUT = float(os.getenv("IA_SERVICE_BACKEND_HEALTH_TIMEOUT", "2"))
+
+# Tiempo de vida (segundos) de la caché del catálogo de cuentas que usan las
+# herramientas. El endpoint devuelve miles de filas; no conviene pedirlo en cada
+# pregunta.
+CATALOG_TTL_SECONDS = float(os.getenv("IA_SERVICE_CATALOG_TTL", "300"))
+
 # Puerto del servicio (8002 lo usa el ia-service del ecommerce si se levanta en
 # paralelo; por eso aquí se usa 8003). Vite lo consume por el proxy /bot-api.
 PORT = int(os.getenv("IA_SERVICE_PORT", "8003"))

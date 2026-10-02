@@ -1,7 +1,7 @@
 """API del asistente contable de CONTABDSI (ia-service).
 
 Endpoints:
-- GET  /health        → estado del servicio y del modelo.
+- GET  /health        → estado del servicio, del modelo y del backend.
 - GET  /chat/options  → opciones rápidas que muestra el widget.
 - POST /chat          → conversación {message, session_id?, history?, context?}
                         → {reply, session_id, payload}.
@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import config, deepseek, tools
+from . import backend, config, deepseek, tools
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("ia-service.main")
@@ -56,11 +56,32 @@ class ChatResponse(BaseModel):
 
 @app.get("/health")
 async def health():
+    """Estado del servicio: clave, herramientas y backend alcanzable.
+
+    ``tools_enabled`` son las herramientas registradas y ``tools_announced``
+    indica si además se le anuncian al modelo. Sin clave de DeepSeek ``/chat``
+    responde 503 y el modelo no llega a recibirlas: se informa la causa en
+    ``aviso`` en vez de esconder las herramientas. ``backend`` es el sondeo de
+    ``/api/health`` del backend, útil para separar «el asistente está arriba»
+    de «el backend no responde».
+    """
+    habilitadas = sorted(tools.FUNCTION_MAP.keys())
+    clave = bool(config.DEEPSEEK_API_KEY)
     return {
         "status": "ok",
         "model": config.DEEPSEEK_MODEL,
-        "api_key_configured": bool(config.DEEPSEEK_API_KEY),
-        "tools_enabled": sorted(tools.FUNCTION_MAP.keys()),
+        "api_key_configured": clave,
+        "backend_url": config.BACKEND_API_URL,
+        "backend": await backend.check_health(),
+        "tools_enabled": habilitadas,
+        "tools_announced": bool(clave and tools.TOOLS),
+        "aviso": None
+        if clave
+        else (
+            "Sin IA_SERVICE_DEEPSEEK_API_KEY: /chat responde 503 y el modelo no "
+            "recibe las herramientas. Las de tools_enabled están registradas en el "
+            "servicio y se anunciarán en cuanto haya clave."
+        ),
     }
 
 

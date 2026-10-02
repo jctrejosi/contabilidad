@@ -61,17 +61,17 @@ clasificado mal por el nombre del campo:
 | **D-CONCTR-3** | `CTLEY1` | pendiente | **`comentarioCertificado`** (texto) | ídem |
 | **D-CONCTR-4** | resto de `CONCTR` | 34 pendientes | **Se modelan los 13 que la interfaz lee**; los demás se conservan en `procedencia` | ídem + `docs/` (sólo citan `CTANO` y `CT00..CT12`) |
 | **D-VISDOCUM-1** | `CLAVE`, `CLAVE2` | «secretos» → descartados | `CLAVE` es `LOGICAL`: es una **bandera**, no una contraseña | Catálogo real del `.add` |
-| **D-VISDOCUM-2** | `MODULO`, `TIPO`, `PREFIJO`, `COMPRO`, `ICONTAB`, `CONVER`, `DOCCONVER` | pendientes | **Se modelan** en `tipos_documento` | `docs/TIPOS_DOCUMENTO_ADS.md` |
+| **D-VISDOCUM-2** | `MODULO`, `TIPO`, `PREFIJO`, `COMPRO`, `ICONTAB`, `CONVER`, `DOCCONVER` | pendientes | **Se modelan** en `tipos_documento` | `docs/maestros/TIPOS_DOCUMENTO_ADS.md` |
 | **D-VISDOCUM-3** | 39 banderas de integración | pendientes | Se conservan en `procedencia`; ningún documento las mapea a un campo | `docs/` (aparecen en prosa, sin nombre de campo) |
 | **D-FADCLI-1** | `CSOCIAL`, `CNOM1`, `CNOM2`, `CAPE1`, `CAPE2`, `CCODCIU` | «pendiente» / «fuera del núcleo» | **Se modelan**: la interfaz los exige al crear un tercero | `TerceroCreate` en `src/api/terceros.ts` |
 | **D-FADCLI-2** | resto de identidad y contacto | 14 pendientes | Se conserva en `procedencia` | Ni `docs/` ni la interfaz los usan |
-| **D-FADCLI-3** | 72 campos comerciales y de crédito | fuera del núcleo | **Confirmado**: ni una pantalla los consume | `docs/TERCEROS_ADS.md` y el tipo `Tercero` |
+| **D-FADCLI-3** | 72 campos comerciales y de crédito | fuera del núcleo | **Confirmado**: ni una pantalla los consume | `docs/maestros/TERCEROS_ADS.md` y el tipo `Tercero` |
 | **D-CONCECOS-1** | `VALOR`, `PORCEN`, `VLRPOR`, `CODITEM`, `CUENTA`, `CONCEPTO` | 6 pendientes | **Se modelan** en `centros_costos` | `CentroJerarquico` en `src/data/configCentros.ts` los declara uno por uno |
 | **D-CONTICOM-1** | `CTABDES` | pendiente | **Se modela**: `comprobantes.descripcion_auxiliar` | `descripcionAuxiliar` en `src/api/comprobantes.ts` |
 | **D-CONMOVI-1/2** | `BORRAR`, `USUA_F` | pendientes | `USUA_F` → `lotes.actualizado_por`; `BORRAR` → conservado (la tabla está vacía) | Volumetría: `CONMOVI` = 0 filas |
 | **D-CONDOCUM-1/2** | `DDOCUMI`, `DDOCUM2` | pendientes | Conservados: no aparecen en `docs/` ni en la interfaz | Búsqueda en la interfaz sin coincidencias |
 | **D-CONEMP-1** | `REASIGNA` | pendiente | Conservado: la interfaz no expone ninguna reasignación | `src/data/configCompanias.ts` |
-| **D-CONPUC-1** | `MFLAG` | pendiente | Conservado: sin semántica documentada | `docs/PLAN_CUENTAS_ADS.md` |
+| **D-CONPUC-1** | `MFLAG` | pendiente | Conservado: sin semántica documentada | `docs/maestros/PLAN_CUENTAS_ADS.md` |
 | **D-CONCTR-5** | `CTCOMNOM1..3` / `CTDOCNOM1..3` | pendiente (orden) | Se cargan en `parametros_nomina`; el orden queda por confirmar **cuando exista la pantalla de nómina** | `interface: Nomina.tsx` (sin conexión aún) |
 
 ### Cerradas por los datos
@@ -106,7 +106,7 @@ con 23 columnas, cada una pedida por una funcionalidad concreta:
 | Tabla | Columnas | Quién las pide |
 |---|---:|---|
 | `terceros` | 6 | `TerceroCreate` (`src/api/terceros.ts`) |
-| `tipos_documento` | 7 | `docs/TIPOS_DOCUMENTO_ADS.md` |
+| `tipos_documento` | 7 | `docs/maestros/TIPOS_DOCUMENTO_ADS.md` |
 | `centros_costos` | 9 | `CentroJerarquico` (`src/data/configCentros.ts`) |
 | `comprobantes` | 1 | `descripcionAuxiliar` (`src/api/comprobantes.ts`) |
 

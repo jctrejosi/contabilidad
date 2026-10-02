@@ -21,7 +21,7 @@
 --     (`CCODIGO`), que `terceros.codigo_legado` guarda.
 --   * `documentos_documento_idx`: la consulta de documentos filtrada por número
 --     de documento y período, que es la que usa la pantalla de consulta
---     (`docs/CONSULTA_DOCUMENTOS_ADS.md`).
+--     (`docs/movimientos/CONSULTA_DOCUMENTOS_ADS.md`).
 -- =====================================================================
 
 BEGIN;

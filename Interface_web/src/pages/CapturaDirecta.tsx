@@ -150,7 +150,8 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
   const [aviso, setAviso] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
   const capturaRef = useRef<HTMLDivElement>(null);
 
-  // CONMAE, CONCECOS y CONTICOM son maestros por compañía; VISDOCUM es global.
+  // CONMAE, CONCECOS y CONTICOM son por compañía; VISDOCUM se comparte entre
+  // compañías, pero el backend solo entrega la sucursal predeterminada (SUC=1).
   // Todos se resuelven al entrar para que la captura nunca mezcle catálogos de
   // otra contabilidad ni dependa de listas de demostración del frontend.
   useEffect(() => {
@@ -195,15 +196,9 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
 
   const cuentasAfectables = cuentas.filter(c => c.afectable);
 
-  // VISDOCUM es global. Los tipos vinculados al comprobante seleccionado se
-  // presentan primero, pero los demás permanecen disponibles para no alterar
-  // la operación histórica cuando COMPROBA viene vacío o difiere por módulo.
-  const tiposDocumentoOrdenados = Array.from(
-    new Map(tiposDocumento.map(tipo => [tipo.codigo, tipo])).values(),
-  ).sort((a, b) =>
-    Number(b.comprobante === comprobante) - Number(a.comprobante === comprobante)
-    || a.codigo.localeCompare(b.codigo),
-  );
+  // Contabilidad puede usar cualquier tipo documental de la sucursal activa,
+  // aunque su módulo o comprobante asociado sea diferente al seleccionado.
+  // La lista llega ordenada por código desde el catálogo, sin filtros locales.
   const tipoDocumentoSeleccionado = tiposDocumento.find(tipo => tipo.codigo === tipoDoc);
 
   const totalDeb = lineas.reduce((s, l) => s + parseCOP(l.debito), 0);
@@ -639,10 +634,10 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
               }
             }}
               data-capture-nav="true"
-              disabled={maestrosCargando || tiposDocumentoOrdenados.length === 0}
+              disabled={maestrosCargando || tiposDocumento.length === 0}
               className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1">
               <option value="">{maestrosCargando ? 'Cargando…' : 'Seleccione…'}</option>
-              {tiposDocumentoOrdenados.map(tipo => (
+              {tiposDocumento.map(tipo => (
                 <option key={tipo.codigo} value={tipo.codigo}>
                   {tipo.codigo} — {tipo.nombre}{tipo.comprobante ? ` · Comp. ${tipo.comprobante}` : ''}
                 </option>

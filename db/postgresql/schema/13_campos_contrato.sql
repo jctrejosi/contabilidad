@@ -9,7 +9,7 @@
 --   * `terceros`        → `TerceroCreate` (src/api/terceros.ts) pide
 --                          nombreComercial, primer/segundo nombre,
 --                          primer/segundo apellido y codigoCiudad.
---   * `tipos_documento` → `docs/TIPOS_DOCUMENTO_ADS.md` documenta módulo,
+--   * `tipos_documento` → `docs/maestros/TIPOS_DOCUMENTO_ADS.md` documenta módulo,
 --                          naturaleza, prefijo, comprobante, ICONTAB y conversión.
 --   * `comprobantes`    → `descripcionAuxiliar` (src/api/comprobantes.ts).
 --   * `centros_costos`  → `CentroJerarquico` (src/data/configCentros.ts).

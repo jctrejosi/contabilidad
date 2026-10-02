@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listarCuentas } from '../api/cuentas';
 import { consultarDetalleAnualCuenta, consultarMovimientoAnualCuenta, type DetalleAnualCuentaResponse, type MesMovimientoAnual, type MovimientoAnualCuentaResponse } from '../api/movimientoAnualCuenta';
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
+import AnnualMovementChart from '../components/AnnualMovementChart';
 import type { Cuenta } from '../types';
 
 const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100 disabled:bg-gray-100 disabled:text-gray-400';
@@ -87,7 +88,7 @@ export default function AnualCuenta({ cia }: { cia: string }) {
           {showChart ? 'Ocultar gráfica' : 'Graficar'}
         </button>
       </div>}
-      {result && showChart && <AnnualAccountChart result={result} />}
+      {result && showChart && <AnnualMovementChart id="grafica-anual-cuenta" label={`cuenta ${result.cuenta}`} year={result.anio} months={result.meses} filterLabel={result.nitDesde || result.nitHasta ? `NIT ${result.nitDesde || 'inicio'} a ${result.nitHasta || 'fin'}` : undefined} />}
       <div className="overflow-x-auto"><table className="w-full text-xs">
         <thead className="border-b border-gray-200 bg-gray-50"><tr>{['Mes', 'Débito', 'Crédito', 'Saldo del mes', 'Saldo acumulado', ''].map((heading, index) => <th key={`${heading}-${index}`} className={`whitespace-nowrap px-3 py-2.5 font-semibold text-gray-600 ${index > 0 && index < 5 ? 'text-right' : 'text-left'}`}>{heading}</th>)}</tr></thead>
         <tbody className="divide-y divide-gray-50">
@@ -100,53 +101,6 @@ export default function AnualCuenta({ cia }: { cia: string }) {
       </table></div>
     </div>
   </div>;
-}
-
-const shortAmount = new Intl.NumberFormat('es-CO', { notation: 'compact', maximumFractionDigits: 1 });
-
-function AnnualAccountChart({ result }: { result: MovimientoAnualCuentaResponse }) {
-  const months = result.meses;
-  const balances = months.map(item => item.saldoAcumulado);
-  const minBalance = Math.min(0, ...balances);
-  const maxBalance = Math.max(0, ...balances);
-  const balanceSpan = maxBalance - minBalance || 1;
-  const x = (index: number) => 65 + index * (835 / 11);
-  const y = (value: number) => 210 - ((value - minBalance) / balanceSpan) * 170;
-  const line = balances.map((value, index) => `${index === 0 ? 'M' : 'L'} ${x(index)} ${y(value)}`).join(' ');
-  const maxMovement = Math.max(1, ...months.map(item => Math.max(item.debito, item.credito)));
-
-  return <section id="grafica-anual-cuenta" aria-label={`Gráficas del movimiento anual de ${result.cuenta}`} className="border-b border-gray-200 bg-white px-4 py-4">
-    <div className="mb-3 text-xs text-gray-600">Comportamiento de {result.cuenta} durante {result.anio}{result.nitDesde || result.nitHasta ? ` · NIT ${result.nitDesde || 'inicio'} a ${result.nitHasta || 'fin'}` : ''}. Los valores exactos permanecen en la tabla.</div>
-    <div className="grid gap-4">
-      <div className="min-w-0 rounded border border-gray-200 p-3">
-        <h3 className="mb-2 text-xs font-semibold text-gray-700">Saldo acumulado por mes</h3>
-        <div className="overflow-x-auto"><svg viewBox="0 0 960 250" className="min-w-[640px] w-full" role="img" aria-label="Evolución mensual del saldo acumulado">
-          {[0, 0.25, 0.5, 0.75, 1].map(fraction => {
-            const value = minBalance + balanceSpan * fraction;
-            return <g key={fraction}><line x1="55" x2="920" y1={y(value)} y2={y(value)} stroke="#e5e7eb" strokeWidth="1" /><text x="50" y={y(value) + 4} textAnchor="end" fill="#6b7280" fontSize="11">{shortAmount.format(value)}</text></g>;
-          })}
-          <path d={line} fill="none" stroke="#0073C0" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-          {months.map((month, index) => <g key={month.mes}><circle cx={x(index)} cy={y(month.saldoAcumulado)} r="5" fill="#0073C0"><title>{`${MONTHS[month.mes - 1]}: ${money(month.saldoAcumulado)}`}</title></circle><text x={x(index)} y="239" textAnchor="middle" fill="#4b5563" fontSize="11">{MONTHS[month.mes - 1].slice(0, 3)}</text></g>)}
-        </svg></div>
-      </div>
-      <div className="min-w-0 rounded border border-gray-200 p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h3 className="text-xs font-semibold text-gray-700">Débitos y créditos por mes</h3><div className="flex gap-3 text-xs text-gray-600"><span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-petroleum-500" />Débitos</span><span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-[#00B0F2]" />Créditos</span></div></div>
-        <div className="overflow-x-auto"><svg viewBox="0 0 960 250" className="min-w-[640px] w-full" role="img" aria-label="Comparación mensual de débitos y créditos">
-          {[0, 0.25, 0.5, 0.75, 1].map(fraction => <g key={fraction}><line x1="55" x2="920" y1={210 - fraction * 170} y2={210 - fraction * 170} stroke="#e5e7eb" strokeWidth="1" /><text x="50" y={214 - fraction * 170} textAnchor="end" fill="#6b7280" fontSize="11">{shortAmount.format(maxMovement * fraction)}</text></g>)}
-          {months.map((month, index) => {
-            const center = x(index);
-            const debitHeight = month.debito / maxMovement * 170;
-            const creditHeight = month.credito / maxMovement * 170;
-            return <g key={month.mes}>
-              <rect x={center - 22} y={210 - debitHeight} width="19" height={debitHeight} rx="2" fill="#0073C0"><title>{`${MONTHS[month.mes - 1]} · Débitos: ${money(month.debito)}`}</title></rect>
-              <rect x={center + 3} y={210 - creditHeight} width="19" height={creditHeight} rx="2" fill="#00B0F2"><title>{`${MONTHS[month.mes - 1]} · Créditos: ${money(month.credito)}`}</title></rect>
-              <text x={center} y="239" textAnchor="middle" fill="#4b5563" fontSize="11">{MONTHS[month.mes - 1].slice(0, 3)}</text>
-            </g>;
-          })}
-        </svg></div>
-      </div>
-    </div>
-  </section>;
 }
 
 function MonthRow({ month, expanded, loading, detail, account, onToggle, onMore }: { month: MesMovimientoAnual; expanded: boolean; loading: boolean; detail?: DetalleAnualCuentaResponse; account: string; onToggle: () => void; onMore: () => void }) {

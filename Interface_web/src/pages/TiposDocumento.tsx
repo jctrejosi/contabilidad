@@ -85,7 +85,7 @@ export default function TiposDocumento() {
           <h1 className="text-lg font-semibold text-gray-800">Tipos de documento</h1>
           <p className="mt-1 text-xs text-gray-500">Reglas globales de Cartera, Inventarios, Cuentas por pagar y Contabilidad.</p>
         </div>
-        <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">Advantage · VISDOCUM · Global · {tipos.length} tipos</span>
+        <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">Advantage · Sucursal 1 · {tipos.length} tipos</span>
       </div>
 
       <div className="rounded border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-800">
@@ -121,7 +121,7 @@ export default function TiposDocumento() {
               <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Acciones</th>
             </tr></thead>
             <tbody className="divide-y divide-gray-50">
-              {cargando && <tr><td colSpan={11} className="px-4 py-10 text-center text-gray-500">Consultando el catálogo global VISDOCUM…</td></tr>}
+              {cargando && <tr><td colSpan={11} className="px-4 py-10 text-center text-gray-500">Consultando tipos de documento…</td></tr>}
               {!cargando && !error && filtrados.length === 0 && <tr><td colSpan={11} className="px-4 py-10 text-center text-gray-500">No hay tipos que coincidan con los filtros.</td></tr>}
               {!cargando && filtrados.map(tipo => <tr key={tipo.id || tipo.codigo} className="hoverable">
                 <td className="px-3 py-2.5 font-mono font-semibold text-gray-800">{tipo.codigo}</td>

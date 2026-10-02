@@ -64,6 +64,28 @@ def test_account_prefixes_match_harbour_hierarchy() -> None:
     ]
 
 
+def test_document_type_validation_and_sequence_use_only_branch_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    queries: list[str] = []
+    updates: list[str] = []
+
+    def one(_connection, sql, _params):
+        queries.append(sql)
+        if "CONTICOM" in sql:
+            return {"CODIGO": "05"}
+        if "VISDOCUM" in sql:
+            return {"CODIGO": "AN", "CONSE": 41, "MODICONSE": False, "PREFIJO": ""}
+        return None
+
+    monkeypatch.setattr(repository, "_one", one)
+    monkeypatch.setattr(repository, "_execute", lambda _connection, sql, _params: updates.append(sql))
+    data = {"cia": 27, "comprobante": "05", "tipoDocumento": "AN", "numeroDocumento": "", "lineas": []}
+
+    document_type, _ = repository._validate_masters(object(), data)
+    assert repository._document_number(object(), data, document_type).startswith("AN")
+    assert all("SUC = 1 AND CODIGO = ?" in sql for sql in queries if "VISDOCUM" in sql)
+    assert len(updates) == 1 and "SUC = 1 AND CODIGO = ?" in updates[0]
+
+
 def test_creates_conterce_row_for_new_account_third_party(monkeypatch: pytest.MonkeyPatch) -> None:
     executed: list[tuple[str, list[tuple[int, int, object]]]] = []
     monkeypatch.setattr(repository, "_one", lambda *_args, **_kwargs: None)

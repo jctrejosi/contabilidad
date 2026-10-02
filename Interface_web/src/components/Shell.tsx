@@ -100,14 +100,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Informes',
     icon: '⎙',
     items: [
-      { id: 'informes/documentos', label: 'Documentos', icon: '◻' },
-      { id: 'informes/libros', label: 'Libros', icon: '◻' },
-      { id: 'informes/estados', label: 'Estados y balances', icon: '◻' },
-      { id: 'informes/terceros', label: 'Terceros', icon: '◻' },
-      { id: 'informes/centros', label: 'Centros', icon: '◻' },
-      { id: 'informes/flujo-caja', label: 'Flujo de caja', icon: '◻' },
-      { id: 'informes/nic-niif', label: 'NIC/NIIF', icon: '◻' },
-      { id: 'informes/generador', label: 'Generador personalizado', icon: '◻' },
+      { id: 'informes/documentos', label: 'Informes 1–R', icon: '◻' },
     ],
   },
   {
@@ -181,6 +174,7 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
 
   const periodoLabel = `${PERIODO.nombre}`;
   const isGroupActive = (group: NavGroup) =>
+    (group.id === 'informes' && currentPage.startsWith('informes/')) ||
     group.items.some(i => i.id === currentPage);
 
   return (

@@ -1,62 +1,133 @@
-import { useState } from 'react';
-import { SALDOS_BALANCE, fmtCOP } from '../data/mock';
+import { useEffect, useState } from 'react';
+import {
+  consultarBalanceComprobacion,
+  exportarBalanceComprobacion,
+  type BalanceComprobacion as BalanceComprobacionDatos,
+  type FiltrosBalanceComprobacion,
+} from '../api/balanceComprobacion';
+import { consultarPeriodoOperacion } from '../api/periodoOperacion';
 
-const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const PERIODOS = [...MESES, 'Mes 13', 'Mes 14', 'Mes 15', 'Mes 16', 'Mes 17', 'Mes 18'];
 
-export default function BalanceComprobacion() {
-  const [anio, setAnio] = useState('2026');
-  const [mesHasta, setMesHasta] = useState(2);
-  const [tipoVista, setTipoVista] = useState<'acumulado' | 'mensual'>('acumulado');
+const fmtCOP = (value: number) => new Intl.NumberFormat('es-CO', {
+  style: 'currency', currency: 'COP', maximumFractionDigits: 2,
+}).format(value);
+
+interface Props {
+  /** Compañía activa: CONMAE se consulta siempre dentro de una CIA. */
+  cia: string;
+}
+
+interface Formulario {
+  mesDesde: number;
+  mesHasta: number;
+  nivel: 4 | 6 | 9 | 12;
+  incluirCeros: boolean;
+  incluirResultados: boolean;
+  incluirTerceros: boolean;
+  incluirCentros: boolean;
+  detalleCuentaDesde: string;
+  detalleCuentaHasta: string;
+}
+
+export default function BalanceComprobacion({ cia }: Props) {
+  const [formulario, setFormulario] = useState<Formulario | null>(null);
+  const [anioOperacion, setAnioOperacion] = useState<number | null>(null);
+  const [consulta, setConsulta] = useState<FiltrosBalanceComprobacion | null>(null);
+  const [balance, setBalance] = useState<BalanceComprobacionDatos | null>(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
   const [showExport, setShowExport] = useState(false);
-  const [showParams, setShowParams] = useState(true);
 
-  function saldoAcumulado(idx: number) {
-    return SALDOS_BALANCE.map(c => {
-      let saldo = c.saldoInicial;
-      for (let i = 0; i < Math.min(mesHasta, c.meses.length); i++) {
-        saldo += c.meses[i].debito - c.meses[i].credito;
-      }
-      return { ...c, saldoFinal: saldo };
-    });
+  // El año y el mes no se inventan: se toman del ejercicio de CONCTR que ya
+  // alimenta al resto de informes.
+  useEffect(() => {
+    let vigente = true;
+    setFormulario(null);
+    setAnioOperacion(null);
+    setConsulta(null);
+    setBalance(null);
+    setError('');
+    consultarPeriodoOperacion(cia)
+      .then(periodo => {
+        if (!vigente) return;
+        const mesHasta = periodo.mesesHabilitados.at(-1) ?? 1;
+        const defaults = { mesDesde: 1, mesHasta, nivel: 4 as const, incluirCeros: false,
+          incluirResultados: true, incluirTerceros: false, incluirCentros: false,
+          detalleCuentaDesde: '', detalleCuentaHasta: '' };
+        setAnioOperacion(periodo.anio);
+        setFormulario(defaults);
+      })
+      .catch((cause: unknown) => {
+        if (vigente) setError(cause instanceof Error ? cause.message : 'No fue posible consultar el período.');
+      });
+    return () => { vigente = false; };
+  }, [cia]);
+
+  useEffect(() => {
+    if (!consulta) return;
+    let vigente = true;
+    setCargando(true);
+    setError('');
+    consultarBalanceComprobacion(consulta)
+      .then(datos => { if (vigente) setBalance(datos); })
+      .catch((cause: unknown) => {
+        if (vigente) {
+          setBalance(null);
+          setError(cause instanceof Error ? cause.message : 'No fue posible generar el balance de comprobación.');
+        }
+      })
+      .finally(() => { if (vigente) setCargando(false); });
+    return () => { vigente = false; };
+  }, [consulta]);
+
+  async function exportar(formato: 'pdf' | 'xlsx') {
+    if (!consulta) return;
+    setShowExport(false);
+    try {
+      await exportarBalanceComprobacion(consulta, formato);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : `No fue posible exportar el balance en ${formato.toUpperCase()}.`);
+    }
   }
 
-  const rows = saldoAcumulado(mesHasta);
-  const totalDebAcum = rows.reduce((s, r) => s + r.meses.slice(0, mesHasta).reduce((ss, m) => ss + m.debito, 0), 0);
-  const totalCredAcum = rows.reduce((s, r) => s + r.meses.slice(0, mesHasta).reduce((ss, m) => ss + m.credito, 0), 0);
-  const totalSaldos = rows.reduce((s, r) => s + Math.abs(r.saldoFinal), 0);
+  const totales = balance?.totales;
+  const cuadrado = (totales?.diferencia ?? 1) === 0;
 
   return (
     <div className="p-4 space-y-4 max-w-screen-2xl">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-gray-800">Balance de comprobación</h1>
-          <p className="text-xs text-gray-500">Saldos iniciales y movimientos acumulados por período — comprobante maestro</p>
+          <p className="text-xs text-gray-500">Estado de resultados y balance acumulado por cuenta y rango de meses.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowParams(p => !p)}
-            className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50"
+            onClick={() => exportar('pdf')}
+            disabled={!balance || cargando}
+            className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {showParams ? '▴ Parámetros' : '▾ Parámetros'}
+            Imprimir
           </button>
-          <button className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">⎙ Imprimir</button>
           <div className="relative">
             <button
               onClick={() => setShowExport(v => !v)}
-              className="text-xs px-3 py-1.5 rounded text-white font-medium flex items-center gap-1"
+              disabled={!balance || cargando}
+              className="text-xs px-3 py-1.5 rounded text-white font-medium flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-60"
               style={{ backgroundColor: '#0073C0' }}
             >
-              ↓ Exportar ▾
+              Exportar
             </button>
             {showExport && (
               <div className="absolute right-0 top-9 bg-white rounded border border-gray-200 shadow-lg z-20 py-1 w-36">
-                {['PDF', 'XLSX', 'CSV'].map(f => (
+                {(['pdf', 'xlsx'] as const).map(formato => (
                   <button
-                    key={f}
-                    onClick={() => setShowExport(false)}
+                    key={formato}
+                    onClick={() => exportar(formato)}
                     className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
                   >
-                    {f === 'PDF' ? '📄 PDF' : f === 'XLSX' ? '📊 XLSX' : '📝 CSV'}
+                    {formato === 'pdf' ? 'PDF' : 'XLSX'}
                   </button>
                 ))}
               </div>
@@ -65,76 +136,108 @@ export default function BalanceComprobacion() {
         </div>
       </div>
 
+      {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
       {/* Parameters */}
-      {showParams && (
+      {formulario && (
         <div className="bg-white rounded border border-gray-200 p-4">
           <h2 className="text-xs font-semibold text-gray-700 mb-3">Parámetros del informe</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Año</label>
-              <input
-                type="number"
-                value={anio}
-                onChange={e => setAnio(e.target.value)}
-                className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
-              />
+              <label className="block text-xs font-medium text-gray-600 mb-1">Desde mes</label>
+              <select
+                value={formulario.mesDesde}
+                onChange={e => setFormulario({ ...formulario, mesDesde: Number(e.target.value) })}
+                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
+              >
+                {PERIODOS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Hasta mes</label>
               <select
-                value={mesHasta}
-                onChange={e => setMesHasta(Number(e.target.value))}
+                value={formulario.mesHasta}
+                onChange={e => setFormulario({ ...formulario, mesHasta: Number(e.target.value) })}
                 className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
               >
-                {MESES.map((m, i) => (
-                  <option key={m} value={i + 1}>{m} — {i + 1}</option>
-                ))}
+                {PERIODOS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Vista</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Nivel máximo</label>
               <select
-                value={tipoVista}
-                onChange={e => setTipoVista(e.target.value as 'acumulado' | 'mensual')}
+                value={formulario.nivel}
+                onChange={e => setFormulario({ ...formulario, nivel: Number(e.target.value) as 4 | 6 | 9 | 12 })}
                 className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
               >
-                <option value="acumulado">Acumulado</option>
-                <option value="mensual">Mensual</option>
+                <option value={4}>Cuenta</option>
+                <option value={6}>Subcuenta</option>
+                <option value={9}>Auxiliar 1</option>
+                <option value={12}>Auxiliar 2</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Cuenta desde</label>
-              <input
-                placeholder="100000"
-                className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
-              />
             </div>
           </div>
           <div className="flex items-center gap-3 mt-3">
             <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-              <input type="checkbox" defaultChecked />
-              Solo cuentas con movimiento
+              <input
+                type="checkbox"
+                checked={formulario.incluirCeros}
+                onChange={e => setFormulario({ ...formulario, incluirCeros: e.target.checked })}
+              />
+              Incluir cuentas sin saldo ni movimiento
             </label>
-            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-              <input type="checkbox" />
-              Incluir cuentas de orden
-            </label>
-            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
-              <input type="checkbox" />
-              Desglosar centros de costo
-            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mt-3">
+            <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={formulario.incluirResultados} onChange={e => setFormulario({ ...formulario, incluirResultados: e.target.checked })} />Incluir estado de resultados</label>
+            <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={formulario.incluirTerceros} onChange={e => setFormulario({ ...formulario, incluirTerceros: e.target.checked })} />Incluir terceros</label>
+            <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={formulario.incluirCentros} onChange={e => setFormulario({ ...formulario, incluirCentros: e.target.checked })} />Incluir centros de costo</label>
+          </div>
+          {(formulario.incluirTerceros || formulario.incluirCentros) && <div className="flex gap-3 mt-3">
+            <input aria-label="Detalle: cuenta desde" placeholder="Detalle: cuenta desde" value={formulario.detalleCuentaDesde} onChange={e => setFormulario({ ...formulario, detalleCuentaDesde: e.target.value })} className="border rounded px-2 py-1 text-xs" />
+            <input aria-label="Detalle: cuenta hasta" placeholder="Detalle: cuenta hasta" value={formulario.detalleCuentaHasta} onChange={e => setFormulario({ ...formulario, detalleCuentaHasta: e.target.value })} className="border rounded px-2 py-1 text-xs" />
+          </div>}
+          <div className="mt-3">
+            <button
+              onClick={() => {
+                if (anioOperacion === null) {
+                  setError('No fue posible determinar el período operativo de la compañía.');
+                  return;
+                }
+                setConsulta({
+                  cia,
+                  anio: anioOperacion,
+                  mesDesde: formulario.mesDesde,
+                  mesHasta: formulario.mesHasta,
+                  nivel: formulario.nivel,
+                  incluirCeros: formulario.incluirCeros,
+                  incluirResultados: formulario.incluirResultados,
+                  incluirTerceros: formulario.incluirTerceros,
+                  incluirCentros: formulario.incluirCentros,
+                  detalleCuentaDesde: formulario.detalleCuentaDesde,
+                  detalleCuentaHasta: formulario.detalleCuentaHasta,
+                });
+              }}
+              disabled={cargando || anioOperacion === null}
+              className="text-xs px-3 py-1.5 rounded text-white font-medium disabled:cursor-wait disabled:opacity-60"
+              style={{ backgroundColor: '#0073C0' }}
+            >
+              {cargando ? 'Consultando…' : 'Generar'}
+            </button>
           </div>
         </div>
       )}
 
       {/* Report */}
       <div className="bg-white rounded border border-gray-200 overflow-hidden">
-        {/* Report header */}
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
           <div className="text-center space-y-0.5">
             <div className="text-sm font-bold text-gray-800">BALANCE DE COMPROBACIÓN ACUMULADO</div>
-            <div className="text-xs text-gray-600">Compañía Demo S.A.S. — NIT 900.123.456-7</div>
-            <div className="text-xs text-gray-500">Año {anio} — Acumulado enero a {MESES[mesHasta - 1]}</div>
+            <div className="text-xs text-gray-600">
+              {balance ? `${balance.compania.nombre} — NIT ${balance.compania.nit}` : 'Sin datos consultados'}
+            </div>
+            <div className="text-xs text-gray-500">
+              {balance ? `${balance.periodo} · Nivel ${balance.nombreNivel}${balance.incluirCeros ? ' · Incluye cuentas en cero' : ''}` : ''}
+            </div>
           </div>
         </div>
 
@@ -143,84 +246,58 @@ export default function BalanceComprobacion() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-3 py-2.5 text-left font-semibold text-gray-600 w-24">Cuenta</th>
+                <th className="px-3 py-2.5 text-left font-semibold text-gray-600 w-24">NIT / Centro</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-gray-600">Nombre</th>
-                <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Saldo inicial</th>
-                {tipoVista === 'mensual' && MESES.slice(0, mesHasta).map(m => (
-                  <th key={m} className="px-2 py-2.5 text-right font-semibold text-gray-600 w-24">{m}</th>
-                ))}
-                {tipoVista === 'acumulado' && (
-                  <>
-                    <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Débito acum.</th>
-                    <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Crédito acum.</th>
-                  </>
-                )}
-                <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Saldo final</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Saldo anterior</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Débito</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Crédito</th>
+                <th className="px-3 py-2.5 text-right font-semibold text-gray-600 w-32">Saldo actual</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {rows.map(row => {
-                const debAcum = row.meses.slice(0, mesHasta).reduce((s, m) => s + m.debito, 0);
-                const credAcum = row.meses.slice(0, mesHasta).reduce((s, m) => s + m.credito, 0);
-                return (
-                  <tr key={row.cuenta} className="hoverable">
-                    <td className="px-3 py-2 font-mono font-medium text-gray-700">{row.cuenta}</td>
-                    <td className="px-3 py-2 text-gray-600">{row.nombre}</td>
-                    <td className={`px-3 py-2 text-right font-mono ${row.saldoInicial > 0 ? 'text-gray-800' : 'text-gray-400'}`}>
-                      {row.saldoInicial !== 0 ? fmtCOP(Math.abs(row.saldoInicial)) : '—'}
-                    </td>
-                    {tipoVista === 'mensual' && MESES.slice(0, mesHasta).map((mes, i) => (
-                      <td key={mes} className="px-2 py-2 text-right font-mono text-gray-600">
-                        {(row.meses[i]?.debito || 0) !== 0 || (row.meses[i]?.credito || 0) !== 0
-                          ? fmtCOP((row.meses[i]?.debito || 0) - (row.meses[i]?.credito || 0))
-                          : <span className="text-gray-200">—</span>
-                        }
-                      </td>
-                    ))}
-                    {tipoVista === 'acumulado' && (
-                      <>
-                        <td className="px-3 py-2 text-right font-mono text-gray-800">
-                          {debAcum > 0 ? fmtCOP(debAcum) : <span className="text-gray-200">—</span>}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-600">
-                          {credAcum > 0 ? fmtCOP(credAcum) : <span className="text-gray-200">—</span>}
-                        </td>
-                      </>
-                    )}
-                    <td className={`px-3 py-2 text-right font-mono font-semibold ${
-                      row.saldoFinal > 0 ? 'text-green-700' : row.saldoFinal < 0 ? 'text-red-700' : 'text-gray-400'
-                    }`}>
-                      {row.saldoFinal !== 0 ? fmtCOP(Math.abs(row.saldoFinal)) : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
+              {cargando && <tr><td colSpan={7} className="px-3 py-10 text-center text-xs text-gray-500">Consultando…</td></tr>}
+              {!cargando && !error && !balance && <tr><td colSpan={7} className="px-3 py-10 text-center text-xs text-gray-500">Aún no se ha consultado el balance.</td></tr>}
+              {!cargando && balance && balance.items.length === 0 && (
+                <tr><td colSpan={7} className="px-3 py-10 text-center text-xs text-gray-500">La compañía no tiene acumulados en el período seleccionado.</td></tr>
+              )}
+              {!cargando && balance && balance.items.map((row, index) => (
+                <tr key={`${row.tipo}-${row.cuenta}-${row.nit}-${index}`} className={row.tipo === 'seccion' ? 'bg-petroleum-500' : row.tipo.startsWith('total') || row.tipo === 'resultado' ? 'bg-petroleum-50 font-semibold' : 'hoverable'}>
+                  {row.tipo === 'seccion' ? <td colSpan={7} className="px-3 py-2 text-white font-semibold">{row.nombre}</td> : <>
+                  <td className="px-3 py-2 font-mono font-medium text-gray-700">{row.cuenta}</td>
+                  <td className="px-3 py-2 font-mono text-gray-600">{row.nit}</td>
+                  <td className="px-3 py-2 text-gray-600">{row.nombre}</td>
+                  <td className="px-3 py-2 text-right font-mono text-gray-600">{row.saldoAnterior !== 0 ? fmtCOP(row.saldoAnterior) : '—'}</td>
+                  <td className="px-3 py-2 text-right font-mono text-gray-800">{row.debito !== 0 ? fmtCOP(row.debito) : '—'}</td>
+                  <td className="px-3 py-2 text-right font-mono text-gray-600">{row.credito !== 0 ? fmtCOP(row.credito) : '—'}</td>
+                  <td className={`px-3 py-2 text-right font-mono font-semibold ${row.saldoActual > 0 ? 'text-green-700' : row.saldoActual < 0 ? 'text-red-700' : 'text-gray-400'}`}>
+                    {row.saldoActual !== 0 ? fmtCOP(row.saldoActual) : '—'}
+                  </td>
+                  </>}
+                </tr>
+              ))}
             </tbody>
-            <tfoot className="bg-gray-50 border-t-2 border-gray-300">
-              <tr>
-                <td className="px-3 py-2.5 font-bold text-gray-800 text-xs" colSpan={2}>TOTALES</td>
-                <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">
-                  {fmtCOP(SALDOS_BALANCE.reduce((s, r) => s + r.saldoInicial, 0))}
-                </td>
-                {tipoVista === 'acumulado' && (
-                  <>
-                    <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totalDebAcum)}</td>
-                    <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totalCredAcum)}</td>
-                  </>
-                )}
-                {tipoVista === 'mensual' && MESES.slice(0, mesHasta).map(m => <td key={m} className="px-2 py-2.5 font-mono font-bold text-gray-800 text-right text-xs">—</td>)}
-                <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totalSaldos)}</td>
-              </tr>
-            </tfoot>
+            {!cargando && balance && (
+              <tfoot className="bg-gray-50 border-t-2 border-gray-300">
+                <tr>
+                  <td className="px-3 py-2.5 font-bold text-gray-800 text-xs" colSpan={3}>ACTIVO</td>
+                  <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totales?.saldoAnterior ?? 0)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totales?.debito ?? 0)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totales?.credito ?? 0)}</td>
+                  <td className="px-3 py-2.5 text-right font-mono font-bold text-gray-800">{fmtCOP(totales?.saldoActual ?? 0)}</td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
-        {/* Footer note */}
-        <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
-          <span>Generado: {new Date().toLocaleDateString('es-CO')} {new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })} · Usuario: Laura Gómez</span>
-          <span className={totalDebAcum === totalCredAcum ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-            {totalDebAcum === totalCredAcum ? '✓ Cuadrado' : '✗ Descuadrado'}
-          </span>
-        </div>
+        {balance && (
+          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
+            <span>{balance.items.filter(item => item.tipo === 'cuenta').length} cuenta(s)</span>
+            <span className={cuadrado ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+              {cuadrado ? 'Cuadrado' : `Descuadrado por ${fmtCOP(Math.abs(totales?.diferencia ?? 0))}`}
+            </span>
+          </div>
+        )}
       </div>
 
       {showExport && (

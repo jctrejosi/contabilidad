@@ -47,6 +47,8 @@ export interface DocumentosResponse {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  totalDocumentos: number;
+  totalValor: number;
   source: 'CONDOCUM';
   sharedAcrossCompanies: false;
 }
@@ -90,17 +92,25 @@ export async function consultarDocumentos(filtros: FiltrosDocumentos): Promise<D
   return body as DocumentosResponse;
 }
 
-/** Lee MOV01 usando la clave completa de la cabecera seleccionada. */
-export async function consultarDetalleDocumento(
+/** Clave de la cabecera (CONDOCUM) que identifica un documento para MOV01. */
+export interface ClaveDocumento {
+  documento: string;
+  comprobante: string;
+  tipoDocumento: string;
+  fecha: string;
+}
+
+/** Lee MOV01 usando la clave de la cabecera seleccionada. */
+export async function consultarDetallePorClave(
   cia: string,
-  documento: DocumentoContable,
+  clave: ClaveDocumento,
 ): Promise<MovimientoDocumento[]> {
   const params = new URLSearchParams({
     cia,
-    documento: documento.documento,
-    comprobante: documento.comprobante,
-    tipoDocumento: documento.tipoDocumento,
-    fecha: documento.fecha,
+    documento: clave.documento,
+    comprobante: clave.comprobante,
+    tipoDocumento: clave.tipoDocumento,
+    fecha: clave.fecha,
   });
   const response = await fetch(`/api/documentos/detalle?${params.toString()}`);
   const body = await response.json().catch(() => null) as { items?: MovimientoDocumento[]; detail?: string } | null;
@@ -108,6 +118,14 @@ export async function consultarDetalleDocumento(
     throw new Error(body?.detail || 'No fue posible consultar el detalle en MOV01.');
   }
   return body.items;
+}
+
+/** Lee MOV01 usando la clave completa de la cabecera seleccionada. */
+export function consultarDetalleDocumento(
+  cia: string,
+  documento: DocumentoContable,
+): Promise<MovimientoDocumento[]> {
+  return consultarDetallePorClave(cia, documento);
 }
 
 /** Retira un documento seleccionado y solicita el recálculo contable atómico. */

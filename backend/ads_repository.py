@@ -206,13 +206,22 @@ def ads_connection() -> Iterator[Any]:
 
 
 @contextmanager
-def ads_odbc_connection() -> Iterator[Any]:
-    """Abre Advantage mediante ADODB + ODBC para escrituras masivas estables."""
+def ads_odbc_connection(*, no_table_cache: bool = False) -> Iterator[Any]:
+    """Abre Advantage mediante ADODB + ODBC para escrituras masivas estables.
+
+    El mantenimiento de índices requiere acceso exclusivo a cada tabla. Con
+    ``no_table_cache`` el controlador no conserva tablas cerradas por SELECT,
+    evitando que nuestras propias verificaciones bloqueen ``sp_Reindex``.
+    Las demás operaciones conservan la configuración habitual.
+    """
     pythoncom.CoInitialize()
     connection = None
     try:
         connection = win32com.client.Dispatch("ADODB.Connection")
-        connection.Open(load_odbc_connection_string())
+        connection_string = load_odbc_connection_string()
+        if no_table_cache:
+            connection_string += "MaxTableCloseCache=0;"
+        connection.Open(connection_string)
         yield connection
     finally:
         if connection is not None:
@@ -292,6 +301,14 @@ def normalize_account(payload: dict[str, Any], *, include_code: bool) -> dict[st
         "ajuste": bool(payload.get("ajuste", False)),
         "tipoFiscal": str(payload.get("tipoFiscal", "O")).strip().upper() or "O",
     }
+    if "clasificacionCorriente" in payload:
+        from .flujo_caja_niif_repository import (
+            CashFlowValidationError, normalize_clasificacion_corriente,
+        )
+
+        normalized["clasificacionCorriente"] = normalize_clasificacion_corriente(
+            payload.get("clasificacionCorriente"), CashFlowValidationError
+        )
     if not normalized["nombre"]:
         raise ValueError("El nombre es obligatorio.")
     if len(normalized["nombre"]) > 30:
@@ -324,13 +341,21 @@ def normalize_company_code(code: str) -> int:
 
 
 def _company_from_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Mapea CONEMP al contrato usado durante la selección de compañía."""
+    """Mapea CONEMP al contrato usado durante la selección de compañía.
+
+    B3 (R2): se conservan las claves y se **añaden** ``soloConsolidacion`` y
+    ``anios``. ``CONEMP`` no tiene columna de consolidación ni tabla de años
+    (la compañía es una carpeta de tablas): viajan en su valor por defecto para
+    que la forma del JSON no dependa del motor.
+    """
     company_id = int(_number(row.get("EMPCOD")))
     return {
         "codigo": f"{company_id:03d}",
         "nombre": _text(row.get("EMPNOM")),
         "nit": _text(row.get("EMPNIT")),
         "habilitada": _boolean(row.get("HABILITA")),
+        "soloConsolidacion": False,
+        "anios": [],
     }
 
 
@@ -384,6 +409,7 @@ def _account_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "requiereCentro": _boolean(row.get("MCOSTOS")),
         "requiereBase": fiscal_type in {"I", "R"},
         "ajuste": _boolean(row.get("MAJUSTE")),
+        "clasificacionCorriente": _text(row.get("CTCTABASE")).strip(),
         "claseIVA": "IVA" if fiscal_type == "I" else None,
         "claseRetencion": "Retencion" if fiscal_type == "R" else None,
         "saldoInicial": _number(row.get("MSALDO")),
@@ -399,7 +425,7 @@ def list_accounts(company_code: str) -> list[dict[str, Any]]:
     )
     sql = (
         "SELECT CODIGO, MNOMBRE, MTC, MCTAPAGOS, MCOSTOS, MAJUSTE, "
-        f"MIVA_RET, MSALDO, {monthly_columns} "
+        f"MIVA_RET, MSALDO, CTCTABASE, {monthly_columns} "
         f"FROM CONMAE WHERE CIA = {company_id} AND {CATALOG_ACCOUNT_FILTER} ORDER BY CODIGO"
     )
     with ads_connection() as connection:
@@ -444,8 +470,9 @@ def create_account(company_code: str, payload: dict[str, Any]) -> dict[str, Any]
             _execute(
                 connection,
                 "INSERT INTO CONMAE "
-                "(CIA, CODIGO, NITN, MNOMBRE, MTC, MCTAPAGOS, MCOSTOS, MAJUSTE, MIVA_RET, MSALDO) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "(CIA, CODIGO, NITN, MNOMBRE, MTC, MCTAPAGOS, MCOSTOS, MAJUSTE, MIVA_RET, "
+                "CTCTABASE, MSALDO) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (ADO_TYPE_INTEGER, 0, company_id),
                     (ADO_TYPE_VARCHAR, 12, code),
@@ -456,6 +483,7 @@ def create_account(company_code: str, payload: dict[str, Any]) -> dict[str, Any]
                     (ADO_TYPE_BOOLEAN, 0, data["requiereCentro"]),
                     (ADO_TYPE_BOOLEAN, 0, data["ajuste"]),
                     (ADO_TYPE_VARCHAR, 1, data["tipoFiscal"]),
+                    (ADO_TYPE_VARCHAR, 30, data.get("clasificacionCorriente") or ""),
                     (ADO_TYPE_DOUBLE, 0, 0.0),
                 ],
             )
@@ -476,7 +504,7 @@ def get_account(company_code: str, code: str) -> dict[str, Any]:
     )
     sql = (
         "SELECT CODIGO, MNOMBRE, MTC, MCTAPAGOS, MCOSTOS, MAJUSTE, "
-        f"MIVA_RET, MSALDO, {monthly_columns} FROM CONMAE "
+        f"MIVA_RET, MSALDO, CTCTABASE, {monthly_columns} FROM CONMAE "
         f"WHERE CIA = {company_id} AND CODIGO = '{code}' AND {CATALOG_ACCOUNT_FILTER}"
     )
     with ads_connection() as connection:
@@ -502,19 +530,27 @@ def update_account(company_code: str, code: str, payload: dict[str, Any]) -> dic
             raise AccountNotFound(f"No existe la cuenta {code}.")
         connection.BeginTrans()
         try:
+            # ``clasificacionCorriente`` es aditivo y opcional: cuando no llega
+            # (``None``) el UPDATE no toca CTCTABASE y conserva lo que tenía.
+            columnas = "MNOMBRE = ?, MTC = ?, MCTAPAGOS = ?, MCOSTOS = ?, MAJUSTE = ?, MIVA_RET = ?"
+            parametros = [
+                (ADO_TYPE_VARCHAR, 30, data["nombre"]),
+                (ADO_TYPE_BOOLEAN, 0, data["afectable"]),
+                (ADO_TYPE_BOOLEAN, 0, data["requiereTercero"]),
+                (ADO_TYPE_BOOLEAN, 0, data["requiereCentro"]),
+                (ADO_TYPE_BOOLEAN, 0, data["ajuste"]),
+                (ADO_TYPE_VARCHAR, 1, data["tipoFiscal"]),
+            ]
+            if data.get("clasificacionCorriente") is not None:
+                columnas += ", CTCTABASE = ?"
+                parametros.append(
+                    (ADO_TYPE_VARCHAR, 30, data["clasificacionCorriente"])
+                )
             _execute(
                 connection,
-                "UPDATE CONMAE SET MNOMBRE = ?, MTC = ?, MCTAPAGOS = ?, "
-                "MCOSTOS = ?, MAJUSTE = ?, MIVA_RET = ? "
+                f"UPDATE CONMAE SET {columnas} "
                 f"WHERE CIA = {company_id} AND CODIGO = '{code}' AND {CATALOG_ACCOUNT_FILTER}",
-                [
-                    (ADO_TYPE_VARCHAR, 30, data["nombre"]),
-                    (ADO_TYPE_BOOLEAN, 0, data["afectable"]),
-                    (ADO_TYPE_BOOLEAN, 0, data["requiereTercero"]),
-                    (ADO_TYPE_BOOLEAN, 0, data["requiereCentro"]),
-                    (ADO_TYPE_BOOLEAN, 0, data["ajuste"]),
-                    (ADO_TYPE_VARCHAR, 1, data["tipoFiscal"]),
-                ],
+                parametros,
             )
             connection.CommitTrans()
         except Exception:

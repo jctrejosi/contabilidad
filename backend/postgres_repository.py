@@ -53,17 +53,25 @@ def list_companies() -> list[dict[str, Any]]:
     nuevo está separado del dígito de verificación, así que se vuelven a
     componer para no cambiar la interfaz. El orden imita al de ``CONEMP``:
     primero la compañía vigente y después por código descendente.
+
+    B3 (R2): la respuesta conserva sus claves y **añade** ``soloConsolidacion`` y
+    ``anios``. Los años salen de ``compania_anios``, que es la tabla que crea
+    ``POST /api/companias``; el legado no tiene ninguna de las dos columnas.
     """
     sql = (
-        "SELECT codigo, nombre, nit, digito, estado FROM companias "
-        "ORDER BY (estado = 'Activa') DESC, codigo DESC"
+        "SELECT c.codigo, c.nombre, c.nit, c.digito, c.estado, c.solo_consolidacion, "
+        "COALESCE(array_agg(ca.anio ORDER BY ca.anio) FILTER (WHERE ca.anio IS NOT NULL), "
+        "'{}') AS anios "
+        "FROM companias c LEFT JOIN compania_anios ca ON ca.compania_id = c.id "
+        "GROUP BY c.id, c.codigo, c.nombre, c.nit, c.digito, c.estado, c.solo_consolidacion "
+        "ORDER BY (c.estado = 'Activa') DESC, c.codigo DESC"
     )
     with _connect() as connection, connection.cursor() as cursor:
         cursor.execute(sql)
         rows = cursor.fetchall()
 
     companies: list[dict[str, Any]] = []
-    for codigo, nombre, nit, digito, estado in rows:
+    for codigo, nombre, nit, digito, estado, solo_consolidacion, anios in rows:
         check_digit = str(digito or "").strip()
         companies.append(
             {
@@ -74,6 +82,8 @@ def list_companies() -> list[dict[str, Any]]:
                 "nombre": str(nombre),
                 "nit": f"{nit}-{check_digit}" if check_digit else str(nit),
                 "habilitada": str(estado) == "Activa",
+                "soloConsolidacion": bool(solo_consolidacion),
+                "anios": sorted(int(anio) for anio in (anios or [])),
             }
         )
     return companies
@@ -250,6 +260,217 @@ def list_document_types() -> list[dict[str, Any]]:
     return [_document_type_from_row(fila) for fila in filas]
 
 
+# ---------------------------------------------------------------------------
+# Configuración por compañía (bloque B3)
+# ---------------------------------------------------------------------------
+# Las tres tablas de configuración son por compañía en el modelo nuevo y globales
+# en el legado (``CONTIIVA``, ``CONTIRET`` y ``CONDECLA`` no tienen ``CIA``), así
+# que la lectura PG siempre filtra por compañía y excluye las filas con
+# ``eliminado_en`` (baja lógica).
+_CUENTA_JOIN = (
+    "LEFT JOIN cuentas cu ON cu.id = {tabla}.cuenta_id AND cu.compania_id = {tabla}.compania_id"
+)
+
+
+def _tarifa_iva_item(fila: dict[str, Any]) -> dict[str, Any]:
+    """Contrato del ``GET`` de tarifas de IVA (mismas claves que en Advantage)."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        # ``tarifas_iva.tarifa`` es ``porcentaje``: numeric(9,6) en fracción.
+        "tarifa": round(float(fila.get("TARIFA") or 0), 6),
+        "cuenta": _text(fila.get("CUENTA")),
+        "nombreCuenta": _text(fila.get("NOMBRE_CUENTA")),
+    }
+
+
+def _concepto_retencion_item(fila: dict[str, Any]) -> dict[str, Any]:
+    """Contrato del ``GET`` de conceptos de retención."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        "tarifa": round(float(fila.get("TARIFA") or 0), 6),
+        "baseMinima": round(float(fila.get("BASE_MINIMA") or 0), 2),
+        "cuenta": _text(fila.get("CUENTA")),
+        "nombreCuenta": _text(fila.get("NOMBRE_CUENTA")),
+    }
+
+
+def _renglon_renta_item(fila: dict[str, Any]) -> dict[str, Any]:
+    """Contrato del ``GET`` de renglones de renta (``signo`` viaja como entero)."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        "cuenta": _text(fila.get("CUENTA")),
+        "nombreCuenta": _text(fila.get("NOMBRE_CUENTA")),
+        "signo": int(fila.get("SIGNO") or 1),
+    }
+
+
+def list_tarifas_iva(company_code: str) -> list[dict[str, Any]]:
+    """Tarifas de IVA de la compañía, con el contrato de ``tarifas_iva``."""
+    sql = (
+        'SELECT t.codigo AS "CODIGO", t.nombre AS "NOMBRE", t.tarifa AS "TARIFA", '
+        'cu.codigo AS "CUENTA", cu.nombre AS "NOMBRE_CUENTA" '
+        "FROM tarifas_iva t " + _CUENTA_JOIN.format(tabla="t") + " "
+        "WHERE t.compania_id = %s AND t.eliminado_en IS NULL ORDER BY t.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        cursor.execute(sql, (_compania_id(cursor, codigo),))
+        filas = _filas(cursor)
+    return [_tarifa_iva_item(fila) for fila in filas]
+
+
+def list_conceptos_retencion(company_code: str) -> list[dict[str, Any]]:
+    """Conceptos de retención de la compañía, con el contrato de ``conceptos_retencion``."""
+    sql = (
+        'SELECT c.codigo AS "CODIGO", c.nombre AS "NOMBRE", c.tarifa AS "TARIFA", '
+        'c.base_minima AS "BASE_MINIMA", '
+        'cu.codigo AS "CUENTA", cu.nombre AS "NOMBRE_CUENTA" '
+        "FROM conceptos_retencion c " + _CUENTA_JOIN.format(tabla="c") + " "
+        "WHERE c.compania_id = %s AND c.eliminado_en IS NULL ORDER BY c.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        cursor.execute(sql, (_compania_id(cursor, codigo),))
+        filas = _filas(cursor)
+    return [_concepto_retencion_item(fila) for fila in filas]
+
+
+def list_renglones_renta(company_code: str) -> list[dict[str, Any]]:
+    """Renglones de renta de la compañía, con el contrato de ``renglones_renta``."""
+    sql = (
+        'SELECT r.codigo AS "CODIGO", r.nombre AS "NOMBRE", r.signo AS "SIGNO", '
+        'cu.codigo AS "CUENTA", cu.nombre AS "NOMBRE_CUENTA" '
+        "FROM renglones_renta r " + _CUENTA_JOIN.format(tabla="r") + " "
+        "WHERE r.compania_id = %s AND r.eliminado_en IS NULL ORDER BY r.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        cursor.execute(sql, (_compania_id(cursor, codigo),))
+        filas = _filas(cursor)
+    return [_renglon_renta_item(fila) for fila in filas]
+
+
+# Colecciones hijas anidadas (B3): la cabecera lleva sus líneas/elementos en el
+# cuerpo, como ya hace la importación de lotes, así que la lectura las agrupa aquí
+# en vez de proponer rutas para la colección hija.
+_PLANTILLA_LINEAS_SQL = (
+    'SELECT p.codigo AS "PLANTILLA", l.orden AS "ORDEN", '
+    'cd.codigo AS "CUENTA_DEBITO", cc.codigo AS "CUENTA_CREDITO", l.concepto AS "CONCEPTO" '
+    "FROM plantilla_lineas l "
+    "JOIN plantillas_contables p ON p.id = l.plantilla_id "
+    "LEFT JOIN cuentas cd ON cd.id = l.cuenta_debito_id "
+    "LEFT JOIN cuentas cc ON cc.id = l.cuenta_credito_id "
+    "WHERE p.compania_id = %s AND p.eliminado_en IS NULL "
+    "ORDER BY p.codigo, l.orden, l.id"
+)
+_FORMATO_ELEMENTOS_SQL = (
+    'SELECT f.codigo AS "FORMATO", e.tipo AS "TIPO", e.contenido AS "CONTENIDO", '
+    'e.x AS "X", e.y AS "Y", e.ancho AS "ANCHO", e.alto AS "ALTO", '
+    'e.fuente AS "FUENTE", e.orden AS "ORDEN" '
+    "FROM formato_elementos e "
+    "JOIN formatos_documentales f ON f.id = e.formato_id "
+    "WHERE f.compania_id = %s AND f.eliminado_en IS NULL "
+    "ORDER BY f.codigo, e.orden, e.id"
+)
+
+
+def _por_codigo(filas: list[dict[str, Any]], clave: str) -> dict[str, list[dict[str, Any]]]:
+    """Agrupa las líneas o elementos hijos por el código de su cabecera."""
+    agrupado: dict[str, list[dict[str, Any]]] = {}
+    for fila in filas:
+        agrupado.setdefault(_text(fila.get(clave)), []).append(fila)
+    return agrupado
+
+
+def _plantilla_contable_item(
+    fila: dict[str, Any], lineas: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Contrato del ``GET`` de plantillas contables (parejas de cuentas, no importes)."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        "tipoDocumento": _text(fila.get("TIPO_DOCUMENTO")),
+        "lineas": [
+            {
+                "orden": int(linea.get("ORDEN") or 0),
+                "cuentaDebito": _text(linea.get("CUENTA_DEBITO")),
+                "cuentaCredito": _text(linea.get("CUENTA_CREDITO")),
+                "concepto": _text(linea.get("CONCEPTO")),
+            }
+            for linea in lineas
+        ],
+    }
+
+
+def _formato_documental_item(
+    fila: dict[str, Any], elementos: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Contrato del ``GET`` de formatos documentales, con la geometría del editor."""
+    return {
+        "codigo": _text(fila.get("CODIGO")),
+        "nombre": _text(fila.get("NOMBRE")),
+        "comprobante": _text(fila.get("COMPROBANTE")),
+        "elementos": [
+            {
+                "tipo": _text(elemento.get("TIPO")),
+                "contenido": _text(elemento.get("CONTENIDO")),
+                "x": round(float(elemento.get("X") or 0), 2),
+                "y": round(float(elemento.get("Y") or 0), 2),
+                "ancho": None if elemento.get("ANCHO") is None else round(float(elemento["ANCHO"]), 2),
+                "alto": None if elemento.get("ALTO") is None else round(float(elemento["ALTO"]), 2),
+                "fuente": _text(elemento.get("FUENTE")),
+                "orden": int(elemento.get("ORDEN") or 0),
+            }
+            for elemento in elementos
+        ],
+    }
+
+
+def list_plantillas_contables(company_code: str) -> list[dict[str, Any]]:
+    """Plantillas de la compañía con sus parejas de cuentas ordenadas por ``orden``."""
+    sql = (
+        'SELECT p.codigo AS "CODIGO", p.nombre AS "NOMBRE", td.codigo AS "TIPO_DOCUMENTO" '
+        "FROM plantillas_contables p "
+        "LEFT JOIN tipos_documento td ON td.id = p.tipo_documento_id "
+        "WHERE p.compania_id = %s AND p.eliminado_en IS NULL ORDER BY p.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        compania_id = _compania_id(cursor, codigo)
+        cursor.execute(sql, (compania_id,))
+        cabeceras = _filas(cursor)
+        cursor.execute(_PLANTILLA_LINEAS_SQL, (compania_id,))
+        lineas = _por_codigo(_filas(cursor), "PLANTILLA")
+    return [
+        _plantilla_contable_item(fila, lineas.get(_text(fila.get("CODIGO")), []))
+        for fila in cabeceras
+    ]
+
+
+def list_formatos_documentales(company_code: str) -> list[dict[str, Any]]:
+    """Formatos de la compañía con sus elementos ordenados por ``orden``."""
+    sql = (
+        'SELECT f.codigo AS "CODIGO", f.nombre AS "NOMBRE", cb.codigo AS "COMPROBANTE" '
+        "FROM formatos_documentales f "
+        "LEFT JOIN comprobantes cb ON cb.id = f.comprobante_id "
+        "WHERE f.compania_id = %s AND f.eliminado_en IS NULL ORDER BY f.codigo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        compania_id = _compania_id(cursor, codigo)
+        cursor.execute(sql, (compania_id,))
+        cabeceras = _filas(cursor)
+        cursor.execute(_FORMATO_ELEMENTOS_SQL, (compania_id,))
+        elementos = _por_codigo(_filas(cursor), "FORMATO")
+    return [
+        _formato_documental_item(fila, elementos.get(_text(fila.get("CODIGO")), []))
+        for fila in cabeceras
+    ]
+
+
 def _compania_id(cursor: Any, codigo: str) -> int:
     """`id` numérico de la compañía a partir de su código (ya validado)."""
     cursor.execute("SELECT id FROM companias WHERE codigo = %s", (codigo,))
@@ -261,8 +482,8 @@ def _compania_id(cursor: Any, codigo: str) -> int:
 # recién creada o modificada con el mismo contrato).
 CUENTA_SELECT = (
     "SELECT cu.codigo, cu.nombre, cu.afectable, cu.controla_tercero, cu.controla_centro, "
-    "cu.ajuste, cu.clase_iva, cu.clase_retencion, s.periodo, s.saldo_inicial, "
-    "s.debito, s.credito "
+    "cu.ajuste, cu.clase_iva, cu.clase_retencion, cu.clasificacion_corriente, "
+    "s.periodo, s.saldo_inicial, s.debito, s.credito "
     "FROM cuentas cu "
     "LEFT JOIN saldos_cuenta s ON s.cuenta_id = cu.id AND s.compania_id = cu.compania_id "
     "AND s.anio = (SELECT anio_operacion::int FROM parametros_operacion p "
@@ -283,7 +504,7 @@ def _cuentas_desde_filas(filas: list[Any]) -> list[dict[str, Any]]:
     acumulados: dict[str, dict[str, Any]] = {}
     for (
         codigo_cuenta, nombre, afectable, req_tercero, req_centro, ajuste,
-        clase_iva, clase_retencion, periodo, saldo_inicial, debito, credito,
+        clase_iva, clase_retencion, clasificacion_corriente, periodo, saldo_inicial, debito, credito,
     ) in filas:
         fila = acumulados.setdefault(
             codigo_cuenta,
@@ -291,7 +512,7 @@ def _cuentas_desde_filas(filas: list[Any]) -> list[dict[str, Any]]:
                 "CODIGO": codigo_cuenta, "MNOMBRE": nombre, "MTC": afectable,
                 "MCTAPAGOS": req_tercero, "MCOSTOS": req_centro, "MAJUSTE": ajuste,
                 "MIVA_RET": "I" if clase_iva else ("R" if clase_retencion else "O"),
-                "MSALDO": 0,
+                "MSALDO": 0, "CTCTABASE": clasificacion_corriente,
             },
         )
         if periodo == "00":
@@ -346,7 +567,7 @@ def list_third_parties(
     if state not in {"todos", "activo", "bloqueado"}:
         raise ValueError("El estado solicitado no es válido.")
 
-    condiciones: list[str] = []
+    condiciones: list[str] = ["eliminado_en IS NULL"]
     parametros: list[Any] = []
     if search:
         condiciones.append(
@@ -487,14 +708,36 @@ def list_monthly_movements(
         "LEFT JOIN centros_costos cc ON cc.id = l.centro_costo_id "
         "LEFT JOIN tipos_documento td ON td.id = l.tipo_documento_id "
         "WHERE " + " AND ".join(condiciones) + " "
-        "ORDER BY d.fecha, d.id, l.numero_linea LIMIT %s"
+        "ORDER BY d.fecha, d.id, l.numero_linea LIMIT %s OFFSET %s"
+    )
+    # Totales del período completo con los mismos filtros (no solo la página).
+    # Un renglón es débito cuando ``debito - credito`` es positivo, igual que en
+    # el contrato que arma ``_movement_from_row``.
+    totales_sql = (
+        "SELECT "
+        'COALESCE(SUM(GREATEST(l.debito - l.credito, 0)), 0) AS "TDEBITO", '
+        'COALESCE(SUM(GREATEST(l.credito - l.debito, 0)), 0) AS "TCREDITO" '
+        "FROM documento_lineas l "
+        "JOIN documentos d ON d.id = l.documento_id "
+        "JOIN companias co ON co.id = l.compania_id "
+        "JOIN cuentas cu ON cu.id = l.cuenta_id "
+        "LEFT JOIN terceros t ON t.id = l.tercero_id "
+        "LEFT JOIN comprobantes cb ON cb.id = d.comprobante_id "
+        "LEFT JOIN centros_costos cc ON cc.id = l.centro_costo_id "
+        "WHERE " + " AND ".join(condiciones)
     )
     with _connect() as connection, connection.cursor() as cursor:
-        cursor.execute(sql, [*parametros, page_size + 1])
+        # ``OFFSET`` replica el ``START AT`` del repositorio de Advantage; sin él
+        # todas las páginas devolvían las mismas filas.
+        cursor.execute(sql, [*parametros, page_size + 1, (page - 1) * page_size])
         filas = _filas(cursor)
+        cursor.execute(totales_sql, parametros)
+        totales = _filas(cursor)[0]
 
     has_more = len(filas) > page_size
     items = [_movement_from_row(fila) for fila in filas[:page_size]]
+    debito_total = float(totales["TDEBITO"] or 0)
+    credito_total = float(totales["TCREDITO"] or 0)
     return {
         "items": items,
         "page": page,
@@ -502,6 +745,9 @@ def list_monthly_movements(
         "hasMore": has_more,
         "pageDebit": sum(item["debito"] for item in items),
         "pageCredit": sum(item["credito"] for item in items),
+        "periodDebit": debito_total,
+        "periodCredit": credito_total,
+        "periodSaldo": debito_total - credito_total,
     }
 
 
@@ -617,11 +863,30 @@ def list_documents(
         "LEFT JOIN tipos_documento td ON td.id = d.tipo_documento_id "
         "LEFT JOIN terceros t ON t.id = d.tercero_id "
         "WHERE " + " AND ".join(condiciones) + " "
-        "ORDER BY d.fecha DESC, d.id DESC LIMIT %s"
+        "ORDER BY d.fecha DESC, d.id DESC LIMIT %s OFFSET %s"
+    )
+    # Totales de TODOS los documentos que cumplen los filtros (no solo la
+    # página). ``valor`` se recalcula igual que en la consulta paginada: suma de
+    # débitos de las partidas del documento, así que el total es la suma de esas
+    # mismas partidas. ``COUNT(DISTINCT)`` evita contar de más por el JOIN.
+    totales_sql = (
+        'SELECT COUNT(DISTINCT d.id) AS "TDOCS", '
+        'COALESCE(SUM(l.debito), 0) AS "TVALOR" '
+        "FROM documentos d "
+        "JOIN companias co ON co.id = d.compania_id "
+        "LEFT JOIN comprobantes cb ON cb.id = d.comprobante_id "
+        "LEFT JOIN tipos_documento td ON td.id = d.tipo_documento_id "
+        "LEFT JOIN terceros t ON t.id = d.tercero_id "
+        "LEFT JOIN documento_lineas l ON l.documento_id = d.id "
+        "WHERE " + " AND ".join(condiciones)
     )
     with _connect() as connection, connection.cursor() as cursor:
-        cursor.execute(sql, [*parametros, page_size + 1])
+        # ``OFFSET`` replica el ``START AT`` del repositorio de Advantage; sin él
+        # todas las páginas devolvían las mismas filas.
+        cursor.execute(sql, [*parametros, page_size + 1, (page - 1) * page_size])
         filas = _filas(cursor)
+        cursor.execute(totales_sql, parametros)
+        totales = _filas(cursor)[0]
 
     has_more = len(filas) > page_size
     items = []
@@ -640,7 +905,14 @@ def list_documents(
             "modulo": int(fila["DMODULO"] or 0),
             "documentoAfectado": _text(fila["DDOCUM2"]),
         })
-    return {"items": items, "page": page, "pageSize": page_size, "hasMore": has_more}
+    return {
+        "items": items,
+        "page": page,
+        "pageSize": page_size,
+        "hasMore": has_more,
+        "totalDocumentos": int(totales["TDOCS"] or 0),
+        "totalValor": float(totales["TVALOR"] or 0),
+    }
 
 
 def document_movements(
@@ -727,7 +999,7 @@ def build_trial_balance(
     level: int = 4,
     include_zero: bool = False,
     include_results: bool = True,
-    include_third: bool = False,
+    include_thirds: bool = False,
     include_centers: bool = False,
     detail_from: str = "",
     detail_to: str = "",
@@ -751,10 +1023,9 @@ def build_trial_balance(
     """
     from .balance_comprobacion_repository import _assemble_report, _validate_parameters
 
-    if include_third or include_centers or detail_from or detail_to:
-        raise ValueError("El detalle por tercero y centro de costo de este balance requiere Advantage.")
-
     _validate_parameters(year, month_from, month_to, level)
+    if include_thirds or include_centers:
+        raise ValueError("El detalle por tercero o centro de costo requiere la conexión Advantage.")
 
     with _connect() as connection, connection.cursor() as cursor:
         codigo = _compania(cursor, company_code)
@@ -814,6 +1085,7 @@ def build_trial_balance(
     return _assemble_report(
         int(codigo), empresa, year, month_from, month_to, level, include_zero,
         list(filas_por_codigo.values()), include_results=include_results,
+        detail_from=detail_from, detail_to=detail_to,
     )
 
 
@@ -973,3 +1245,988 @@ def list_lot_lines(
         "pageDebit": sum(item["debito"] for item in items),
         "pageCredit": sum(item["credito"] for item in items),
     }
+
+
+# ---------------------------------------------------------------------------
+# Bloque D1 · Impuestos (solo lectura)
+# ---------------------------------------------------------------------------
+def _estado_acumulacion(cursor: Any, compania_id: int, anio: int, tipo: str) -> str | None:
+    """Fecha de última acumulación de un tipo (``estado_acumulaciones``)."""
+    cursor.execute(
+        "SELECT to_char(ultima_acumulacion, 'YYYY-MM-DD\"T\"HH24:MI:SS') "
+        "FROM estado_acumulaciones WHERE compania_id = %s AND anio = %s AND tipo = %s",
+        (compania_id, anio, tipo),
+    )
+    fila = cursor.fetchone()
+    return _text(fila[0]) if fila and fila[0] is not None else None
+
+
+def list_acumulados_iva(
+    cia: str, anio: int, mes_desde: int, mes_hasta: int,
+    *, nit: str = "", page: int = 1, page_size: int = 100,
+) -> dict[str, Any]:
+    """IVA acumulado por tercero y período en ``acumulados_iva`` (1.1).
+
+    El modelo no separa IVA generado de descontable: la tabla solo tiene ``base``
+    y ``valor``. Se reporta ``valor`` como generado y descontable en cero, y la
+    diferencia se declara en ``advertencia`` en vez de simular una apertura que no
+    existe (R10).
+    """
+    from .impuestos_repository import periodo_de_mes
+
+    sql = (
+        'SELECT t.nit AS "NIT", t.nombre AS "NOMBRE", a.periodo AS "PERIODO", '
+        'COALESCE(SUM(a.base), 0) AS "BASE", COALESCE(SUM(a.valor), 0) AS "VALOR" '
+        "FROM acumulados_iva a "
+        "JOIN terceros t ON t.id = a.tercero_id AND t.compania_id = a.compania_id "
+        "WHERE a.compania_id = %s AND a.anio = %s AND a.periodo >= %s AND a.periodo <= %s "
+        + ("AND t.nit = %s " if nit.strip() else "")
+        + "GROUP BY t.nit, t.nombre, a.periodo ORDER BY t.nit, a.periodo"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        compania_id = _compania_id(cursor, codigo)
+        parametros: list[Any] = [
+            compania_id, anio, periodo_de_mes(mes_desde), periodo_de_mes(mes_hasta)
+        ]
+        if nit.strip():
+            parametros.append(nit.strip())
+        cursor.execute(sql, parametros)
+        filas = _filas(cursor)
+        ultima = _estado_acumulacion(cursor, compania_id, anio, "Iva")
+    items = [
+        {
+            "nit": _text(fila["NIT"]),
+            "nombre": _text(fila["NOMBRE"]),
+            "periodo": _text(fila["PERIODO"]),
+            "base": round(float(fila["BASE"] or 0), 2),
+            "ivaGenerado": round(float(fila["VALOR"] or 0), 2),
+            "ivaDescontable": 0.0,
+            "neto": round(float(fila["VALOR"] or 0), 2),
+        }
+        for fila in filas
+    ]
+    return {
+        "items": items[(page - 1) * page_size: (page - 1) * page_size + page_size],
+        "count": len(items),
+        "totales": {
+            "base": round(sum(item["base"] for item in items), 2),
+            "ivaGenerado": round(sum(item["ivaGenerado"] for item in items), 2),
+            "ivaDescontable": 0.0,
+            "neto": round(sum(item["neto"] for item in items), 2),
+        },
+        "ultimaActualizacion": ultima,
+        "source": "acumulados_iva",
+        "advertencia": (
+            "acumulados_iva no distingue IVA generado de descontable: se reporta el "
+            "valor acumulado como generado (db/postgresql/schema/05_saldos.sql L126-140)."
+        ),
+    }
+
+
+def list_acumulados_retencion(
+    cia: str, anio: int, mes_desde: int, mes_hasta: int,
+    *, nit: str = "", concepto: str = "", page: int = 1, page_size: int = 100,
+) -> dict[str, Any]:
+    """Retenciones acumuladas por tercero, concepto y período (1.4).
+
+    ``acumulados_retencion`` no guarda la tarifa histórica: el campo viaja ``None``
+    y no se completa con la tarifa vigente de hoy, como pide la matriz (CONTIRET).
+    """
+    from .impuestos_repository import periodo_de_mes
+
+    sql = (
+        'SELECT t.nit AS "NIT", t.nombre AS "NOMBRE", c.codigo AS "CONCEPTO", '
+        'c.nombre AS "NOMBRE_CONCEPTO", a.periodo AS "PERIODO", '
+        'COALESCE(SUM(a.base), 0) AS "BASE", COALESCE(SUM(a.valor), 0) AS "VALOR" '
+        "FROM acumulados_retencion a "
+        "JOIN terceros t ON t.id = a.tercero_id AND t.compania_id = a.compania_id "
+        "JOIN conceptos_retencion c ON c.id = a.concepto_retencion_id "
+        "AND c.compania_id = a.compania_id "
+        "WHERE a.compania_id = %s AND a.anio = %s AND a.periodo >= %s AND a.periodo <= %s "
+    )
+    parametros: list[Any] = [
+        None, anio, periodo_de_mes(mes_desde), periodo_de_mes(mes_hasta)
+    ]
+    condiciones = ""
+    if nit.strip():
+        condiciones += "AND t.nit = %s "
+        parametros.append(nit.strip())
+    if concepto.strip():
+        condiciones += "AND c.codigo = %s "
+        parametros.append(concepto.strip().upper())
+    sql += condiciones + "GROUP BY t.nit, t.nombre, c.codigo, c.nombre, a.periodo "
+    sql += "ORDER BY t.nit, c.codigo, a.periodo"
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        parametros[0] = _compania_id(cursor, codigo)
+        cursor.execute(sql, parametros)
+        filas = _filas(cursor)
+        ultima = _estado_acumulacion(cursor, parametros[0], anio, "Retencion")
+    items = [
+        {
+            "nit": _text(fila["NIT"]),
+            "nombre": _text(fila["NOMBRE"]),
+            "concepto": _text(fila["CONCEPTO"]),
+            "nombreConcepto": _text(fila["NOMBRE_CONCEPTO"]),
+            "periodo": _text(fila["PERIODO"]),
+            "base": round(float(fila["BASE"] or 0), 2),
+            # No se guarda en el acumulado: viaja nulo, no con la tarifa de hoy.
+            "tarifa": None,
+            "valor": round(float(fila["VALOR"] or 0), 2),
+        }
+        for fila in filas
+    ]
+    return {
+        "items": items[(page - 1) * page_size: (page - 1) * page_size + page_size],
+        "count": len(items),
+        "totales": {
+            "base": round(sum(item["base"] for item in items), 2),
+            "valor": round(sum(item["valor"] for item in items), 2),
+        },
+        "ultimaActualizacion": ultima,
+        "source": "acumulados_retencion",
+        "advertencia": (
+            "acumulados_retencion no guarda la tarifa histórica: el campo viaja nulo en "
+            "vez de completarse con la tarifa vigente (db/old_db/MATRIZ_TABLAS_Y_BRECHAS.md, "
+            "CONTIRET)."
+        ),
+    }
+
+
+def list_impuestos_formatos(cia: str, *, anio: int | None = None) -> dict[str, Any]:
+    """Formatos de exógena con sus conteos de conceptos y cuentas (2.1)."""
+    sql = (
+        'SELECT f.codigo AS "CODIGO", f.nombre AS "NOMBRE", f.vigencia AS "VIGENCIA", '
+        'f.activo AS "ACTIVO", '
+        '(SELECT count(*) FROM formato_conceptos fc WHERE fc.formato_id = f.id) AS "CONCEPTOS", '
+        '(SELECT count(*) FROM formato_asignaciones fa WHERE fa.formato_id = f.id '
+        'AND fa.activo) AS "CUENTAS" '
+        "FROM formatos_exogenos f "
+        "WHERE f.compania_id = %s AND f.eliminado_en IS NULL "
+        + ("AND f.vigencia = %s " if anio is not None else "")
+        + "ORDER BY f.codigo, f.vigencia"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        parametros: list[Any] = [_compania_id(cursor, codigo)]
+        if anio is not None:
+            parametros.append(anio)
+        cursor.execute(sql, parametros)
+        filas = _filas(cursor)
+    items = [
+        {
+            "codigo": _text(fila["CODIGO"]),
+            "nombre": _text(fila["NOMBRE"]),
+            "vigencia": int(fila["VIGENCIA"]),
+            "activo": bool(fila["ACTIVO"]),
+            "conceptos": int(fila["CONCEPTOS"] or 0),
+            "cuentasAsignadas": int(fila["CUENTAS"] or 0),
+        }
+        for fila in filas
+    ]
+    return {"items": items, "count": len(items), "source": "formatos_exogenos"}
+
+
+def _generacion_id(cursor: Any, compania_id: int, medio_id: int) -> None:
+    """Comprueba que la generación exista y sea de la compañía (404 si no)."""
+    from .impuestos_repository import MediumNotFound
+
+    cursor.execute(
+        "SELECT 1 FROM generaciones_medios WHERE id = %s AND compania_id = %s",
+        (medio_id, compania_id),
+    )
+    if cursor.fetchone() is None:
+        raise MediumNotFound(
+            f"No existe la generación de medios {medio_id} en esta compañía."
+        )
+
+
+def list_medios(cia: str, anio: int) -> dict[str, Any]:
+    """Generaciones de medios del año con su estado y su cuadre (3.1)."""
+    sql = (
+        'SELECT g.id AS "ID", g.numero_generacion AS "NUMERO", g.anio AS "ANIO", '
+        'g.estado AS "ESTADO", '
+        "to_char(g.generado_en, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS \"GENERADO_EN\", "
+        '(SELECT count(DISTINCT mf.formato_id) FROM medio_filas mf '
+        'WHERE mf.generacion_id = g.id) AS "FORMATOS", '
+        '(SELECT count(*) FROM medio_filas mf WHERE mf.generacion_id = g.id) AS "REGISTROS", '
+        'COALESCE(mc.cuadrado, true) AS "CUADRADO" '
+        "FROM generaciones_medios g "
+        "LEFT JOIN medio_conciliaciones mc ON mc.generacion_id = g.id "
+        "WHERE g.compania_id = %s AND g.anio = %s ORDER BY g.numero_generacion"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        cursor.execute(sql, (_compania_id(cursor, codigo), anio))
+        filas = _filas(cursor)
+    items = [
+        {
+            "id": int(fila["ID"]),
+            "numeroGeneracion": int(fila["NUMERO"]),
+            "anio": int(fila["ANIO"]),
+            "estado": _text(fila["ESTADO"]),
+            "generadoEn": _text(fila["GENERADO_EN"]),
+            "formatos": int(fila["FORMATOS"] or 0),
+            "registros": int(fila["REGISTROS"] or 0),
+            "cuadrado": bool(fila["CUADRADO"]),
+        }
+        for fila in filas
+    ]
+    return {"items": items, "count": len(items), "source": "generaciones_medios"}
+
+
+def get_medio(
+    cia: str, medio_id: int, *, formato: str = "", nit: str = "",
+    page: int = 1, page_size: int = 200,
+) -> dict[str, Any]:
+    """Filas de una generación para revisión, paginadas y filtradas (3.3)."""
+    if page < 1 or not 1 <= page_size <= 500:
+        raise ValueError("La paginación del detalle no es válida.")
+    condiciones = ""
+    parametros: list[Any] = []
+    if formato.strip():
+        condiciones += "AND f.codigo = %s "
+        parametros.append(formato.strip().upper())
+    if nit.strip():
+        condiciones += "AND t.nit = %s "
+        parametros.append(nit.strip())
+    sql = (
+        'SELECT mf.id AS "ID", f.codigo AS "FORMATO", t.nit AS "NIT", '
+        't.nombre AS "NOMBRE", c.codigo AS "CONCEPTO", cu.codigo AS "CUENTA", '
+        'mf.base AS "BASE", c.tarifa AS "TARIFA", mf.valor AS "VALOR", '
+        'mf.ajustado AS "AJUSTADO" '
+        "FROM medio_filas mf "
+        "JOIN formatos_exogenos f ON f.id = mf.formato_id "
+        "LEFT JOIN terceros t ON t.id = mf.tercero_id "
+        "LEFT JOIN formato_conceptos c ON c.id = mf.concepto_id "
+        "LEFT JOIN cuentas cu ON cu.id = mf.cuenta_id "
+        "WHERE mf.generacion_id = %s "
+        + condiciones
+        + "ORDER BY f.codigo, t.nit, mf.id LIMIT %s OFFSET %s"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        compania_id = _compania_id(cursor, codigo)
+        _generacion_id(cursor, compania_id, medio_id)
+        cursor.execute(
+            sql, [medio_id, *parametros, page_size, (page - 1) * page_size]
+        )
+        filas = _filas(cursor)
+        cursor.execute(
+            "SELECT count(*) FROM medio_filas mf "
+            "JOIN formatos_exogenos f ON f.id = mf.formato_id "
+            "LEFT JOIN terceros t ON t.id = mf.tercero_id "
+            "WHERE mf.generacion_id = %s " + condiciones,
+            [medio_id, *parametros],
+        )
+        total = int(cursor.fetchone()[0])
+    items = [
+        {
+            "id": int(fila["ID"]),
+            "formato": _text(fila["FORMATO"]),
+            "nit": _text(fila["NIT"]),
+            "nombre": _text(fila["NOMBRE"]),
+            "concepto": _text(fila["CONCEPTO"]),
+            "cuenta": _text(fila["CUENTA"]),
+            "base": round(float(fila["BASE"] or 0), 2),
+            "tarifa": None if fila["TARIFA"] is None else round(float(fila["TARIFA"]), 6),
+            "valor": round(float(fila["VALOR"] or 0), 2),
+            "ajustado": bool(fila["AJUSTADO"]),
+        }
+        for fila in filas
+    ]
+    return {
+        "items": items,
+        "count": total,
+        "page": page,
+        "pageSize": page_size,
+        "source": "medio_filas",
+    }
+
+
+def get_medio_conciliacion(cia: str, medio_id: int) -> dict[str, Any]:
+    """Cinco valores del cuadre guardados al generar el medio (3.5)."""
+    from .impuestos_repository import MediumNotFound
+
+    sql = (
+        'SELECT mc.total_contable AS "TOTAL_CONTABLE", mc.exclusiones AS "EXCLUSIONES", '
+        'mc.topes AS "TOPES", mc.ajustes AS "AJUSTES", '
+        'mc.total_reportado AS "TOTAL_REPORTADO", mc.cuadrado AS "CUADRADO" '
+        "FROM medio_conciliaciones mc WHERE mc.generacion_id = %s"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        compania_id = _compania_id(cursor, codigo)
+        _generacion_id(cursor, compania_id, medio_id)
+        cursor.execute(sql, (medio_id,))
+        filas = _filas(cursor)
+    if not filas:
+        # El medio existe pero no tiene cuadre: cero, no un error (caso vacío).
+        return {
+            "item": {
+                "totalContable": 0.0, "exclusiones": 0.0, "topes": 0.0,
+                "ajustes": 0.0, "totalReportado": 0.0, "cuadrado": True,
+            },
+            "source": "medio_conciliaciones",
+        }
+    fila = filas[0]
+    return {
+        "item": {
+            "totalContable": round(float(fila["TOTAL_CONTABLE"] or 0), 2),
+            "exclusiones": round(float(fila["EXCLUSIONES"] or 0), 2),
+            "topes": round(float(fila["TOPES"] or 0), 2),
+            "ajustes": round(float(fila["AJUSTES"] or 0), 2),
+            "totalReportado": round(float(fila["TOTAL_REPORTADO"] or 0), 2),
+            "cuadrado": bool(fila["CUADRADO"]),
+        },
+        "source": "medio_conciliaciones",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bloque D3 · Consolidación (lecturas)
+# ---------------------------------------------------------------------------
+_ORIGENES_CONTEO_SQL = (
+    "SELECT o.compania_origen_id, p.codigo, o.incluida, "
+    "(SELECT count(*) FROM consolidacion_cuentas cc "
+    " WHERE cc.consolidacion_id = o.consolidacion_id "
+    " AND cc.compania_origen_id = o.compania_origen_id) AS homologadas, "
+    "(SELECT count(*) FROM cuentas cu "
+    " WHERE cu.compania_id = o.compania_origen_id AND cu.afectable "
+    " AND NOT EXISTS (SELECT 1 FROM consolidacion_cuentas cc "
+    "   WHERE cc.consolidacion_id = o.consolidacion_id "
+    "   AND cc.compania_origen_id = o.compania_origen_id "
+    "   AND cc.cuenta_origen_id = cu.id) "
+    " AND EXISTS (SELECT 1 FROM saldos_cuenta s "
+    "   WHERE s.compania_id = cu.compania_id AND s.anio = %s AND s.cuenta_id = cu.id "
+    "   AND (s.saldo_inicial <> 0 OR s.debito <> 0 OR s.credito <> 0))) AS sin_homologar "
+    "FROM consolidacion_origenes o JOIN companias p ON p.id = o.compania_origen_id "
+    "WHERE o.consolidacion_id = %s ORDER BY p.codigo"
+)
+
+
+def _origenes_de_consolidacion(
+    cursor: Any, consolidacion_id: int, anio: int
+) -> list[dict[str, Any]]:
+    """Orígenes con el conteo de cuentas homologadas y sin homologar (§2.3)."""
+    cursor.execute(_ORIGENES_CONTEO_SQL, (anio, consolidacion_id))
+    return [
+        {
+            "codigo": _text(fila["codigo"]),
+            "incluida": bool(fila["incluida"]),
+            "homologadas": int(fila["homologadas"] or 0),
+            "sinHomologar": int(fila["sin_homologar"] or 0),
+        }
+        for fila in _filas(cursor)
+    ]
+
+
+def list_consolidaciones(cia: str, anio: int) -> dict[str, Any]:
+    """Consolidaciones del año destino en ``consolidaciones`` (2.1).
+
+    ``origenes`` y ``compatibles`` se calculan de ``consolidacion_origenes`` y de
+    la verificación de compatibilidad (``es_compatible``), no del estado de la
+    pantalla.
+    """
+    from .consolidacion_repository import es_compatible
+
+    sql = (
+        "SELECT id, anio, estado, "
+        "to_char(ejecutado_en, 'YYYY-MM-DD\"T\"HH24:MI:SS') AS ejecutado_en "
+        "FROM consolidaciones WHERE compania_destino_id = %s AND anio = %s ORDER BY id"
+    )
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        compania_id = _compania_id(cursor, codigo)
+        cursor.execute(sql, (compania_id, anio))
+        cabeceras = _filas(cursor)
+        items: list[dict[str, Any]] = []
+        for fila in cabeceras:
+            consolidacion_id = int(fila["id"])
+            origenes = _origenes_de_consolidacion(cursor, consolidacion_id, int(fila["anio"]))
+            items.append(
+                {
+                    "id": consolidacion_id,
+                    "anio": int(fila["anio"]),
+                    "estado": _text(fila["estado"]),
+                    "origenes": len(origenes),
+                    "compatibles": es_compatible(origenes),
+                    "ejecutadoEn": _text(fila["ejecutado_en"]) or None,
+                }
+            )
+    return {"items": items, "count": len(items), "source": "consolidaciones"}
+
+
+def get_consolidation(cia: str, consolidacion_id: int) -> dict[str, Any]:
+    """Orígenes, homologaciones, simulación y totales comparados (2.3).
+
+    ``id`` inexistente o de otra compañía responde 404, no 403: la sesión activa
+    no debe revelar que existe en otra contabilidad.
+    """
+    from .consolidacion_repository import ConsolidacionNotFound, es_compatible
+
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        compania_id = _compania_id(cursor, codigo)
+        cursor.execute(
+            "SELECT id, anio, estado, simulacion FROM consolidaciones "
+            "WHERE id = %s AND compania_destino_id = %s",
+            (consolidacion_id, compania_id),
+        )
+        fila = cursor.fetchone()
+        if fila is None:
+            raise ConsolidacionNotFound(
+                f"No existe la consolidación {consolidacion_id} para la compañía {cia}."
+            )
+        anio = int(fila[1])
+        estado = _text(fila[2])
+        simulacion = fila[3] if isinstance(fila[3], dict) else {}
+        origenes = _origenes_de_consolidacion(cursor, int(fila[0]), anio)
+    return {
+        "item": {
+            "id": consolidacion_id,
+            "estado": estado,
+            "compatibles": es_compatible(origenes),
+            "origenes": [
+                {
+                    "cia": f"{int(origen['codigo']):03d}",
+                    "incluida": origen["incluida"],
+                    "cuentasHomologadas": origen["homologadas"],
+                    "cuentasSinHomologar": origen["sinHomologar"],
+                }
+                for origen in origenes
+            ],
+            "simulacion": simulacion,
+            "comparacion": simulacion.get("comparacion", []),
+        },
+        "source": "consolidaciones",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bloque A5 · Configuración de informes: flujo de caja y rubros NIIF
+#
+# Tablas nuevas, solo PostgreSQL (docs/schemas/15_flujo_caja_niif.md). Las
+# lecturas y los generadores de los cinco informes viven aquí; el ensamblado
+# puro está en backend.flujo_caja_niif_repository.
+# ---------------------------------------------------------------------------
+def _renglones_flujo(cursor: Any, compania_id: int) -> list[dict[str, Any]]:
+    """Renglones de la definición del flujo con el nombre de su cuenta."""
+    cursor.execute(
+        'SELECT r.codigo AS "CODIGO", r.nombre AS "NOMBRE", r.grupo AS "GRUPO", '
+        'r.orden AS "ORDEN", r.signo AS "SIGNO", cu.codigo AS "CUENTA", '
+        'cu.nombre AS "NOMBRE_CUENTA" '
+        "FROM flujo_caja_renglones r "
+        "JOIN cuentas cu ON cu.id = r.cuenta_id AND cu.compania_id = r.compania_id "
+        "WHERE r.compania_id = %s AND r.eliminado_en IS NULL "
+        "ORDER BY r.grupo, r.orden, r.codigo",
+        (compania_id,),
+    )
+    return [
+        {
+            "codigo": _text(fila["CODIGO"]), "nombre": _text(fila["NOMBRE"]),
+            "grupo": _text(fila["GRUPO"]), "orden": int(fila["ORDEN"] or 0),
+            "signo": int(fila["SIGNO"] or 1), "cuenta": _text(fila["CUENTA"]),
+            "nombreCuenta": _text(fila["NOMBRE_CUENTA"]),
+        }
+        for fila in _filas(cursor)
+    ]
+
+
+def _rubros_niif_rows(
+    cursor: Any, compania_id: int, informe: str | None = None
+) -> list[dict[str, Any]]:
+    """Rubros NIIF con sus cuentas asignadas, filtrados por informe si se pide."""
+    filtro = "AND r.informe = %s " if informe else ""
+    parametros: tuple[Any, ...] = (compania_id, informe) if informe else (compania_id,)
+    cursor.execute(
+        "SELECT r.codigo, r.nombre, r.informe, r.tipo, r.orden, "
+        "COALESCE(array_agg(cu.codigo ORDER BY cu.codigo) FILTER (WHERE cu.codigo IS NOT NULL), "
+        "'{}') AS cuentas "
+        "FROM rubros_niif r "
+        "LEFT JOIN rubro_niif_cuentas rc ON rc.rubro_id = r.id "
+        "LEFT JOIN cuentas cu ON cu.id = rc.cuenta_id AND cu.compania_id = rc.compania_id "
+        "WHERE r.compania_id = %s AND r.eliminado_en IS NULL " + filtro +
+        "GROUP BY r.id, r.codigo, r.nombre, r.informe, r.tipo, r.orden "
+        "ORDER BY r.informe, r.tipo, r.orden, r.codigo",
+        parametros,
+    )
+    return [
+        {
+            "codigo": _text(fila["codigo"]), "nombre": _text(fila["nombre"]),
+            "informe": _text(fila["informe"]), "tipo": _text(fila["tipo"]),
+            "orden": int(fila["orden"] or 0),
+            "cuentas": [_text(cuenta) for cuenta in (fila["cuentas"] or [])],
+        }
+        for fila in _filas(cursor)
+    ]
+
+
+def _compania_header(cursor: Any, codigo: str) -> dict[str, Any]:
+    """Cabecera de compañía del contrato de informes (código, nombre y NIT)."""
+    cursor.execute("SELECT nombre, nit, digito FROM companias WHERE codigo = %s", (codigo,))
+    nombre, nit, digito = cursor.fetchone()
+    sufijo = _text(digito).strip()
+    return {
+        "codigo": f"{int(codigo):03d}",
+        "nombre": _text(nombre),
+        "nit": f"{_text(nit)}-{sufijo}" if sufijo else _text(nit),
+    }
+
+
+def _acumulados_del_ejercicio(
+    cursor: Any, compania_id: int, year: int
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """Saldos por cuenta con nombres de CONMAE y las cuentas clasificadas.
+
+    Reconstruye las filas ``MSALDO``/``MACMDEBxx``/``MACMCREyy`` desde
+    ``saldos_cuenta`` (como ``build_trial_balance``) y, en el mismo recorrido,
+    recoge la clasificación corriente/no corriente de ``cuentas``.
+    """
+    cursor.execute(
+        "SELECT cu.codigo, cu.nombre, cu.clasificacion_corriente, s.periodo, "
+        "s.saldo_inicial, s.debito, s.credito FROM cuentas cu "
+        "LEFT JOIN saldos_cuenta s ON s.cuenta_id = cu.id AND s.compania_id = cu.compania_id "
+        "AND s.anio = %s WHERE cu.compania_id = %s ORDER BY cu.codigo, s.periodo",
+        (year, compania_id),
+    )
+    saldos: dict[str, dict[str, Any]] = {}
+    clasificadas: dict[str, dict[str, Any]] = {}
+    for codigo_cuenta, nombre, clasificacion, periodo, saldo_inicial, debito, credito in cursor.fetchall():
+        codigo_cuenta = _text(codigo_cuenta)
+        fila = saldos.setdefault(
+            codigo_cuenta, {"CODIGO": codigo_cuenta, "MNOMBRE": _text(nombre), "MSALDO": 0}
+        )
+        if periodo == "00":
+            fila["MSALDO"] = saldo_inicial
+        elif periodo:
+            fila[f"MACMDEB{periodo}"] = debito
+            fila[f"MACMCRE{periodo}"] = credito
+        texto_clasificacion = _text(clasificacion)
+        if texto_clasificacion:
+            clasificadas[codigo_cuenta] = {
+                "codigo": codigo_cuenta, "nombre": _text(nombre),
+                "clasificacion": texto_clasificacion,
+            }
+    return saldos, list(clasificadas.values())
+
+
+def list_flujo_caja_renglones(
+    company_code: str, *, anio: int | None = None
+) -> dict[str, Any]:
+    """Definición de cuentas del flujo de caja de la compañía (§1).
+
+    ``anio`` se valida pero no filtra: la tabla guarda una definición vigente por
+    compañía y no tiene columna de año (docs/schemas/15_flujo_caja_niif.md).
+    """
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        items = _renglones_flujo(cursor, _compania_id(cursor, codigo))
+    return {"items": items, "count": len(items), "source": "flujo_caja_renglones"}
+
+
+def list_rubros_niif(
+    company_code: str, *, anio: int | None = None, informe: str = "todos"
+) -> dict[str, Any]:
+    """Rubros NIIF y sus cuentas, filtrados por informe (§3)."""
+    from .flujo_caja_niif_repository import NIIF_INFORMES
+
+    if informe not in {"todos", *NIIF_INFORMES}:
+        raise ValueError("El informe debe ser todos, ESFA o ER.")
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, company_code)
+        items = _rubros_niif_rows(
+            cursor, _compania_id(cursor, codigo),
+            None if informe == "todos" else informe,
+        )
+    return {"items": items, "count": len(items), "source": "rubros_niif"}
+
+
+def build_additional_report(
+    report_id: str, cia: str, year: int, month_from: int, month_to: int, **_filtros: Any
+) -> dict[str, Any]:
+    """Genera los cinco informes A5 desde PostgreSQL (§1 a §4).
+
+    Los parámetros auxiliares de la ruta de informes (cuenta, tercero, centro…)
+    no aplican: estos informes se gobiernan con la definición y los saldos. Sin
+    definición el informe **no** sale en blanco: el ensamblado puro devuelve 422
+    con el mensaje de carencia.
+    """
+    from .flujo_caja_niif_repository import (
+        NUEVOS_INFORME_IDS, build_cash_flow_report, build_corriente_report,
+        build_niif_report,
+    )
+
+    if report_id not in NUEVOS_INFORME_IDS:
+        raise ValueError(
+            "Este informe no pertenece a la configuración de flujo de caja ni de rubros NIIF."
+        )
+    if not 1900 <= year <= 2100 or not 1 <= month_from <= month_to <= 12:
+        raise ValueError("Seleccione un año y un rango de meses válido.")
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        compania_id = _compania_id(cursor, codigo)
+        cursor.execute(
+            "SELECT anio_operacion FROM parametros_operacion WHERE compania_id = %s",
+            (compania_id,),
+        )
+        fila_control = cursor.fetchone()
+        if fila_control is None or not _text(fila_control[0]).strip():
+            raise ValueError("No existe configuración contable en CONCTR.")
+        control_year = int(float(_text(fila_control[0])))
+        if year != control_year:
+            raise ValueError(
+                f"CONMAE contiene los acumulados del ejercicio {control_year}; "
+                f"no es posible generar el año {year}."
+            )
+        company = _compania_header(cursor, codigo)
+        saldos, cuentas_clasificadas = _acumulados_del_ejercicio(cursor, compania_id, year)
+        if report_id in {"def-cuentas-flujo", "flujo-comparativo"}:
+            renglones = _renglones_flujo(cursor, compania_id)
+            return build_cash_flow_report(
+                report_id, company, year, month_from, month_to, renglones, saldos
+            )
+        if report_id == "acum-corriente":
+            return build_corriente_report(
+                company, year, month_from, month_to, cuentas_clasificadas, saldos
+            )
+        rubros = _rubros_niif_rows(cursor, compania_id)
+        return build_niif_report(report_id, company, year, month_from, month_to, rubros, saldos)
+
+
+# ---------------------------------------------------------------------------
+# Bloque D2 · Cierres (lectura y checklist calculado)
+#
+# El checklist **no** se lee de un valor fijo: se calcula de los lotes
+# pendientes, del cuadre de `saldos_cuenta`, del estado de `estado_acumulaciones`
+# y de `procesos.respaldo_realizado` (§1.1). La consulta recalcula; la foto se
+# congela al abrir el cierre (POST /api/cierres).
+# ---------------------------------------------------------------------------
+def _checklist_cierre(cursor: Any, compania_id: int, anio: int) -> list[dict[str, Any]]:
+    """Los siete items del checklist, calculados con lo que existe (§1.1)."""
+    from .cierres_repository import build_checklist
+
+    # c1 · lotes pendientes. Pendiente es todo lote que no esté Contabilizado ni
+    # Anulado; se cuenta por estado para el detalle de la pantalla.
+    cursor.execute(
+        "SELECT estado, count(*) FROM lotes WHERE compania_id = %s AND anio = %s GROUP BY estado",
+        (compania_id, anio),
+    )
+    estados = {_text(estado): int(total) for estado, total in cursor.fetchall()}
+    cerrados = ("Contabilizado", "Anulado")
+    total_lotes = sum(estados.values())
+    pendientes = sum(total for estado, total in estados.items() if estado not in cerrados)
+    if not total_lotes:
+        lotes_detalle = "sin lotes en el ejercicio"
+    elif pendientes:
+        partes = ", ".join(
+            f"{total} en {estado or 'Activo'}"
+            for estado, total in sorted(estados.items())
+            if estado not in cerrados
+        )
+        lotes_detalle = f"{pendientes} lote(s) pendiente(s): {partes}"
+    else:
+        lotes_detalle = "todos los lotes contabilizados"
+
+    # c2 · cuadre del balance. Se usa la misma convención de `saldos_cuenta` que
+    # el balance de comprobación y la simulación de consolidación: el crédito va
+    # en negativo (CONMAE), así que el descuadre es débito + crédito. Un ejercicio
+    # sin saldos no "cuadra" por vacío.
+    cursor.execute(
+        "SELECT count(*) FROM saldos_cuenta WHERE compania_id = %s AND anio = %s "
+        "AND (saldo_inicial <> 0 OR debito <> 0 OR credito <> 0)",
+        (compania_id, anio),
+    )
+    balance_con_datos = int(cursor.fetchone()[0]) > 0
+    cursor.execute(
+        "SELECT COALESCE(SUM(debito), 0), COALESCE(SUM(credito), 0) "
+        "FROM saldos_cuenta WHERE compania_id = %s AND anio = %s",
+        (compania_id, anio),
+    )
+    debito, credito = cursor.fetchone()
+    diferencia = float(debito or 0) + float(credito or 0)
+    balance_cuadrado = abs(diferencia) < 0.005
+    if not balance_con_datos:
+        balance_detalle = "sin saldos en el ejercicio"
+    elif balance_cuadrado:
+        balance_detalle = "debito = credito"
+    else:
+        balance_detalle = f"descuadre de {round(diferencia, 2):,.2f} entre debitos y creditos"
+
+    # c4/c5 · acumulados. Un acumulado está al día si llegó al último período con
+    # saldo del año; el detalle nombra su último período, como el prototipo.
+    cursor.execute(
+        "SELECT tipo, periodo_hasta FROM estado_acumulaciones WHERE compania_id = %s AND anio = %s",
+        (compania_id, anio),
+    )
+    acumulados = {_text(tipo): _text(periodo) for tipo, periodo in cursor.fetchall()}
+    cursor.execute(
+        "SELECT max(periodo) FROM saldos_cuenta WHERE compania_id = %s AND anio = %s "
+        "AND (saldo_inicial <> 0 OR debito <> 0 OR credito <> 0)",
+        (compania_id, anio),
+    )
+    fila = cursor.fetchone()
+    ultimo = _text(fila[0]) if fila and fila[0] is not None else ""
+
+    def _acumulado(tipo: str) -> tuple[bool, str]:
+        periodo = acumulados.get(tipo)
+        if periodo is None:
+            return False, "sin acumulado registrado"
+        if ultimo and int(periodo) < int(ultimo):
+            return False, f"ultimo periodo {periodo} (el libro llega a {ultimo})"
+        return True, f"ultimo periodo {periodo}"
+
+    retencion_al_dia, retencion_detalle = _acumulado("Retencion")
+    iva_al_dia, iva_detalle = _acumulado("Iva")
+
+    # c6 · respaldo. La marca vive en `procesos.respaldo_realizado`.
+    cursor.execute(
+        "SELECT COALESCE(bool_or(respaldo_realizado), false) FROM procesos "
+        "WHERE compania_id = %s AND anio = %s",
+        (compania_id, anio),
+    )
+    respaldo = bool(cursor.fetchone()[0])
+
+    return build_checklist(
+        {
+            "lotes_con_datos": total_lotes > 0,
+            "lotes_pendientes": pendientes,
+            "lotes_detalle": lotes_detalle,
+            "balance_con_datos": balance_con_datos,
+            "balance_cuadrado": balance_cuadrado,
+            "balance_detalle": balance_detalle,
+            "retencion_al_dia": retencion_al_dia,
+            "retencion_detalle": retencion_detalle,
+            "iva_al_dia": iva_al_dia,
+            "iva_detalle": iva_detalle,
+            "respaldo": respaldo,
+            "respaldo_detalle": "respaldo registrado" if respaldo else "sin respaldo registrado",
+        }
+    )
+
+
+def _cierre_de_la_compania(cursor: Any, compania_id: int, cierre_id: int) -> dict[str, Any]:
+    """Cierre de la compañía o ``CierreNotFound`` (404)."""
+    from .cierres_repository import CierreNotFound
+
+    cursor.execute(
+        "SELECT id, anio, estado, comprobante_id, cuenta_resultado_id, documento "
+        "FROM cierres WHERE id = %s AND compania_id = %s",
+        (cierre_id, compania_id),
+    )
+    fila = cursor.fetchone()
+    if fila is None:
+        raise CierreNotFound(f"No existe el cierre {cierre_id} para la compañía activa.")
+    return {
+        "id": int(fila[0]),
+        "anio": int(fila[1]),
+        "estado": _text(fila[2]),
+        "comprobante_id": int(fila[3]) if fila[3] is not None else None,
+        "cuenta_resultado_id": int(fila[4]) if fila[4] is not None else None,
+        "documento": _text(fila[5]),
+    }
+
+
+def _cuenta_resultado(cursor: Any, compania_id: int, codigo: str) -> dict[str, Any]:
+    """Valida la cuenta que **recibe** el cierre: patrimonial, afectable y sin dimensiones (§1.3).
+
+    El cierre cancela las cuentas de resultado (clases 4 a 7) y lleva su neto al
+    patrimonio del ejercicio (clase 3; el prototipo lo confirma con una cuenta de
+    clase 3, ``Cierres.tsx:88-91``). La partida del neto es una sola, así que la
+    cuenta receptora no puede exigir tercero ni centro.
+    """
+    from .cierres_repository import RECEIVER_ACCOUNT_CLASSES, CierreValidationError
+
+    cursor.execute(
+        "SELECT id, afectable, left(codigo, 1), controla_tercero, controla_centro "
+        "FROM cuentas WHERE compania_id = %s AND codigo = %s",
+        (compania_id, codigo),
+    )
+    fila = cursor.fetchone()
+    if fila is None:
+        raise CierreValidationError(f"No existe la cuenta de resultado {codigo} en la compañía.")
+    if not bool(fila[1]):
+        raise CierreValidationError(f"La cuenta {codigo} no es afectable: no puede recibir el cierre.")
+    if _text(fila[2]) not in RECEIVER_ACCOUNT_CLASSES:
+        raise CierreValidationError(
+            f"La cuenta {codigo} no es la cuenta patrimonial del resultado del ejercicio "
+            "(clase 3): el cierre lleva el neto de las clases 4 a 7 al patrimonio, no a "
+            "otra cuenta de resultado."
+        )
+    if bool(fila[3]) or bool(fila[4]):
+        raise CierreValidationError(
+            f"La cuenta {codigo} controla tercero o centro: el neto del cierre es una sola "
+            "partida y no puede llevar esas dimensiones."
+        )
+    return {"id": int(fila[0]), "codigo": codigo}
+
+
+def _saldos_por_centro(
+    cursor: Any, compania_id: int, anio: int, cuenta_id: int
+) -> list[tuple[str, float]]:
+    """Saldo del año de una cuenta de resultado desagregado por centro (§1.3)."""
+    cursor.execute(
+        "SELECT cc.codigo, COALESCE(SUM(sc.debito), 0) + COALESCE(SUM(sc.credito), 0) AS saldo "
+        "FROM saldos_cuenta_centro sc JOIN centros_costos cc "
+        "ON cc.compania_id = sc.compania_id AND cc.id = sc.centro_costo_id "
+        "WHERE sc.compania_id = %s AND sc.anio = %s AND sc.cuenta_id = %s "
+        "GROUP BY cc.codigo "
+        "HAVING COALESCE(SUM(sc.debito), 0) + COALESCE(SUM(sc.credito), 0) <> 0 "
+        "ORDER BY cc.codigo",
+        (compania_id, anio, cuenta_id),
+    )
+    return [(_text(codigo), float(saldo or 0)) for codigo, saldo in cursor.fetchall()]
+
+
+def _saldos_por_tercero(
+    cursor: Any, compania_id: int, anio: int, cuenta_id: int
+) -> list[tuple[str, float]]:
+    """Saldo del año de una cuenta de resultado desagregado por tercero (§1.3)."""
+    cursor.execute(
+        "SELECT t.nit, COALESCE(SUM(st.debito), 0) + COALESCE(SUM(st.credito), 0) AS saldo "
+        "FROM saldos_cuenta_tercero st JOIN terceros t "
+        "ON t.compania_id = st.compania_id AND t.id = st.tercero_id "
+        "WHERE st.compania_id = %s AND st.anio = %s AND st.cuenta_id = %s "
+        "GROUP BY t.id, t.nit "
+        "HAVING COALESCE(SUM(st.debito), 0) + COALESCE(SUM(st.credito), 0) <> 0 "
+        "ORDER BY t.nit",
+        (compania_id, anio, cuenta_id),
+    )
+    return [(_text(nit), float(saldo or 0)) for nit, saldo in cursor.fetchall()]
+
+
+def _unidades_resultado(cursor: Any, compania_id: int, anio: int) -> list[dict[str, Any]]:
+    """Saldos del año de las cuentas de resultado, expandidos por tercero y centro (§1.3).
+
+    La convención del saldo es la misma de la simulación de consolidación:
+    ``saldo_inicial + debito + credito`` con el crédito en negativo. Una cuenta que
+    controla centro se expande con ``saldos_cuenta_centro`` y una que controla
+    tercero con ``saldos_cuenta_tercero``, para que el cierre deje en cero también
+    los auxiliares; la que no controla ninguno va como una sola unidad. La cuenta
+    que controla los dos no se expande: las dos proyecciones son marginales y su
+    cruce no se puede reconstruir, así que se declara en vez de dejar un auxiliar
+    descuadrado.
+    """
+    from .cierres_repository import RESULT_ACCOUNT_CLASSES, CierreValidationError
+
+    cursor.execute(
+        "SELECT cu.id, cu.codigo, cu.controla_tercero, cu.controla_centro, "
+        "COALESCE(SUM(s.saldo_inicial), 0) + COALESCE(SUM(s.debito), 0) "
+        "+ COALESCE(SUM(s.credito), 0) AS saldo "
+        "FROM cuentas cu JOIN saldos_cuenta s "
+        "ON s.cuenta_id = cu.id AND s.compania_id = cu.compania_id AND s.anio = %s "
+        "WHERE cu.compania_id = %s AND cu.afectable AND left(cu.codigo, 1) = ANY(%s) "
+        "GROUP BY cu.id, cu.codigo, cu.controla_tercero, cu.controla_centro "
+        "HAVING COALESCE(SUM(s.saldo_inicial), 0) + COALESCE(SUM(s.debito), 0) "
+        "+ COALESCE(SUM(s.credito), 0) <> 0 ORDER BY cu.codigo",
+        (anio, compania_id, list(RESULT_ACCOUNT_CLASSES)),
+    )
+    cuentas = cursor.fetchall()
+    unidades: list[dict[str, Any]] = []
+    for cuenta_id, codigo, controla_tercero, controla_centro, saldo in cuentas:
+        codigo = _text(codigo)
+        if controla_tercero and controla_centro:
+            raise CierreValidationError(
+                f"La cuenta de resultado {codigo} controla tercero y centro a la vez: el cierre "
+                "no puede expandirla con los saldos por tercero y por centro, que son "
+                "proyecciones separadas. Se declara para no dejar los auxiliares descuadrados."
+            )
+        if controla_centro:
+            for centro, valor in _saldos_por_centro(cursor, compania_id, anio, cuenta_id):
+                unidades.append({"cuenta": codigo, "saldo": valor, "nit": "", "centro": centro})
+        elif controla_tercero:
+            for nit, valor in _saldos_por_tercero(cursor, compania_id, anio, cuenta_id):
+                unidades.append({"cuenta": codigo, "saldo": valor, "nit": nit, "centro": ""})
+        else:
+            unidades.append({"cuenta": codigo, "saldo": float(saldo or 0), "nit": "", "centro": ""})
+    return unidades
+
+
+def _periodo_sembrado(cursor: Any, compania_id: int, anio: int, periodo: str) -> bool:
+    """¿El motor activo tiene sembrado el período en ``periodos_contables``? (P-5).
+
+    Se consulta la tabla; **no** se decide con una lista fija de períodos.
+    """
+    cursor.execute(
+        "SELECT 1 FROM periodos_contables WHERE compania_id = %s AND anio = %s AND periodo = %s",
+        (compania_id, anio, periodo),
+    )
+    return cursor.fetchone() is not None
+
+
+def _masters_de_cierre(cursor: Any, compania_id: int) -> dict[str, Any]:
+    """Comprobante y tipo de documento para armar las partidas del cierre.
+
+    El cierre usa el comprobante de nota interna (`NI`) cuando existe y, si no, el
+    primero de la compañía; el comprobante se anota además en ``cierres``. El tipo
+    de documento debe caber en la partida: el código del legado es de dos
+    caracteres (``VISDOCUM.CODIGO`` es ``CHARACTER(2,0)``) y el contrato de la
+    línea rechaza los de más de dos, así que se eligen solo tipos que la partida
+    admite, prefiriendo el ligado al comprobante elegido
+    (``tipos_documento.comprobante_id``) y, si no hay vínculo, el primero por id.
+    Sin los dos maestros no se puede armar una partida de lote (§1.3).
+    """
+    from .cierres_repository import CierreValidationError
+
+    cursor.execute(
+        "SELECT id, codigo FROM comprobantes WHERE compania_id = %s "
+        "AND eliminado_en IS NULL AND activo ORDER BY (codigo = 'NI') DESC, id LIMIT 1",
+        (compania_id,),
+    )
+    comprobante = cursor.fetchone()
+    comprobante_id = int(comprobante[0]) if comprobante is not None else None
+    cursor.execute(
+        "SELECT codigo FROM tipos_documento WHERE compania_id = %s "
+        "AND char_length(codigo) <= 2 "
+        "ORDER BY (comprobante_id = %s) DESC NULLS LAST, id LIMIT 1",
+        (compania_id, comprobante_id),
+    )
+    tipo = cursor.fetchone()
+    if comprobante is None or tipo is None:
+        raise CierreValidationError(
+            "La compañía no tiene comprobantes ni tipos de documento de máximo dos "
+            "caracteres configurados para armar las partidas del cierre."
+        )
+    return {
+        "comprobante_id": comprobante_id,
+        "comprobante": _text(comprobante[1]),
+        "tipo_documento": _text(tipo[0]),
+    }
+
+
+def list_cierres(cia: str, anio: int) -> dict[str, Any]:
+    """Estado del cierre del año y checklist **calculado** (§1.1).
+
+    Si no existe fila en ``cierres`` para el año, devuelve el checklist
+    calculado con ``estado: 'Pendiente'`` e ``id: null``: no obliga a crear el
+    cierre para consultarlo.
+    """
+    from .cierres_repository import puede_cerrar
+
+    with _connect() as connection, connection.cursor() as cursor:
+        codigo = _compania(cursor, cia)
+        compania_id = _compania_id(cursor, codigo)
+        checklist = _checklist_cierre(cursor, compania_id, anio)
+        cursor.execute(
+            "SELECT id, estado, comprobante_id, documento FROM cierres "
+            "WHERE compania_id = %s AND anio = %s ORDER BY id DESC LIMIT 1",
+            (compania_id, anio),
+        )
+        fila = cursor.fetchone()
+        comprobante = None
+        if fila is not None and fila[2] is not None:
+            cursor.execute("SELECT codigo FROM comprobantes WHERE id = %s", (int(fila[2]),))
+            fila_comprobante = cursor.fetchone()
+            comprobante = _text(fila_comprobante[0]) if fila_comprobante else None
+
+    item = {
+        "id": int(fila[0]) if fila is not None else None,
+        "anio": anio,
+        "estado": _text(fila[1]) if fila is not None else "Pendiente",
+        "checklist": checklist,
+        "comprobante": comprobante,
+        "documento": _text(fila[3]) or None if fila is not None else None,
+        "puedeCerrar": puede_cerrar(checklist),
+    }
+    return {"item": item, "source": "cierres"}
