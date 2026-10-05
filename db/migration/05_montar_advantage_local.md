@@ -107,10 +107,10 @@ La base **ya existe**: es el conjunto `PUBLIDATA.add` (diccionario) + los `.adt`
 7. **Comprobar:**
    ```powershell
    node dev.js                 # el paso «Advantage» prueba check_connection()
-   curl http://127.0.0.1:8443/api/companias   # debe decir source: CONEMP
-   curl http://127.0.0.1:8443/api/health      # 200
+   curl http://127.0.0.1:8448/api/companias   # debe decir source: CONEMP
+   curl http://127.0.0.1:8448/api/health      # 200
    ```
-   Después entra en `http://127.0.0.1:8443` y elige una compañía real.
+   Después entra en `http://127.0.0.1:8448` y elige una compañía real.
 
 ## 4. Advertencias
 

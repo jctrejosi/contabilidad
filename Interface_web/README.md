@@ -29,7 +29,7 @@ La funcionalidad pendiente se completó desde el repositorio hermano
 
 ```bash
 pnpm install
-pnpm dev            # desarrollo (Vite en http://localhost:8443)
+pnpm dev            # desarrollo (Vite en http://localhost:8448)
 pnpm build          # compilación de producción
 pnpm test:parametros  # tests unitarios de los validadores de Parámetros
 pnpm smoke          # smoke test E2E del flujo contable (requiere preview en 8444)

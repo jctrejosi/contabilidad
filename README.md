@@ -68,7 +68,7 @@ Frontend, desde `Interface_web`:
 npm run dev
 ```
 
-La interfaz queda disponible en `http://127.0.0.1:8443/`. Vite dirige las
+La interfaz queda disponible en `http://127.0.0.1:8448/`. Vite dirige las
 solicitudes `/api` al backend del puerto `8001`.
 
 ## Criterio de documentación

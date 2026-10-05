@@ -84,7 +84,8 @@ const CONFIG = {
   backendHost: "127.0.0.1",
   backendPort: Number(process.env.BACKEND_PORT || 8001),
   iaServicePort: Number(process.env.IA_SERVICE_PORT || 8003),
-  webPort: Number(process.env.WEB_PORT || process.env.PORT || 8443),
+  // 8448 y no 8443: el admin del ecommerce ocupa 8443.
+  webPort: Number(process.env.WEB_PORT || process.env.PORT || 8448),
   dbPort: Number(process.env.DB_PORT || 5433),
   dbUser: process.env.DB_USER || "contabdsi",
   dbName: process.env.DB_NAME || "contabdsi",

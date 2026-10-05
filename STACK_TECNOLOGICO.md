@@ -27,8 +27,8 @@ transición el acceso al motor de origen **Advantage Database Server**.
 | **Docker + Docker Compose** | `db/postgresql/docker-compose.yml` | PostgreSQL de referencia local |
 | **Git** | `.gitignore`, repositorio | Control de versiones |
 
-**Puertos de desarrollo:** interfaz web `8443`, backend FastAPI `8001`,
-PostgreSQL de referencia `5433`.
+**Puertos de desarrollo:** interfaz web `8448`, backend FastAPI `8001`,
+servicio de IA `8003`, PostgreSQL de referencia `5433`.
 
 Arranque: `node dev.js` (instala lo que falte, levanta PostgreSQL + backend +
 interfaz + IA y libera la terminal). Modos: `--db-postgres`, `--db-advantage`

@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0',
-      port: parseInt(process.env.PORT || '8443'),
+      port: parseInt(process.env.PORT || '8448'),
       strictPort: true,
       watch: { ignored: ['**/.figma/**'] },
       proxy: {
@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
           target: process.env.ADS_API_URL || 'http://127.0.0.1:8001',
           changeOrigin: true,
         },
-        // Asistente contable (ia-service, FastAPI en el puerto 8002). Se expone
+        // Asistente contable (ia-service, FastAPI en el puerto 8003). Se expone
         // bajo /bot-api para no chocar con /api y poder usar un proxy inverso en
         // producción. El prefijo se elimina antes de reenviar al servicio.
         '/bot-api': {
@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
     },
     preview: {
       host: '0.0.0.0',
-      port: parseInt(process.env.PORT || '8443'),
+      port: parseInt(process.env.PORT || '8448'),
     },
   }
 })
