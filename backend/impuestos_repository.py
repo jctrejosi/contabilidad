@@ -658,9 +658,9 @@ def list_acumulados_retencion(
     concepto = _safe(concepto, "concepto", FILTER_CODE, 12) if concepto else ""
     meses = list(range(mes_desde, mes_hasta + 1))
     columnas = ", ".join(
-        f"BASE{mes:02d}, VALOR{mes:02d}" for mes in meses
+        f"BASE{mes:02d}, VALOR{mes:02d}, BASE{mes:02d}C, VALOR{mes:02d}C" for mes in meses
     )
-    condiciones = []
+    condiciones = [f"CIA = {company_id}", f"ANO = {anio}"]
     if nit:
         condiciones.append(f"NIT = '{nit}'")
     if concepto:
@@ -676,8 +676,8 @@ def list_acumulados_retencion(
             tercero = _text(fila.get("NIT"))
             codigo = _text(fila.get("CODIGO"))
             for mes in meses:
-                base = _number(fila.get(f"BASE{mes:02d}"))
-                valor = _number(fila.get(f"VALOR{mes:02d}"))
+                base = _number(fila.get(f"BASE{mes:02d}")) + _number(fila.get(f"BASE{mes:02d}C"))
+                valor = _number(fila.get(f"VALOR{mes:02d}")) + _number(fila.get(f"VALOR{mes:02d}C"))
                 if base == 0 and valor == 0:
                     continue
                 items.append({
@@ -703,7 +703,7 @@ def list_acumulados_retencion(
         },
         "ultimaActualizacion": None,
         "source": "CONRET",
-        "sharedAcrossCompanies": True,
+        "sharedAcrossCompanies": False,
         "advertencia": (
             "CONRET no tiene columna de tarifa ni nombre de concepto por fila: la "
             "tarifa viaja nula (no se rellena con la de hoy) y el nombre no se simula."

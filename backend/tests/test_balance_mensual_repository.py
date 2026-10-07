@@ -66,8 +66,8 @@ def test_xlsx_keeps_legacy_empty_opening_column(monkeypatch):
     sheet = load_workbook(BytesIO(xlsx), data_only=False).active
     assert sheet["D5"].value == "Saldo anterior"
     assert sheet["A1"].value == "BALANCE DE COMPROBACIÓN MENSUAL"
-    assert sheet["A1"].fill.fgColor.rgb == "00174E5A"
-    assert sheet["A5"].fill.fgColor.rgb == "00174E5A"
+    assert sheet["A1"].fill.fgColor.rgb == "00003366"
+    assert sheet["A5"].fill.fgColor.rgb == "00003366"
     assert sheet.freeze_panes == "A6"
     account_row = next(row for row in sheet.iter_rows(min_row=6)
                        if row[0].value == "1" and row[2].value == "ACTIVO")

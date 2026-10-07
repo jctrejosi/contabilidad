@@ -201,16 +201,16 @@ export default function App() {
         return <TiposDocumento />;
 
       case 'config/retenciones':
-        return <ConfigRetenciones />;
+        return <ConfigRetenciones cia={companiaActiva.codigo} />;
 
       case 'config/iva':
-        return <ConfigIVA />;
+        return <ConfigIVA cia={companiaActiva.codigo} />;
 
       case 'config/plantillas':
-        return <Plantillas onNavigate={navigate} onCrearLote={crearLote} />;
+        return <Plantillas cia={companiaActiva.codigo} />;
 
       case 'config/companias':
-        return <Companias />;
+        return <Companias cia={companiaActiva.codigo} />;
 
       case 'config/formatos':
         return <FormatosDocumentales />;

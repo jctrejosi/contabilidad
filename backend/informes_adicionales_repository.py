@@ -221,6 +221,9 @@ def build_additional_report(
     """Genera una opción visible de impresión sin cambiar ningún acumulado."""
     if report_id == "iva-acumulacion":
         return read_iva_accumulation(cia, year, month_from, month_to)
+    if report_id == "ret-acumulacion":
+        from .retenciones_acumulacion_repository import read_retention_accumulation
+        return read_retention_accumulation(cia, year, month_from, month_to)
     if report_id == "bal-gral-resultados":
         if month_from != month_to:
             raise ValueError("El balance general solicita un solo mes, no un rango.")
@@ -499,6 +502,17 @@ def build_additional_report(
         raise ValueError("Este informe requiere una homologación específica y aún no está disponible.")
 
 
+def _dsi_pdf_styles():
+    """Colores de marca para títulos y textos, sin alterar el diseño del informe."""
+    styles = getSampleStyleSheet()
+    for name in ("Title", "Heading1"):
+        styles[name].textColor = colors.HexColor("#003366")
+    styles["Heading2"].textColor = colors.HexColor("#0073C0")
+    for name in ("Normal", "BodyText"):
+        styles[name].textColor = colors.HexColor("#001F4C")
+    return styles
+
+
 def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
     """Exporta exactamente las filas consultadas; nunca genera datos ficticios."""
     labels = [column["label"] for column in report["columnas"]]
@@ -531,16 +545,16 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         if report["id"] == "iva-acumulacion":
             sheet.append(report["totales"])
             for cell in sheet[sheet.max_row]:
-                cell.font = Font(bold=True, color="174E5A")
-                cell.fill = PatternFill("solid", fgColor="EAF1F2")
+                cell.font = Font(bold=True, color="003366")
+                cell.fill = PatternFill("solid", fgColor="EFFAFF")
         for row_number, kind in enumerate(report.get("tipos", []), start=4):
             if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "apertura"}:
                 for cell in sheet[row_number]:
-                    cell.font = Font(bold=True, color="174E5A")
-                    cell.fill = PatternFill("solid", fgColor="EAF1F2")
+                    cell.font = Font(bold=True, color="003366")
+                    cell.fill = PatternFill("solid", fgColor="EFFAFF")
         for cell in sheet[3]:
             cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = PatternFill("solid", fgColor="174E5A")
+            cell.fill = PatternFill("solid", fgColor="003366")
         sheet.freeze_panes = "A4"
         sheet.auto_filter.ref = f"A3:{sheet.cell(row=max(3, sheet.max_row), column=len(labels)).coordinate}"
         for column in sheet.columns:
@@ -558,7 +572,7 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
             document = SimpleDocTemplate(output, pagesize=landscape(A3),
                                          leftMargin=24, rightMargin=24,
                                          topMargin=25, bottomMargin=25)
-            styles = getSampleStyleSheet()
+            styles = _dsi_pdf_styles()
             width = landscape(A3)[0] - 48
             story = []
             sections: list[tuple[str, list[tuple[list[Any], str]]]] = []
@@ -580,20 +594,20 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
                 data.extend([[str(row[0]), str(row[1]), str(row[2]),
                               f"{float(row[3]):,.2f}"] for row, _ in section_rows])
                 commands = [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174E5A")),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                     ("FONTSIZE", (0, 0), (-1, -1), 8),
                     ("GRID", (0, 0), (-1, -1), 0.2, colors.lightgrey),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("ALIGN", (-1, 1), (-1, -1), "RIGHT"),
                     ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-                     [colors.white, colors.HexColor("#F4F8F8")]),
+                     [colors.white, colors.HexColor("#F5FBFF")]),
                 ]
                 for position, (_, kind) in enumerate(section_rows, start=1):
                     if kind in {"subtotal", "total-cuenta", "total-general"}:
                         commands.extend([
-                            ("BACKGROUND", (0, position), (-1, position), colors.HexColor("#EAF1F2")),
-                            ("TEXTCOLOR", (0, position), (-1, position), colors.HexColor("#174E5A")),
+                            ("BACKGROUND", (0, position), (-1, position), colors.HexColor("#EFFAFF")),
+                            ("TEXTCOLOR", (0, position), (-1, position), colors.HexColor("#003366")),
                         ])
                 table = LongTable(data, colWidths=[100, 110, width - 340, 130], repeatRows=1)
                 table.setStyle(TableStyle(commands))
@@ -602,7 +616,7 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
             return output.getvalue()
         if report["id"] == "doc-formato":
             doc = SimpleDocTemplate(output, pagesize=landscape(letter), leftMargin=28, rightMargin=28)
-            styles = getSampleStyleSheet()
+            styles = _dsi_pdf_styles()
             story = []
             ordered = sorted(rows, key=lambda row: (str(row[6]), str(row[5]), str(row[4])))
             groups = groupby(ordered, key=lambda row: (str(row[6]), str(row[5]), str(row[4])))
@@ -629,11 +643,11 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
                              f"{sum(float(row[10]) for row in group_rows):,.2f}"])
                 table = LongTable(data, colWidths=[82, 85, 55, 325, 76, 76], repeatRows=1)
                 table.setStyle(TableStyle([
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174E5A")),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                     ("GRID", (0, 0), (-1, -1), 0.2, colors.lightgrey),
                     ("ALIGN", (-2, 1), (-1, -1), "RIGHT"),
-                    ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EAF1F2")),
+                    ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFFAFF")),
                 ]))
                 story.append(table)
             if not story:
@@ -653,25 +667,25 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
             data.append([str(value) for value in report["totales"]])
         table = LongTable(data, colWidths=[cell_width] * len(labels), repeatRows=1)
         table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174E5A")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("FONTSIZE", (0, 0), (-1, -1), 7),
             ("GRID", (0, 0), (-1, -1), 0.2, colors.lightgrey),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F4F8F8")]),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5FBFF")]),
         ]))
         for row_number, kind in enumerate(report.get("tipos", []), start=1):
             if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "apertura"}:
                 table.setStyle(TableStyle([
-                    ("BACKGROUND", (0, row_number), (-1, row_number), colors.HexColor("#EAF1F2")),
-                    ("TEXTCOLOR", (0, row_number), (-1, row_number), colors.HexColor("#174E5A")),
+                    ("BACKGROUND", (0, row_number), (-1, row_number), colors.HexColor("#EFFAFF")),
+                    ("TEXTCOLOR", (0, row_number), (-1, row_number), colors.HexColor("#003366")),
                 ]))
         if report["id"] == "iva-acumulacion":
             table.setStyle(TableStyle([
-                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EAF1F2")),
-                ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#174E5A")),
+                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFFAFF")),
+                ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#003366")),
             ]))
-        styles = getSampleStyleSheet()
+        styles = _dsi_pdf_styles()
         heading = Paragraph(escape(report["compania"]["nombre"]), styles["Heading1"])
         detail = (report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado", "iva-acumulacion"} else
                   "Catálogo de cuentas" if report["id"] == "listado-cuentas" else

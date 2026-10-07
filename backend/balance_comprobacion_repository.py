@@ -454,8 +454,8 @@ def export_trial_balance_xlsx(report: dict[str, Any]) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Balance acumulado"
-    navy = "174E5A"
-    light = "E8F1F2"
+    navy = "003366"
+    light = "EFFAFF"
     thin_gray = Side(style="thin", color="D1D5DB")
 
     sheet.merge_cells("A1:G1")
@@ -539,11 +539,11 @@ def export_trial_balance_pdf(report: dict[str, Any]) -> bytes:
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         "ReportTitle", parent=styles["Title"], fontName="Helvetica-Bold",
-        fontSize=13, leading=16, alignment=TA_CENTER, textColor=colors.HexColor("#174E5A"),
+        fontSize=13, leading=16, alignment=TA_CENTER, textColor=colors.HexColor("#003366"),
     )
     meta_style = ParagraphStyle(
         "ReportMeta", parent=styles["Normal"], fontName="Helvetica",
-        fontSize=8, leading=10, alignment=TA_CENTER, textColor=colors.HexColor("#4B5563"),
+        fontSize=8, leading=10, alignment=TA_CENTER, textColor=colors.HexColor("#004183"),
     )
     number_style = ParagraphStyle(
         "Number", parent=styles["Normal"], fontName="Helvetica",
@@ -589,21 +589,21 @@ def export_trial_balance_pdf(report: dict[str, Any]) -> bytes:
         colWidths=[23 * mm, 27 * mm, 65 * mm, 31 * mm, 31 * mm, 31 * mm, 31 * mm],
     )
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174E5A")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, 0), 7.5),
         ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#E5E7EB")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D7E8F4")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5FBFF")]),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ] + [style for row, kind in special_rows for style in (
-        [("BACKGROUND", (0, row), (-1, row), colors.HexColor("#174E5A")),
+        [("BACKGROUND", (0, row), (-1, row), colors.HexColor("#003366")),
          ("TEXTCOLOR", (0, row), (-1, row), colors.white),
          ("SPAN", (0, row), (-1, row))] if kind == "seccion" else
-        [("BACKGROUND", (0, row), (-1, row), colors.HexColor("#E8F1F2")),
+        [("BACKGROUND", (0, row), (-1, row), colors.HexColor("#EFFAFF")),
          ("FONTNAME", (0, row), (-1, row), "Helvetica-Bold")]
     )]))
     story.append(table)
@@ -611,7 +611,7 @@ def export_trial_balance_pdf(report: dict[str, Any]) -> bytes:
     def footer(canvas: Any, doc: Any) -> None:
         canvas.saveState()
         canvas.setFont("Helvetica", 7)
-        canvas.setFillColor(colors.HexColor("#6B7280"))
+        canvas.setFillColor(colors.HexColor("#005D9C"))
         canvas.drawString(12 * mm, 7 * mm, report["compania"]["nombre"])
         canvas.drawRightString(landscape(letter)[0] - 12 * mm, 7 * mm, f"Página {doc.page}")
         canvas.restoreState()

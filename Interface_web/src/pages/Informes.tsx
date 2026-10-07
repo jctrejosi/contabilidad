@@ -10,8 +10,9 @@ import {
   type FiltrosBalanceComprobacion,
 } from '../api/balanceComprobacion';
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
-import { consultarInformeAdicional, consultarPaginaInformeAdicional, exportarInformeAdicional, procesarAcumulacionIva, urlImpresionInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional } from '../api/informesAdicionales';
+import { consultarInformeAdicional, consultarMovimientoAnualTercero, consultarPaginaInformeAdicional, exportarInformeAdicional, procesarAcumulacionIva, procesarAcumulacionRetenciones, urlImpresionInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional, type MovimientoAnualTercero } from '../api/informesAdicionales';
 import IvaAnalisis from './IvaAnalisis';
+import RetencionesAnalisis from './RetencionesAnalisis';
 
 // El formato de moneda es de presentación: no depende de los datos de demostración.
 const fmtCOP = (n: number): string => `$ ${n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -80,6 +81,18 @@ const CATEGORIAS: Categoria[] = [
     ],
   },
   {
+    id: 'retenciones',
+    nombre: 'Retenciones',
+    icon: '%',
+    informes: [
+      { id: 'ret-acumulacion', nombre: 'Acumulación general', desc: 'Reconstruye los acumulados de retención por cuenta y tercero' },
+      { id: 'ret-analisis', nombre: 'Análisis acumulados y certificados', desc: 'Consulta y corrige acumulados; genera certificados de retenciones' },
+      { id: 'ret-relacion', nombre: 'Relación acumulados', desc: 'Relaciona acumulados por cuenta o tercero' },
+      { id: 'ret-totales-cuenta', nombre: 'Relación totales por cuenta', desc: 'Consolida bases y valores por cuenta' },
+      { id: 'ret-soportes', nombre: 'Soportes y anexos', desc: 'Detalle de movimientos sujetos a retención' },
+    ],
+  },
+  {
     id: 'iva',
     nombre: 'IVA',
     icon: '%',
@@ -93,9 +106,8 @@ const CATEGORIAS: Categoria[] = [
     nombre: 'Terceros',
     icon: '👤',
     informes: [
-      { id: 'tercero-general', nombre: 'General', desc: 'Listado completo de terceros con saldo y cupo' },
-      { id: 'tercero-acumulacion', nombre: 'Acumulación', desc: 'Saldo y movimientos acumulados por tercero' },
-      { id: 'tercero-cuenta-tercero', nombre: 'Cuenta-tercero', desc: 'Movimiento por cuenta y tercero' },
+      { id: 'tercero-general', nombre: 'Consulta', desc: 'Saldos anteriores, débitos, créditos y saldos por cuenta y tercero' },
+      { id: 'tercero-cuenta-tercero', nombre: 'Movimiento cuenta-tercero', desc: 'Partidas detalladas o resumidas por cuenta y tercero' },
       { id: 'tercero-especifico', nombre: 'Tercero específico', desc: 'Detalle de movimiento de un tercero puntual' },
       { id: 'tercero-cumpleanos', nombre: 'Cumpleaños', desc: 'Fechas de cumpleaños de los terceros' },
       { id: 'tercero-etiquetas', nombre: 'Etiquetas', desc: 'Terceros organizados por zona comercial' },
@@ -170,12 +182,12 @@ const MENU_INFORMES: EntradaMenuInforme[] = [
   ] },
   { numero: '5', nombre: 'Balance general y estado de resultados', id: 'bal-gral-resultados' },
   { numero: '6', nombre: 'Informe de retenciones', opciones: [
-    { numero: '1', nombre: 'Acumulación general' },
-    { numero: '2', nombre: 'Análisis acumulados y certificados' },
-    { numero: '3', nombre: 'Relación acumulados' },
-    { numero: '4', nombre: 'Relación totales por cuenta' },
-    { numero: '5', nombre: 'Soportes y anexos' },
-    { numero: '7', nombre: 'Plano reporte anual retenciones' },
+    { numero: '1', nombre: 'Acumulación general', id: 'ret-acumulacion' },
+    { numero: '2', nombre: 'Análisis acumulados y certificados', id: 'ret-analisis' },
+    { numero: '3', nombre: 'Relación acumulados', id: 'ret-relacion' },
+    { numero: '4', nombre: 'Relación totales por cuenta', id: 'ret-totales-cuenta' },
+    { numero: '5', nombre: 'Soportes y anexos', id: 'ret-soportes' },
+    { numero: '7', nombre: 'Plano reporte anual retenciones', id: 'ret-plano-anual' },
   ] },
   { numero: '7', nombre: 'Informe de IVA', opciones: [
     { numero: '1', nombre: 'Acumulación general', id: 'iva-acumulacion' },
@@ -185,10 +197,8 @@ const MENU_INFORMES: EntradaMenuInforme[] = [
     { numero: '5', nombre: 'Soportes y anexos' },
   ] },
   { numero: '8', nombre: 'Informe de terceros', opciones: [
-    { numero: '1', nombre: 'Acumulación general', id: 'tercero-acumulacion' },
     { numero: '2', nombre: 'Consulta', id: 'tercero-general' },
     { numero: '3', nombre: 'Movimiento cuenta-tercero', id: 'tercero-cuenta-tercero' },
-    { numero: '4', nombre: 'Movimiento específico por tercero', id: 'tercero-especifico' },
   ] },
   { numero: '9', nombre: 'Informe por centros de costos', opciones: [
     { numero: '1', nombre: 'Acumulación general' },
@@ -269,7 +279,8 @@ const CENTER_REPORT_IDS = new Set([
 const THIRD_SUMMARY_IDS = new Set([
   'tercero-acumulacion', 'tercero-cuenta-tercero', 'comp-cta-tercero', 'resumen-tipo-contribuyente',
 ]);
-const THIRD_DIRECTORY_IDS = new Set(['tercero-general', 'tercero-cumpleanos', 'tercero-etiquetas']);
+const THIRD_DIRECTORY_IDS = new Set(['tercero-cumpleanos', 'tercero-etiquetas']);
+const THIRD_ORIGINAL_IDS = new Set(['tercero-general', 'tercero-cuenta-tercero']);
 
 function mostrarFiltro(id: string, key: string): boolean {
   const account = ['cuentaDesde', 'cuentaHasta', 'buscar'].includes(key);
@@ -279,9 +290,12 @@ function mostrarFiltro(id: string, key: string): boolean {
   if (id === 'aux-gral') return ['cuentaDesde', 'cuentaHasta'].includes(key);
   if (id === 'aux-doc-afectado') return false;
   if (id === 'bal-gral-resultados') return false;
-  if (id === 'iva-acumulacion') return false;
+  if (id === 'iva-acumulacion' || id === 'ret-acumulacion') return false;
+  if (id === 'ret-relacion' || id === 'ret-totales-cuenta') return ['cuentaDesde', 'cuentaHasta', 'nit', 'buscar'].includes(key);
+  if (id === 'ret-soportes') return ['cuentaDesde', 'cuentaHasta', 'nit', 'fechaDesde', 'fechaHasta', 'buscar'].includes(key);
   if (ACCOUNT_BALANCE_IDS.has(id)) return account;
   if (THIRD_DIRECTORY_IDS.has(id)) return ['nit', 'buscar'].includes(key);
+  if (THIRD_ORIGINAL_IDS.has(id)) return ['cuentaDesde', 'cuentaHasta'].includes(key);
   if (THIRD_SUMMARY_IDS.has(id)) return third;
   if (CENTER_REPORT_IDS.has(id)) return center;
   if (id === 'doc-formato') return ['tipoDocumento', 'documentoDesde', 'documentoHasta'].includes(key);
@@ -372,6 +386,8 @@ interface PreviewState {
 
 function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () => void }) {
   const [reportPage, setReportPage] = useState(preview.report);
+  const [annualThird, setAnnualThird] = useState<MovimientoAnualTercero | null>(null);
+  const [annualLoading, setAnnualLoading] = useState(false);
   const datos = useMemo<DatosInforme>(() => {
     if (reportPage) return {
       columnas: reportPage.columnas,
@@ -405,6 +421,21 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
   const paginas = Math.max(1, Math.ceil(totalFilas / PAGE_SIZE));
   const inicio = pagina * PAGE_SIZE;
   const visibles = cargandoPagina ? [] : paginadoServidor ? datos.filas : datos.filas.slice(inicio, inicio + PAGE_SIZE);
+
+  async function abrirAnualTercero(row: Celda[]) {
+    if (preview.inf.id !== 'tercero-general' || !preview.filtrosReport || String(row[0]).startsWith('TOTAL')) return;
+    setAnnualLoading(true);
+    setAviso(null);
+    try {
+      setAnnualThird(await consultarMovimientoAnualTercero(
+        preview.filtrosReport.cia, preview.filtrosReport.anio, String(row[0]), String(row[2]),
+      ));
+    } catch (error) {
+      setAviso(error instanceof Error ? error.message : 'No fue posible abrir el movimiento anual.');
+    } finally {
+      setAnnualLoading(false);
+    }
+  }
 
   useEffect(() => {
     const snapshotId = preview.report?.snapshotId;
@@ -561,6 +592,7 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
           <button type="button" onClick={imprimir} className={BUTTON_SECONDARY}>⎙ Imprimir</button>
           <div className="flex-1" />
           {aviso && <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">{aviso}</span>}
+          {annualLoading && <span className="text-xs text-gray-500">Consultando movimiento anual…</span>}
         </div>
 
         {/* Tabla */}
@@ -582,10 +614,10 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
                 </tr>
               )}
               {visibles.map((fila, i) => (
-                <tr key={i} className={datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' && preview.inf.id !== 'aux-gral' ? 'bg-petroleum-500 text-white font-semibold' :
+                <tr key={i} onClick={() => abrirAnualTercero(fila)} className={datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' && preview.inf.id !== 'aux-gral' ? 'bg-petroleum-500 text-white font-semibold' :
                   datos.tipos?.[paginadoServidor ? i : inicio + i]?.startsWith('total') || datos.tipos?.[paginadoServidor ? i : inicio + i] === 'resultado' ||
                   datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' || datos.tipos?.[paginadoServidor ? i : inicio + i] === 'subtotal' ||
-                  datos.tipos?.[paginadoServidor ? i : inicio + i] === 'apertura' ? 'bg-petroleum-50 font-semibold' : 'hoverable'}>
+                  datos.tipos?.[paginadoServidor ? i : inicio + i] === 'apertura' ? 'bg-petroleum-50 font-semibold' : preview.inf.id === 'tercero-general' && !String(fila[0]).startsWith('TOTAL') ? 'hoverable cursor-pointer' : 'hoverable'}>
                   {datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' && preview.inf.id !== 'aux-gral'
                     ? <td colSpan={datos.columnas.length} className="px-3 py-2 text-white font-semibold">{fila[2]}</td>
                     : fila.map((celda, j) => <CeldaValor key={j} valor={celda} money={!!datos.columnas[j]?.money} />)}
@@ -617,6 +649,19 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
           </div>
         </div>
       </div>
+      {annualThird && <Modal title={`Movimiento anual · ${annualThird.cuenta} · ${annualThird.tercero}`} onClose={() => setAnnualThird(null)} ancho="max-w-3xl">
+        <div className="px-5 py-4 text-xs text-gray-600">{annualThird.nombreCuenta} · {annualThird.nombreTercero}</div>
+        <div className="overflow-auto px-5 pb-5">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 text-gray-600"><tr><th className="px-3 py-2 text-left">Mes</th><th className="px-3 py-2 text-right">Débitos</th><th className="px-3 py-2 text-right">Créditos</th><th className="px-3 py-2 text-right">Saldo</th></tr></thead>
+            <tbody>
+              <tr className="border-t border-gray-100 font-semibold"><td className="px-3 py-2">Saldo inicial</td><td /><td /><td className="px-3 py-2 text-right">{fmtMonto(annualThird.saldoInicial)}</td></tr>
+              {annualThird.meses.map(item => <tr key={item.mes} className="border-t border-gray-100"><td className="px-3 py-2">{MESES[item.mes - 1]}</td><td className="px-3 py-2 text-right">{fmtMonto(item.debito)}</td><td className="px-3 py-2 text-right">{fmtMonto(item.credito)}</td><td className="px-3 py-2 text-right">{fmtMonto(item.saldo)}</td></tr>)}
+            </tbody>
+            <tfoot className="border-t-2 border-gray-200 bg-gray-50 font-semibold"><tr><td className="px-3 py-2">Saldo final</td><td /><td /><td className="px-3 py-2 text-right">{fmtMonto(annualThird.saldoFinal)}</td></tr></tfoot>
+          </table>
+        </div>
+      </Modal>}
     </Modal>
   );
 }
@@ -643,6 +688,7 @@ export default function Informes({ onNavigate, cia }: Props) {
   const [searchInforme, setSearchInforme] = useState('');
   const [showParams, setShowParams] = useState<Informe | null>(null);
   const [showIvaAnalisis, setShowIvaAnalisis] = useState(false);
+  const [showRetAnalisis, setShowRetAnalisis] = useState(false);
   const [favoritos, setFavoritos] = useState<string[]>(() => leerLista(STORAGE_FAVS));
   const [recientes, setRecientes] = useState<string[]>(() => leerLista(STORAGE_RECIENTES));
   const [preview, setPreview] = useState<PreviewState | null>(null);
@@ -651,6 +697,8 @@ export default function Informes({ onNavigate, cia }: Props) {
     incluirResultados: true, incluirTerceros: false, incluirCentros: false,
     detalleCuentaDesde: '', detalleCuentaHasta: '',
     cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '', comprobanteHasta: '',
+    nitDesde: '', nitHasta: '', ordenTerceros: 'cuenta' as 'cuenta' | 'tercero',
+    ordenMovimiento: 'documento' as 'documento' | 'fecha',
     tipoDocumento: '', tipoDocumentoHasta: '',
     documentoDesde: '', documentoHasta: '', buscar: '',
     fechaDesde: '', fechaHasta: '', modalidad: 'detallado' as 'detallado' | 'resumido',
@@ -701,6 +749,12 @@ export default function Informes({ onNavigate, cia }: Props) {
     : [];
 
   function abrirInforme(inf: Informe) {
+    if (inf.id === 'ret-analisis') {
+      setShowRetAnalisis(true);
+      setShowParams(null);
+      setPreview(null);
+      return;
+    }
     if (inf.id === 'iva-analisis') {
       setShowIvaAnalisis(true);
       setShowParams(null);
@@ -713,13 +767,13 @@ export default function Informes({ onNavigate, cia }: Props) {
     }
     setParams(p => ({
       ...p, nivel: BALANCE_IDS.has(inf.id) || inf.id === 'bal-gral-resultados' ? '4' : p.nivel,
-      mesDesde: inf.id === 'iva-acumulacion' ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
+      mesDesde: ['iva-acumulacion', 'ret-acumulacion'].includes(inf.id) || THIRD_ORIGINAL_IDS.has(inf.id) ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
         : BALANCE_IDS.has(inf.id) ? p.mesDesde : (MESES.includes(p.mesDesde) ? p.mesDesde : 'Enero'),
-      mesHasta: inf.id === 'iva-acumulacion' ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
+      mesHasta: ['iva-acumulacion', 'ret-acumulacion'].includes(inf.id) || THIRD_ORIGINAL_IDS.has(inf.id) ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
         : BALANCE_IDS.has(inf.id) || inf.id === 'bal-gral-resultados'
         ? (MESES_BALANCE.includes(p.mesHasta) ? p.mesHasta : 'Diciembre')
         : (MESES.includes(p.mesHasta) ? p.mesHasta : 'Diciembre'),
-      cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '',
+      cuentaDesde: '', cuentaHasta: '', nit: '', nitDesde: '', nitHasta: '', ordenTerceros: 'cuenta', ordenMovimiento: 'documento', centro: '', comprobante: '',
       comprobanteHasta: '', tipoDocumento: '', tipoDocumentoHasta: '',
       documentoDesde: '', documentoHasta: '', buscar: '',
       modalidad: 'detallado', documentoAfectado: '',
@@ -772,17 +826,21 @@ export default function Informes({ onNavigate, cia }: Props) {
       anio: anioOperacion,
       mesDesde: inf.id === 'bal-gral-resultados' ? MESES_BALANCE.indexOf(params.mesHasta) + 1
         : inf.id === 'doc-formato' ? mesSeleccionado
-        : inf.id === 'aux-doc-afectado' ? MESES_LIBRO.indexOf(params.mesDesde)
+        : inf.id === 'aux-doc-afectado' || THIRD_ORIGINAL_IDS.has(inf.id) ? MESES_LIBRO.indexOf(params.mesDesde)
         : inf.id === 'aux-gral' ? Number(params.fechaDesde.slice(5, 7))
         : MESES.indexOf(params.mesDesde) + 1,
       mesHasta: inf.id === 'bal-gral-resultados' ? MESES_BALANCE.indexOf(params.mesHasta) + 1
         : inf.id === 'doc-formato' ? mesSeleccionado
-        : inf.id === 'aux-doc-afectado' ? MESES_LIBRO.indexOf(params.mesHasta)
+        : inf.id === 'aux-doc-afectado' || THIRD_ORIGINAL_IDS.has(inf.id) ? MESES_LIBRO.indexOf(params.mesHasta)
         : inf.id === 'aux-gral' ? Number(params.fechaHasta.slice(5, 7))
         : MESES.indexOf(params.mesHasta) + 1,
       cuentaDesde: params.cuentaDesde,
       cuentaHasta: params.cuentaHasta,
       nit: params.nit,
+      nitDesde: params.nitDesde,
+      nitHasta: params.nitHasta,
+      ordenTerceros: params.ordenTerceros,
+      ordenMovimiento: params.ordenMovimiento,
       centro: params.centro,
       comprobante: params.comprobante,
       comprobanteHasta: params.comprobanteHasta,
@@ -802,7 +860,7 @@ export default function Informes({ onNavigate, cia }: Props) {
         incluirTerceros: params.incluirTerceros,
       } : {}),
     };
-    if (inf.id === 'iva-acumulacion' && filtros.mesDesde > filtros.mesHasta) {
+    if (['iva-acumulacion', 'ret-acumulacion'].includes(inf.id) && filtros.mesDesde > filtros.mesHasta) {
       setErrorInforme('El mes inicial no puede ser posterior al mes final.');
       return;
     }
@@ -810,6 +868,8 @@ export default function Informes({ onNavigate, cia }: Props) {
     try {
       const report = inf.id === 'iva-acumulacion'
         ? await procesarAcumulacionIva(filtros)
+        : inf.id === 'ret-acumulacion'
+        ? await procesarAcumulacionRetenciones(filtros)
         : await consultarInformeAdicional(inf.id, filtros);
       setShowParams(null);
       setRecientes(prev => [inf.id, ...prev.filter(id => id !== inf.id)].slice(0, 6));
@@ -890,9 +950,10 @@ export default function Informes({ onNavigate, cia }: Props) {
       )}
 
       {showIvaAnalisis && anioOperacion !== null && <IvaAnalisis cia={cia} anio={anioOperacion} onClose={() => setShowIvaAnalisis(false)} />}
+      {showRetAnalisis && anioOperacion !== null && <RetencionesAnalisis cia={cia} anio={anioOperacion} onClose={() => setShowRetAnalisis(false)} />}
 
       {/* Búsqueda transversal y accesos frecuentes */}
-      {!showIvaAnalisis && <div className="bg-white rounded border border-gray-200 p-3 space-y-2.5">
+      {!showIvaAnalisis && !showRetAnalisis && <div className="bg-white rounded border border-gray-200 p-3 space-y-2.5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 max-w-lg">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">⌕</span>
@@ -934,7 +995,7 @@ export default function Informes({ onNavigate, cia }: Props) {
       </div>}
 
       {/* Resultados de búsqueda */}
-      {!showIvaAnalisis && searchInforme && (
+      {!showIvaAnalisis && !showRetAnalisis && searchInforme && (
         <div className="bg-white rounded border border-gray-200">
           <div className="px-4 py-2.5 border-b border-gray-100 text-xs text-gray-500">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</div>
           {filtered.map(inf => (
@@ -969,7 +1030,7 @@ export default function Informes({ onNavigate, cia }: Props) {
       )}
 
       {/* Numeración y jerarquía literal del menú Harbour MENU_INFOR. */}
-      {!showIvaAnalisis && !searchInforme && (
+      {!showIvaAnalisis && !showRetAnalisis && !searchInforme && (
         <section className="overflow-hidden rounded border border-gray-200 bg-white" aria-label="Informes del 1 al R">
           {MENU_INFORMES.map(entry => renderEntrada(entry))}
         </section>
@@ -983,6 +1044,12 @@ export default function Informes({ onNavigate, cia }: Props) {
               {showParams.id === 'iva-acumulacion' && <p className="col-span-2 text-xs text-gray-600">
                 Se recalcularán los acumulados de IVA de los meses elegidos para la compañía actual. Los demás meses no se modificarán.
               </p>}
+              {showParams.id === 'ret-acumulacion' && <p className="col-span-2 text-xs text-gray-600">
+                Se reemplazarán los acumulados de retenciones de los meses elegidos para la compañía actual. Los demás meses no se modificarán.
+              </p>}
+              {THIRD_ORIGINAL_IDS.has(showParams.id) && <p className="col-span-2 text-xs text-gray-600">
+                Consulte los saldos y movimientos de los terceros para el período y rangos elegidos.
+              </p>}
               {showParams.id === 'doc-formato' && <div>
                 <label htmlFor="param-mes-lote" className="block text-xs font-medium text-gray-600 mb-1">Mes o lote</label>
                 <select id="param-mes-lote" data-initial-focus value={params.mesLote} onChange={e => setParams(p => ({ ...p, mesLote: e.target.value }))} className={INPUT}>
@@ -992,13 +1059,13 @@ export default function Informes({ onNavigate, cia }: Props) {
               {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && showParams.id !== 'bal-gral-resultados' && <div>
                 <label htmlFor="param-mes-desde" className="block text-xs font-medium text-gray-600 mb-1">Mes desde</label>
                 <select id="param-mes-desde" data-initial-focus value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
-                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' || THIRD_ORIGINAL_IDS.has(showParams.id) ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
               {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && showParams.id !== 'bal-gral-resultados' && <div>
                 <label htmlFor="param-mes-hasta" className="block text-xs font-medium text-gray-600 mb-1">Mes hasta</label>
                 <select id="param-mes-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
-                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' || THIRD_ORIGINAL_IDS.has(showParams.id) ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
               {showParams.id === 'bal-gral-resultados' && <>
@@ -1021,7 +1088,7 @@ export default function Informes({ onNavigate, cia }: Props) {
                   <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />Incluir terceros</label>
                 </div>
               </>}
-              {showParams.id === 'aux-gral' && <>
+              {(showParams.id === 'aux-gral' || showParams.id === 'ret-soportes') && <>
                 <div>
                   <label htmlFor="param-fecha-desde" className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
                   <input id="param-fecha-desde" data-initial-focus type="date" required value={params.fechaDesde} onChange={e => setParams(p => ({ ...p, fechaDesde: e.target.value }))} className={INPUT} />
@@ -1041,6 +1108,34 @@ export default function Informes({ onNavigate, cia }: Props) {
                 <label htmlFor="param-documento-afectado" className="block text-xs font-medium text-gray-600 mb-1">Documento afectado</label>
                 <input id="param-documento-afectado" required maxLength={12} value={params.documentoAfectado} onChange={e => setParams(p => ({ ...p, documentoAfectado: e.target.value }))} className={INPUT} />
               </div>}
+              {THIRD_ORIGINAL_IDS.has(showParams.id) && <>
+                <div>
+                  <label htmlFor="param-nit-desde" className="block text-xs font-medium text-gray-600 mb-1">Tercero desde</label>
+                  <input id="param-nit-desde" maxLength={15} value={params.nitDesde} onChange={e => setParams(p => ({ ...p, nitDesde: e.target.value }))} className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor="param-nit-hasta" className="block text-xs font-medium text-gray-600 mb-1">Tercero hasta</label>
+                  <input id="param-nit-hasta" maxLength={15} value={params.nitHasta} onChange={e => setParams(p => ({ ...p, nitHasta: e.target.value }))} className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor="param-orden-terceros" className="block text-xs font-medium text-gray-600 mb-1">Ordenar por</label>
+                  <select id="param-orden-terceros" value={params.ordenTerceros} onChange={e => setParams(p => ({ ...p, ordenTerceros: e.target.value as 'cuenta' | 'tercero' }))} className={INPUT}>
+                    <option value="cuenta">Cuenta y tercero</option><option value="tercero">Tercero y cuenta</option>
+                  </select>
+                </div>
+                {showParams.id === 'tercero-cuenta-tercero' && <div>
+                  <label htmlFor="param-modalidad-terceros" className="block text-xs font-medium text-gray-600 mb-1">Presentación</label>
+                  <select id="param-modalidad-terceros" value={params.modalidad} onChange={e => setParams(p => ({ ...p, modalidad: e.target.value as 'detallado' | 'resumido' }))} className={INPUT}>
+                    <option value="detallado">Detallado</option><option value="resumido">Resumido</option>
+                  </select>
+                </div>}
+                {showParams.id === 'tercero-cuenta-tercero' && <div>
+                  <label htmlFor="param-orden-movimiento" className="block text-xs font-medium text-gray-600 mb-1">Orden del movimiento</label>
+                  <select id="param-orden-movimiento" value={params.ordenMovimiento} onChange={e => setParams(p => ({ ...p, ordenMovimiento: e.target.value as 'documento' | 'fecha' }))} className={INPUT}>
+                    <option value="documento">Documento y fecha</option><option value="fecha">Fecha y documento</option>
+                  </select>
+                </div>}
+              </>}
               {BALANCE_IDS.has(showParams.id) && (
                 <>
                   <div>
@@ -1117,9 +1212,9 @@ export default function Informes({ onNavigate, cia }: Props) {
             <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
               <button type="button" onClick={() => setShowParams(null)} className={BUTTON_SECONDARY}>Cancelar</button>
               <button type="submit" data-report-submit disabled={generando || anioOperacion === null} className={`${BUTTON_PRIMARY} disabled:opacity-60`}>
-                {generando ? (showParams.id === 'iva-acumulacion' ? 'Acumulando IVA…' : 'Consultando Advantage…')
+                {generando ? (showParams.id === 'iva-acumulacion' ? 'Acumulando IVA…' : showParams.id === 'ret-acumulacion' ? 'Acumulando retenciones…' : 'Consultando Advantage…')
                   : anioOperacion === null && !errorPeriodo ? 'Consultando período…'
-                  : showParams.id === 'iva-acumulacion' ? 'Procesar acumulación' : 'Generar informe'}
+                  : ['iva-acumulacion', 'ret-acumulacion'].includes(showParams.id) ? 'Procesar acumulación' : 'Generar informe'}
               </button>
             </div>
           </form>

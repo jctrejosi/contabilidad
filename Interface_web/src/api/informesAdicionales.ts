@@ -7,6 +7,10 @@ export interface FiltrosInformeAdicional {
   cuentaDesde?: string;
   cuentaHasta?: string;
   nit?: string;
+  nitDesde?: string;
+  nitHasta?: string;
+  ordenTerceros?: 'cuenta' | 'tercero';
+  ordenMovimiento?: 'documento' | 'fecha';
   centro?: string;
   comprobante?: string;
   comprobanteHasta?: string;
@@ -44,6 +48,26 @@ export interface InformeAdicional {
   snapshotId?: string;
 }
 
+export interface MovimientoAnualTercero {
+  cuenta: string;
+  nombreCuenta: string;
+  tercero: string;
+  nombreTercero: string;
+  saldoInicial: number;
+  meses: Array<{ mes: number; debito: number; credito: number; saldo: number }>;
+  saldoFinal: number;
+}
+
+export async function consultarMovimientoAnualTercero(cia: string, anio: number, cuenta: string, nit: string): Promise<MovimientoAnualTercero> {
+  const params = new URLSearchParams({ cia, anio: String(anio), cuenta, nit });
+  const response = await fetch(`/api/informes/terceros/anual?${params}`);
+  const body = await response.json().catch(() => null) as MovimientoAnualTercero | { detail?: string } | null;
+  if (!response.ok || !body || !('meses' in body)) {
+    throw new Error(body && 'detail' in body ? body.detail : 'No fue posible consultar el movimiento anual.');
+  }
+  return body;
+}
+
 function query(f: FiltrosInformeAdicional): URLSearchParams {
   const params = new URLSearchParams({
     cia: f.cia,
@@ -64,7 +88,7 @@ function query(f: FiltrosInformeAdicional): URLSearchParams {
 
 export async function consultarInformeAdicional(id: string, filtros: FiltrosInformeAdicional): Promise<InformeAdicional> {
   const params = query(filtros);
-  if (id === 'aux-gral' || id === 'aux-doc-afectado') params.set('vistaPaginada', 'true');
+  if (['aux-gral', 'aux-doc-afectado', 'tercero-general', 'tercero-cuenta-tercero'].includes(id)) params.set('vistaPaginada', 'true');
   const response = await fetch(`/api/informes/adicionales/${encodeURIComponent(id)}?${params}`);
   const body = await response.json().catch(() => null) as InformeAdicional | { detail?: string } | null;
   if (!response.ok || !body || !('filas' in body)) {
@@ -83,6 +107,20 @@ export async function procesarAcumulacionIva(filtros: FiltrosInformeAdicional): 
   const body = await response.json().catch(() => null) as InformeAdicional | { detail?: string } | null;
   if (!response.ok || !body || !('filas' in body)) {
     throw new Error(body && 'detail' in body ? body.detail : 'No fue posible acumular el IVA.');
+  }
+  return body;
+}
+
+/** INFOR05(1): reemplaza los meses elegidos en el acumulado de retenciones. */
+export async function procesarAcumulacionRetenciones(filtros: FiltrosInformeAdicional): Promise<InformeAdicional> {
+  const params = new URLSearchParams({
+    cia: filtros.cia, anio: String(filtros.anio),
+    mesDesde: String(filtros.mesDesde), mesHasta: String(filtros.mesHasta),
+  });
+  const response = await fetch(`/api/informes/retenciones-acumulacion?${params}`, { method: 'POST' });
+  const body = await response.json().catch(() => null) as InformeAdicional | { detail?: string } | null;
+  if (!response.ok || !body || !('filas' in body)) {
+    throw new Error(body && 'detail' in body ? body.detail : 'No fue posible acumular las retenciones.');
   }
   return body;
 }

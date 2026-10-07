@@ -539,11 +539,7 @@ def delete_formato_documental(
 
 
 def create_company(payload: dict[str, Any], *, user: str = "WEB") -> dict[str, Any]:
-    """Crea una compañía con su primer año (solo PostgreSQL; 503 en Advantage).
-
-    El legado no tiene fila de compañía: en Advantage la rama declarada lanza
-    ``CompanyWriteNotImplemented``, que la capa HTTP traduce a 503 con su causa.
-    """
+    """Crea la compañía en el catálogo del motor activo."""
     if is_postgres():
         from .postgres_writes import create_company as implementation
     else:
@@ -1039,6 +1035,32 @@ def build_additional_report(
     generan las tablas nuevas; en Advantage declaran la carencia con 422 (§0).
     """
     from .flujo_caja_niif_repository import NUEVOS_INFORME_IDS
+
+    if report_id in {"tercero-general", "tercero-cuenta-tercero"}:
+        from .informes_terceros_repository import build_third_party_report
+        return build_third_party_report(
+            report_id, cia, year, month_from, month_to,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            nit_from=filtros.get("nit_from", "") or filtros.get("nit", ""),
+            nit_to=filtros.get("nit_to", "") or filtros.get("nit", ""),
+            order=filtros.get("order", "cuenta"),
+            movement_order=filtros.get("movement_order", "documento"),
+            detailed=filtros.get("detail_mode", "detallado") == "detallado",
+        )
+
+    if report_id in {"ret-relacion", "ret-totales-cuenta", "ret-soportes"}:
+        from .retenciones_reportes_repository import build_retention_report
+        return build_retention_report(
+            report_id, cia, year, month_from, month_to,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            nit_from=filtros.get("nit_from", ""),
+            nit_to=filtros.get("nit_to", ""),
+            order=filtros.get("order", "cuenta"),
+            detailed=filtros.get("detail_mode", "resumido") == "detallado",
+            date_from=filtros.get("date_from", ""), date_to=filtros.get("date_to", ""),
+        )
 
     if report_id in {"aux-gral", "aux-doc-afectado"}:
         from .libro_auxiliar_repository import build_auxiliary_book

@@ -89,6 +89,8 @@ from .plantillas_contables_repository import (
     TemplateNotFound,
     TemplateValidationError,
 )
+from .plantillas_original_repository import list_plantillas_original, guardar_plantilla_original
+from .retenciones_acumulacion_repository import rebuild_retention_accumulation
 from .formatos_documentales_repository import (
     DocumentFormatAlreadyExists,
     DocumentFormatNotFound,
@@ -122,6 +124,10 @@ from .iva_acumulacion_repository import rebuild_iva_accumulation
 from .iva_analisis_repository import (
     IvaAnalysisConflict, build_iva_certificates, export_iva_certificates,
     get_iva_analysis_item, list_iva_analysis, update_iva_analysis_item,
+)
+from .retenciones_analisis_repository import (
+    build_retention_certificates, export_retention_certificates,
+    get_retention_analysis_item, list_retention_analysis, update_retention_analysis_item,
 )
 from .balance_mensual_repository import (
     build_monthly_balance,
@@ -423,6 +429,8 @@ class CompanyCreate(BaseModel):
     codigo: str = Field(pattern=r"^[0-9]{1,3}$", description="EMPCOD de 3 posiciones.")
     nombre: str = Field(min_length=1, max_length=40)
     nit: str = Field(min_length=1, max_length=15)
+    clave: str = Field("", max_length=5, description="Clave de la compañía en CONEMP; obligatoria con Advantage.")
+    habilitada: bool = Field(False, description="Permite seleccionar la compañía al ingresar.")
     digito: str = Field("", pattern=r"^[0-9]?$", max_length=1)
     soloConsolidacion: bool = Field(False, description="Destino de consolidación.")
     anio: int = Field(ge=1900, le=2999, description="Primer año de operación.")
@@ -471,10 +479,10 @@ class VatRateCreate(VatRateWrite):
 
 
 class RetentionConceptWrite(BaseModel):
-    """Campos de ``conceptos_retencion`` comunes al alta y a la modificación (B3).
+    """Contrato compartido: en Advantage, RETES solo edita nombre y tarifa.
 
-    ``cuenta`` llega opcional, como en la tabla, pero la pantalla la exige al
-    confirmar: sin cuenta la operación responde 422 (regla de B3, sección 3.2).
+    ``cuenta`` y ``baseMinima`` se reservan para el modelo PostgreSQL de
+    referencia; Advantage rechaza ambos cuando tienen valor.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1272,12 +1280,12 @@ def _config_catalog(table_postgres: str, table_ads: str) -> dict[str, object]:
 
 @app.post("/api/companias", status_code=status.HTTP_201_CREATED, summary="Crear compañía")
 def create_company_endpoint(payload: CompanyCreate) -> dict[str, object]:
-    """Crea la compañía con su primer año; en Advantage devuelve 503 declarado."""
+    """Crea la compañía en el motor activo; Advantage comparte tablas por CIA."""
     try:
         item = store.create_company(payload.model_dump(), user=payload.usuario)
     except Exception as exc:
         raise _service_error(exc) from exc
-    return {"item": item, "source": "companias"}
+    return {"item": item, "source": "companias" if store.is_postgres() else "CONEMP"}
 
 
 @app.put("/api/companias/{codigo}", summary="Modificar compañía")
@@ -1659,7 +1667,7 @@ def create_retention_concept(
     payload: RetentionConceptCreate,
     cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
-    """Crea el concepto; sin cuenta responde 422 (regla de la pantalla)."""
+    """Crea un tipo global en CONTIRET sin exigir cuenta ni base mínima."""
     try:
         item = store.create_concepto_retencion(cia, payload.model_dump(), user=payload.usuario)
     except Exception as exc:
@@ -1780,6 +1788,41 @@ def delete_income_line(
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     response.status_code = status.HTTP_200_OK
     return {"item": item, **_config_catalog("renglones_renta", "CONDECLA"), "dryRun": True}
+
+
+class PlantillaPosicionOriginal(BaseModel):
+    """Una de las ocho posiciones editables de PLANTICO."""
+
+    orden: int = Field(ge=1, le=8)
+    concepto: str = Field("", max_length=20)
+    cuentaDebito: str = Field("", pattern=r"^[0-9]{0,12}$")
+    cuentaCredito: str = Field("", pattern=r"^[0-9]{0,12}$")
+
+
+class PlantillaOriginalWrite(BaseModel):
+    posiciones: list[PlantillaPosicionOriginal] = Field(min_length=8, max_length=8)
+
+
+@app.get("/api/plantillas-original", summary="Documentos y plantillas del formulario original")
+def plantillas_original(cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> dict[str, object]:
+    try:
+        items = list_plantillas_original(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"items": items, "count": len(items), "source": "VISDOCUM"}
+
+
+@app.put("/api/plantillas-original/{codigo}", summary="Guardar los ocho renglones de una plantilla")
+def guardar_plantilla_original_endpoint(
+    payload: PlantillaOriginalWrite,
+    codigo: str = Path(pattern=r"^[A-Za-z0-9]{1,2}$"),
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    try:
+        item = guardar_plantilla_original(cia, codigo, [p.model_dump() for p in payload.posiciones])
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "VISDOCUM"}
 
 
 @app.get("/api/plantillas-contables", summary="Consultar plantillas contables")
@@ -2612,6 +2655,20 @@ def rebuild_iva_accumulation_endpoint(
         raise _service_error(exc) from exc
 
 
+@app.post("/api/informes/retenciones-acumulacion", summary="Reconstruir la acumulación general de retenciones")
+def rebuild_retention_accumulation_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+) -> dict[str, object]:
+    """Sustituye los meses elegidos de CONRET en una sola transacción."""
+    try:
+        return rebuild_retention_accumulation(cia, anio, mes_desde, mes_hasta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
 class IvaAnalysisSave(BaseModel):
     """Los importes de los doce meses y la versión vista por el usuario."""
     version: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -2714,6 +2771,117 @@ def iva_certificates_export_endpoint(
                     headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})
 
 
+@app.get("/api/informes/retenciones/analisis", summary="Consultar acumulados de retenciones")
+def retention_analysis_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    buscar: str = Query("", max_length=12),
+    cursor_cuenta: str = Query("", alias="cursorCuenta", max_length=12),
+    cursor_tercero: str = Query("", alias="cursorTercero", max_length=15),
+) -> dict[str, Any]:
+    try:
+        return list_retention_analysis(cia, anio, account_from=cuenta_desde, account_to=cuenta_hasta,
+                                       nit_from=nit_desde, nit_to=nit_hasta, search=buscar,
+                                       cursor_account=cursor_cuenta, cursor_nit=cursor_tercero)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/retenciones/analisis/detalle", summary="Ver los doce meses de una retención acumulada")
+def retention_analysis_detail_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12), nit: str = Query(max_length=15),
+) -> dict[str, Any]:
+    try:
+        return get_retention_analysis_item(cia, anio, cuenta, nit)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.patch("/api/informes/retenciones/analisis/detalle", summary="Corregir acumulados mensuales de retenciones")
+def retention_analysis_save_endpoint(
+    payload: IvaAnalysisSave,
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12), nit: str = Query(max_length=15),
+) -> dict[str, Any]:
+    try:
+        return update_retention_analysis_item(cia, anio, cuenta, nit, payload.version, payload.meses)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+def _retention_certificate_report(cia: str, anio: int, cuenta_desde: str, cuenta_hasta: str,
+                                  nit_desde: str, nit_hasta: str, periodicidad: str,
+                                  periodo: str, presentacion: str, incluir_iva: bool) -> dict[str, Any]:
+    return build_retention_certificates(cia, anio, account_from=cuenta_desde, account_to=cuenta_hasta,
+                                        nit_from=nit_desde, nit_to=nit_hasta, frequency=periodicidad,
+                                        period=periodo, presentation=presentacion, include_iva=incluir_iva)
+
+
+@app.get("/api/informes/retenciones/certificados", summary="Previsualizar certificados de retenciones")
+def retention_certificates_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    periodicidad: Literal["mensual", "bimestral", "anual"] = Query("anual"),
+    periodo: str = Query("todos", max_length=5),
+    presentacion: Literal["detallado", "sencillo", "porcentaje"] = Query("detallado"),
+    incluir_iva: bool = Query(False, alias="incluirIva"),
+) -> dict[str, Any]:
+    try:
+        return _retention_certificate_report(cia, anio, cuenta_desde, cuenta_hasta, nit_desde,
+                                             nit_hasta, periodicidad, periodo, presentacion, incluir_iva)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/retenciones/certificados/exportar", summary="Exportar certificados de retenciones")
+def retention_certificates_export_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    periodicidad: Literal["mensual", "bimestral", "anual"] = Query("anual"),
+    periodo: str = Query("todos", max_length=5),
+    presentacion: Literal["detallado", "sencillo", "porcentaje"] = Query("detallado"),
+    incluir_iva: bool = Query(False, alias="incluirIva"),
+    formato: Literal["pdf", "xlsx"] = Query("pdf"),
+) -> Response:
+    try:
+        report = _retention_certificate_report(cia, anio, cuenta_desde, cuenta_hasta, nit_desde,
+                                               nit_hasta, periodicidad, periodo, presentacion, incluir_iva)
+        if not report["certificados"]:
+            raise ValueError("No hay retenciones para emitir certificados con estos filtros.")
+        content = export_retention_certificates(report, formato)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    media = "application/pdf" if formato == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    disposition = "inline" if formato == "pdf" else "attachment"
+    filename = f"certificados_retenciones_{int(cia):03d}_{anio}.{formato}"
+    return Response(content=content, media_type=media,
+                    headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})
+
+
+@app.get("/api/informes/terceros/anual", summary="Movimiento anual de una cuenta y tercero")
+def third_party_annual_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12),
+    nit: str = Query(max_length=15),
+) -> dict[str, object]:
+    try:
+        from .informes_terceros_repository import read_third_party_annual
+        return read_third_party_annual(cia, anio, cuenta, nit)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
 @app.get("/api/informes/adicionales/{report_id}", summary="Generar informe contable adicional")
 def additional_report_endpoint(
     report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
@@ -2724,6 +2892,10 @@ def additional_report_endpoint(
     cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
     cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
     nit: str = Query("", max_length=15),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    orden_terceros: Literal["cuenta", "tercero"] = Query("cuenta", alias="ordenTerceros"),
+    orden_movimiento: Literal["documento", "fecha"] = Query("documento", alias="ordenMovimiento"),
       centro: str = Query("", max_length=7),
       comprobante: str = Query("", max_length=2),
       comprobante_hasta: str = Query("", alias="comprobanteHasta", max_length=2),
@@ -2752,6 +2924,9 @@ def additional_report_endpoint(
         report = store.build_additional_report(
             report_id, cia, anio, mes_desde, mes_hasta,
             account_from=cuenta_desde, account_to=cuenta_hasta, nit=nit,
+            **({"nit_from": nit_desde, "nit_to": nit_hasta, "order": orden_terceros,
+                "movement_order": orden_movimiento}
+               if report_id in {"tercero-general", "tercero-cuenta-tercero"} else {}),
               center=centro, voucher=comprobante, voucher_to=comprobante_hasta,
               document_type=tipo_documento, document_type_to=tipo_documento_hasta,
             document_from=documento_desde, document_to=documento_hasta,
@@ -2762,7 +2937,7 @@ def additional_report_endpoint(
             **({"include_results": incluir_resultados, "include_thirds": incluir_terceros}
                if report_id == "bal-gral-resultados" else {}),
         )
-        if vista_paginada and report_id in {"aux-gral", "aux-doc-afectado"}:
+        if vista_paginada and report_id in {"aux-gral", "aux-doc-afectado", "tercero-general", "tercero-cuenta-tercero"}:
             snapshot_id = save_report_snapshot(report)
             return load_report_snapshot(snapshot_id, page=0)
         return report

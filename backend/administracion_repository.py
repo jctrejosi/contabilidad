@@ -458,7 +458,7 @@ def build_audit_export(rows: Iterable[dict[str, Any]], *, formato: str) -> bytes
     sheet.append(list(AUDIT_EXPORT_HEADERS))
     for celda in sheet[1]:
         celda.font = Font(bold=True, color="FFFFFF")
-        celda.fill = PatternFill("solid", fgColor="174E5A")
+        celda.fill = PatternFill("solid", fgColor="003366")
     for fila in datos:
         sheet.append([fila.get(columna, "") for columna in AUDIT_EXPORT_COLUMNS])
     output = BytesIO()
