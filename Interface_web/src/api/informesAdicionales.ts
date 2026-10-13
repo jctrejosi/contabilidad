@@ -12,10 +12,20 @@ export interface FiltrosInformeAdicional {
   ordenTerceros?: 'cuenta' | 'tercero';
   ordenMovimiento?: 'documento' | 'fecha';
   centro?: string;
+  centroDesde?: string;
+  centroHasta?: string;
+  ordenCentros?: 'cuenta' | 'centro';
+  cuentasSeleccionadas?: string;
+  centrosSeleccionados?: string;
+  prefijoCuenta?: string;
+  incluirSaldoAnterior?: boolean;
+  incluirSubtotales?: boolean;
   comprobante?: string;
   comprobanteHasta?: string;
   tipoDocumento?: string;
   tipoDocumentoHasta?: string;
+  tipoContribuyente?: string;
+  companiaAnterior?: string;
   documentoDesde?: string;
   documentoHasta?: string;
   fechaDesde?: string;
@@ -27,6 +37,9 @@ export interface FiltrosInformeAdicional {
   incluirCeros?: boolean;
   incluirResultados?: boolean;
   incluirTerceros?: boolean;
+  incluirCentros?: boolean;
+  modoComparativo?: 'saldo' | 'movimiento';
+  operacionComparativa?: 'diferencia' | 'sumatoria';
 }
 
 export interface InformeAdicional {
@@ -46,6 +59,36 @@ export interface InformeAdicional {
   fechaHasta?: string;
   /** Identificador temporal del libro calculado para paginar y exportar sin repetir la consulta. */
   snapshotId?: string;
+}
+
+export interface DefinicionFlujo {
+  nivel: string;
+  cuenta: string;
+  nombre: string;
+  tipo: '+' | '-';
+  presupuesto: number;
+  valorBase: boolean;
+}
+
+async function requestFlow(path: string, init?: RequestInit): Promise<unknown> {
+  const response = await fetch(path, init);
+  const body = await response.json().catch(() => null) as { detail?: string } | null;
+  if (!response.ok) throw new Error(body?.detail ?? 'No fue posible guardar la definición.');
+  return body;
+}
+
+export async function listarDefinicionesFlujo(cia: string): Promise<DefinicionFlujo[]> {
+  return await requestFlow(`/api/informes/flujo/definiciones?cia=${encodeURIComponent(cia)}`) as DefinicionFlujo[];
+}
+
+export async function guardarDefinicionFlujo(cia: string, data: DefinicionFlujo, original?: string): Promise<DefinicionFlujo> {
+  const path = `/api/informes/flujo/definiciones${original ? `/${encodeURIComponent(original)}` : ''}?cia=${encodeURIComponent(cia)}`;
+  return await requestFlow(path, { method: original ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data) }) as DefinicionFlujo;
+}
+
+export async function eliminarDefinicionFlujo(cia: string, nivel: string): Promise<void> {
+  await requestFlow(`/api/informes/flujo/definiciones/${encodeURIComponent(nivel)}?cia=${encodeURIComponent(cia)}`, { method: 'DELETE' });
 }
 
 export interface MovimientoAnualTercero {
@@ -68,6 +111,21 @@ export async function consultarMovimientoAnualTercero(cia: string, anio: number,
   return body;
 }
 
+export interface MovimientoAnualCentro extends MovimientoAnualTercero {
+  centro: string;
+  nombreCentro: string;
+}
+
+export async function consultarMovimientoAnualCentro(cia: string, anio: number, cuenta: string, centro: string, nit: string): Promise<MovimientoAnualCentro> {
+  const params = new URLSearchParams({ cia, anio: String(anio), cuenta, centro, nit });
+  const response = await fetch(`/api/informes/centros/anual?${params}`);
+  const body = await response.json().catch(() => null) as MovimientoAnualCentro | { detail?: string } | null;
+  if (!response.ok || !body || !('meses' in body)) {
+    throw new Error(body && 'detail' in body ? body.detail : 'No fue posible consultar el movimiento anual del centro.');
+  }
+  return body;
+}
+
 function query(f: FiltrosInformeAdicional): URLSearchParams {
   const params = new URLSearchParams({
     cia: f.cia,
@@ -79,7 +137,7 @@ function query(f: FiltrosInformeAdicional): URLSearchParams {
   });
   for (const [key, value] of Object.entries(f)) {
     if (!(key in { cia: 1, anio: 1, mesDesde: 1, mesHasta: 1, nivel: 1, incluirCeros: 1 }) &&
-        (value || (typeof value === 'boolean' && key === 'incluirResultados'))) {
+        (value || typeof value === 'boolean')) {
       params.set(key, String(value));
     }
   }
@@ -88,7 +146,9 @@ function query(f: FiltrosInformeAdicional): URLSearchParams {
 
 export async function consultarInformeAdicional(id: string, filtros: FiltrosInformeAdicional): Promise<InformeAdicional> {
   const params = query(filtros);
-  if (['aux-gral', 'aux-doc-afectado', 'tercero-general', 'tercero-cuenta-tercero'].includes(id)) params.set('vistaPaginada', 'true');
+  if (['aux-gral', 'aux-doc-afectado', 'mov-comprobante', 'mov-tipo-doc', 'mov-cuenta', 'diario-cta', 'diario-rangos-continuos', 'diario-rangos-fijos', 'tercero-general', 'tercero-cuenta-tercero', 'tercero-especifico', 'iva-relacion', 'iva-totales-cuenta', 'iva-soportes',
+    'centro-consulta', 'centro-cuenta-centro', 'centro-por-cuenta', 'centro-tercero-centro',
+    'centro-detallado', 'centro-columnas-5152', 'centro-por-nivel'].includes(id)) params.set('vistaPaginada', 'true');
   const response = await fetch(`/api/informes/adicionales/${encodeURIComponent(id)}?${params}`);
   const body = await response.json().catch(() => null) as InformeAdicional | { detail?: string } | null;
   if (!response.ok || !body || !('filas' in body)) {

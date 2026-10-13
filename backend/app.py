@@ -139,6 +139,7 @@ from .report_snapshots import SnapshotNotFound, load as load_report_snapshot, sa
 from .reproceso_mensual_repository import (
     MonthlyReprocessValidationError,
 )
+from .auditoria_documentos_movimiento_repository import audit_documents_movement
 from .parametros_operacion_repository import (
     OperationParametersValidationError,
 )
@@ -644,6 +645,16 @@ class MonthlyReprocessRequest(BaseModel):
     motivo: str = Field("", max_length=180)
 
 
+class DocumentMovementAuditRequest(BaseModel):
+    """Período que se examina sin modificar los registros contables."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cia: str = Field(pattern=r"^[0-9]{1,3}$")
+    anio: int = Field(ge=1900, le=2100)
+    mes: int = Field(ge=1, le=12)
+
+
 class DocumentAnnulmentRequest(BaseModel):
     """Identidad inmutable y trazabilidad requeridas para retirar un documento."""
 
@@ -726,6 +737,18 @@ class OperationParametersWrite(BaseModel):
     controlaUsuarioLotes: bool
     comentarioCertificado: str = Field("", max_length=120)
     periodosHabilitados: dict[str, bool]
+
+
+class FlowDefinitionWrite(BaseModel):
+    """Fila de CONINF1 para el comparativo anual de flujo."""
+
+    model_config = ConfigDict(extra="forbid")
+    nivel: str = Field(min_length=1, max_length=4)
+    cuenta: str = Field(min_length=1, max_length=12)
+    nombre: str = Field(min_length=1, max_length=30)
+    tipo: Literal["+", "-"] = "+"
+    presupuesto: float = Field(0, ge=0)
+    valorBase: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -2487,6 +2510,16 @@ def post_movement(
     return {"item": result, "source": "Advantage Data Server"}
 
 
+@app.post("/api/reprocesos/documentos-movimiento", summary="Auditar documentos y partidas del mes")
+def audit_documents_movement_endpoint(request: DocumentMovementAuditRequest) -> dict[str, object]:
+    """Detecta descuadres y auxiliares inconsistentes; nunca escribe en ADS."""
+    try:
+        result = audit_documents_movement(request.cia, request.anio, request.mes)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "source": "MOV01", "dryRun": True}
+
+
 @app.post("/api/reprocesos/mensual/simular", summary="Simular el reproceso mensual")
 def simulate_monthly_reprocess_endpoint(request: MonthlyReprocessRequest) -> dict[str, object]:
     """Compara MOV01 contra CONMAE/CONTERCE sin efectuar escrituras."""
@@ -2882,6 +2915,62 @@ def third_party_annual_endpoint(
         raise _service_error(exc) from exc
 
 
+@app.get("/api/informes/centros/anual", summary="Movimiento anual de cuenta, centro y tercero")
+def center_annual_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12),
+    centro: str = Query(max_length=7),
+    nit: str = Query(max_length=15),
+) -> dict[str, object]:
+    try:
+        from .informes_centros_repository import read_center_annual
+        return read_center_annual(cia, anio, cuenta, centro, nit)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/flujo/definiciones")
+def flow_definitions(cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> list[dict[str, object]]:
+    try:
+        from .flujo_comparativo_original_repository import list_flow_definitions
+        return list_flow_definitions(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/informes/flujo/definiciones")
+def create_flow_definition(data: FlowDefinitionWrite,
+                           cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> dict[str, object]:
+    try:
+        from .flujo_comparativo_original_repository import save_flow_definition
+        return save_flow_definition(cia, data.model_dump())
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/informes/flujo/definiciones/{nivel}")
+def update_flow_definition(data: FlowDefinitionWrite,
+                           nivel: str = Path(pattern=r"^[A-Za-z0-9]{1,4}$"),
+                           cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> dict[str, object]:
+    try:
+        from .flujo_comparativo_original_repository import save_flow_definition
+        return save_flow_definition(cia, data.model_dump(), old_level=nivel)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete("/api/informes/flujo/definiciones/{nivel}")
+def remove_flow_definition(nivel: str = Path(pattern=r"^[A-Za-z0-9]{1,4}$"),
+                           cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> dict[str, bool]:
+    try:
+        from .flujo_comparativo_original_repository import delete_flow_definition
+        delete_flow_definition(cia, nivel)
+        return {"eliminado": True}
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
 @app.get("/api/informes/adicionales/{report_id}", summary="Generar informe contable adicional")
 def additional_report_endpoint(
     report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
@@ -2896,11 +2985,20 @@ def additional_report_endpoint(
     nit_hasta: str = Query("", alias="nitHasta", max_length=15),
     orden_terceros: Literal["cuenta", "tercero"] = Query("cuenta", alias="ordenTerceros"),
     orden_movimiento: Literal["documento", "fecha"] = Query("documento", alias="ordenMovimiento"),
+    centro_desde: str = Query("", alias="centroDesde", max_length=7),
+    centro_hasta: str = Query("", alias="centroHasta", max_length=7),
+    orden_centros: Literal["cuenta", "centro"] = Query("cuenta", alias="ordenCentros"),
+    cuentas_seleccionadas: str = Query("", alias="cuentasSeleccionadas", max_length=3500),
+    centros_seleccionados: str = Query("", alias="centrosSeleccionados", max_length=2000),
+    prefijo_cuenta: str = Query("", alias="prefijoCuenta", max_length=12),
+    incluir_saldo_anterior: bool = Query(True, alias="incluirSaldoAnterior"),
       centro: str = Query("", max_length=7),
       comprobante: str = Query("", max_length=2),
       comprobante_hasta: str = Query("", alias="comprobanteHasta", max_length=2),
       tipo_documento: str = Query("", alias="tipoDocumento", max_length=2),
       tipo_documento_hasta: str = Query("", alias="tipoDocumentoHasta", max_length=2),
+    tipo_contribuyente: str = Query("", alias="tipoContribuyente", max_length=2),
+    compania_anterior: str = Query("", alias="companiaAnterior", max_length=3),
     documento_desde: str = Query("", alias="documentoDesde", max_length=12),
     documento_hasta: str = Query("", alias="documentoHasta", max_length=12),
     fecha_desde: str = Query("", alias="fechaDesde", max_length=10),
@@ -2908,10 +3006,14 @@ def additional_report_endpoint(
     modalidad: Literal["detallado", "resumido"] = Query("detallado"),
     documento_afectado: str = Query("", alias="documentoAfectado", max_length=12),
     buscar: str = Query("", max_length=60),
-    nivel: int = Query(6, ge=4, le=12),
+    nivel: int = Query(6, ge=1, le=12),
     incluir_ceros: bool = Query(False, alias="incluirCeros"),
     incluir_resultados: bool = Query(True, alias="incluirResultados"),
     incluir_terceros: bool = Query(False, alias="incluirTerceros"),
+    incluir_subtotales: bool = Query(False, alias="incluirSubtotales"),
+    incluir_centros: bool = Query(False, alias="incluirCentros"),
+    modo_comparativo: Literal["saldo", "movimiento"] = Query("saldo", alias="modoComparativo"),
+    operacion_comparativa: Literal["diferencia", "sumatoria"] = Query("diferencia", alias="operacionComparativa"),
     vista_paginada: bool = Query(False, alias="vistaPaginada"),
 ) -> dict[str, object]:
     """Lee el motor activo con los parámetros originales; no modifica tablas.
@@ -2924,20 +3026,54 @@ def additional_report_endpoint(
         report = store.build_additional_report(
             report_id, cia, anio, mes_desde, mes_hasta,
             account_from=cuenta_desde, account_to=cuenta_hasta, nit=nit,
+            **({"movement_order": orden_movimiento, "subtotals": incluir_subtotales}
+               if report_id in {"mov-comprobante", "mov-tipo-doc"} else {}),
+            **({"value_mode": modo_comparativo, "operation": operacion_comparativa}
+               if report_id == "bal-comparativo-mensual" else {}),
+            **({"selected_accounts": cuentas_seleccionadas}
+               if report_id == "tercero-especifico" else {}),
+            **({"center_from": centro_desde, "center_to": centro_hasta,
+                "selected_centers": centros_seleccionados, "order": orden_centros}
+               if report_id in {"diario-rangos-continuos", "diario-rangos-fijos"} else {}),
+            **({"selected_centers": centros_seleccionados,
+                "include_results": incluir_resultados,
+                "include_thirds": incluir_terceros}
+               if report_id in {"balance-acumulado", "balance-mensual-centro",
+                                "clasificacion-centros", "clasificacion-centro-tercero",
+                                "discriminados-mes"} else {}),
             **({"nit_from": nit_desde, "nit_to": nit_hasta, "order": orden_terceros,
                 "movement_order": orden_movimiento}
-               if report_id in {"tercero-general", "tercero-cuenta-tercero"} else {}),
+               if report_id in {"tercero-general", "tercero-cuenta-tercero", "iva-relacion", "iva-totales-cuenta", "iva-soportes"} else {}),
+            **({"nit_from": nit_desde, "nit_to": nit_hasta,
+                "center_from": centro_desde, "center_to": centro_hasta,
+                "order": orden_centros, "include_opening": incluir_saldo_anterior,
+                "selected_accounts": cuentas_seleccionadas,
+                "selected_centers": centros_seleccionados,
+                "account_prefix": prefijo_cuenta,
+                "include_thirds": incluir_terceros}
+               if report_id in {"centro-consulta", "centro-cuenta-centro", "centro-por-cuenta",
+                                "centro-tercero-centro", "centro-detallado", "centro-columnas-5152",
+                                "centro-por-nivel"} else {}),
               center=centro, voucher=comprobante, voucher_to=comprobante_hasta,
               document_type=tipo_documento, document_type_to=tipo_documento_hasta,
+            taxpayer_type=tipo_contribuyente,
+            prior_company=compania_anterior,
             document_from=documento_desde, document_to=documento_hasta,
             date_from=fecha_desde, date_to=fecha_hasta,
             detail_mode=modalidad,
             affected_document=documento_afectado,
             search=buscar, level=nivel, include_zero=incluir_ceros,
             **({"include_results": incluir_resultados, "include_thirds": incluir_terceros}
-               if report_id == "bal-gral-resultados" else {}),
+               if report_id in {"bal-gral-resultados", "bal-comparativo-mensual"} else
+               {"include_results": incluir_resultados, "include_thirds": incluir_terceros,
+                "include_centers": incluir_centros} if report_id == "balance-prueba-anual" else
+               {"include_thirds": incluir_terceros} if report_id == "saldos-cuenta" else
+               {"include_results": incluir_resultados} if report_id == "inventario-bal" else {}),
         )
-        if vista_paginada and report_id in {"aux-gral", "aux-doc-afectado", "tercero-general", "tercero-cuenta-tercero"}:
+        if vista_paginada and report_id in {"aux-gral", "aux-doc-afectado", "mov-comprobante", "mov-tipo-doc", "mov-cuenta", "diario-cta", "diario-rangos-continuos", "diario-rangos-fijos", "tercero-general", "tercero-cuenta-tercero", "tercero-especifico", "iva-relacion", "iva-totales-cuenta", "iva-soportes",
+                                            "centro-consulta", "centro-cuenta-centro", "centro-por-cuenta",
+                                            "centro-tercero-centro", "centro-detallado", "centro-columnas-5152",
+                                            "centro-por-nivel"}:
             snapshot_id = save_report_snapshot(report)
             return load_report_snapshot(snapshot_id, page=0)
         return report

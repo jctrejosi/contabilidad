@@ -533,7 +533,9 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         sheet = workbook.active
         sheet.title = "Informe"
         sheet.append([report["compania"]["nombre"]])
-        period_label = (report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado", "bal-gral-resultados", "iva-acumulacion"} else
+        period_label = (report.get("nota", "") if report["id"] in {"mayor-bal", "diario-cta", "caja-diario-comp", "caja-diario-cta"} else
+                        f"Inventario y balance · mes {report['mesHasta']:02d} de {report['anio']}" if report["id"] == "inventario-bal" else
+                        report.get("nota", "") if report["id"] in {"aux-gral", "aux-doc-afectado", "bal-gral-resultados", "iva-acumulacion"} else
                         "Catálogo de cuentas" if report["id"] == "listado-cuentas" else
                         "Directorio general de terceros" if report.get("source") == "FADCLI" else
                         f"Mes o lote {report['mesDesde']:02d}" if report["id"] == "doc-formato" else
@@ -542,13 +544,18 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
         sheet.append(labels)
         for row in rows:
             sheet.append(row)
+        if report["id"] == "mayor-bal":
+            sheet.append(report["totales"])
+            for cell in sheet[sheet.max_row]:
+                cell.font = Font(bold=True, color="003366")
+                cell.fill = PatternFill("solid", fgColor="EFFAFF")
         if report["id"] == "iva-acumulacion":
             sheet.append(report["totales"])
             for cell in sheet[sheet.max_row]:
                 cell.font = Font(bold=True, color="003366")
                 cell.fill = PatternFill("solid", fgColor="EFFAFF")
         for row_number, kind in enumerate(report.get("tipos", []), start=4):
-            if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "apertura"}:
+            if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "total-clase", "total-estado", "total-balance", "resultado", "apertura"}:
                 for cell in sheet[row_number]:
                     cell.font = Font(bold=True, color="003366")
                     cell.fill = PatternFill("solid", fgColor="EFFAFF")
@@ -614,6 +621,50 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
                 story.append(table)
             document.build(story or [Paragraph("Sin saldos para el período seleccionado.", styles["Normal"])])
             return output.getvalue()
+        if report["id"] in {"caja-diario-comp", "caja-diario-cta"}:
+            document = SimpleDocTemplate(output, pagesize=landscape(A3),
+                                         leftMargin=28, rightMargin=28,
+                                         topMargin=28, bottomMargin=28)
+            styles = _dsi_pdf_styles()
+            headings = [str(label) for label in labels]
+            split_at = next((index for index, kind in enumerate(report.get("tipos", []))
+                             if kind == "seccion" and rows[index][0] == "RESUMEN LIBRO CAJA DIARIO"), len(rows))
+            story = []
+            sections_to_print = [rows[:split_at]]
+            if split_at < len(rows):
+                sections_to_print.append(rows[split_at + 1:])
+            for section_index, section_rows in enumerate(sections_to_print):
+                if section_index:
+                    story.append(PageBreak())
+                story.extend([
+                    Paragraph(escape(report["compania"]["nombre"]), styles["Heading1"]),
+                    Paragraph(escape(report["nota"] if not section_index else
+                                     f"Resumen · {report['nota']}"), styles["Heading2"]),
+                    Spacer(1, 10),
+                ])
+                data = [headings]
+                for row in section_rows:
+                    data.append([str(row[0]), str(row[1]),
+                                 f"{float(row[2]):,.2f}" if isinstance(row[2], (int, float)) else "",
+                                 f"{float(row[3]):,.2f}" if isinstance(row[3], (int, float)) else ""])
+                table = LongTable(data, colWidths=[210, 520, 185, 185], repeatRows=1)
+                commands = [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("GRID", (0, 0), (-1, -1), 0.2, colors.lightgrey),
+                    ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5FBFF")]),
+                ]
+                kinds = report.get("tipos", [])[:split_at] if not section_index else report.get("tipos", [])[split_at + 1:]
+                for row_index, kind in enumerate(kinds, start=1):
+                    if kind in {"seccion", "subtotal", "total-general"}:
+                        commands.append(("BACKGROUND", (0, row_index), (-1, row_index), colors.HexColor("#EFFAFF")))
+                        commands.append(("TEXTCOLOR", (0, row_index), (-1, row_index), colors.HexColor("#003366")))
+                table.setStyle(TableStyle(commands))
+                story.append(table)
+            document.build(story)
+            return output.getvalue()
         if report["id"] == "doc-formato":
             doc = SimpleDocTemplate(output, pagesize=landscape(letter), leftMargin=28, rightMargin=28)
             styles = _dsi_pdf_styles()
@@ -659,13 +710,23 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
             topMargin=25, bottomMargin=25,
         )
         width = landscape(A3)[0] - 48
-        cell_width = width / max(1, len(labels))
+        column_widths = ([75, 75, 145, 80, 35, 35, 105, 200, 125, 125] if report["id"] == "diario-cta" else
+                         [80, 250, *([135] * 6)] if report["id"] == "mayor-bal" else
+                         [63, 65, 230, *([96] * 6)] if report["id"] == "inventario-bal"
+                         else [width / max(1, len(labels))] * len(labels))
         data = [[str(label) for label in labels]]
-        for row in rows:
-            data.append(["\n".join(simpleSplit(str(value), "Helvetica", 7, cell_width - 8)[:3]) for value in row])
+        output_rows = rows + ([report["totales"]] if report["id"] == "mayor-bal" else [])
+        for row in output_rows:
+            data.append([
+                "\n".join(simpleSplit(
+                    f"{float(value):,.2f}" if report["id"] in {"inventario-bal", "mayor-bal", "diario-cta"} and index >= (8 if report["id"] == "diario-cta" else 3 if report["id"] == "inventario-bal" else 2) and value is not None else str(value or ""),
+                    "Helvetica", 7, column_widths[index] - 8,
+                )[:3])
+                for index, value in enumerate(row)
+            ])
         if report["id"] == "iva-acumulacion":
             data.append([str(value) for value in report["totales"]])
-        table = LongTable(data, colWidths=[cell_width] * len(labels), repeatRows=1)
+        table = LongTable(data, colWidths=column_widths, repeatRows=1)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -675,12 +736,17 @@ def export_additional_report(report: dict[str, Any], format_name: str) -> bytes:
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5FBFF")]),
         ]))
         for row_number, kind in enumerate(report.get("tipos", []), start=1):
-            if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "apertura"}:
+            if kind in {"seccion", "subtotal", "total-cuenta", "total-general", "total-clase", "total-estado", "total-balance", "resultado", "apertura"}:
                 table.setStyle(TableStyle([
                     ("BACKGROUND", (0, row_number), (-1, row_number), colors.HexColor("#EFFAFF")),
                     ("TEXTCOLOR", (0, row_number), (-1, row_number), colors.HexColor("#003366")),
                 ]))
         if report["id"] == "iva-acumulacion":
+            table.setStyle(TableStyle([
+                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFFAFF")),
+                ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#003366")),
+            ]))
+        if report["id"] == "mayor-bal":
             table.setStyle(TableStyle([
                 ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFFAFF")),
                 ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#003366")),
