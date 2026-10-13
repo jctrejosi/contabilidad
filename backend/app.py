@@ -16,6 +16,27 @@ from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import store
+from .medios_formatos_repository import (
+    FormatoExiste, FormatoInvalido, FormatoNoExiste,
+    delete_formato as delete_medio_formato,
+    list_formatos as list_medio_formatos,
+    save_formato as save_medio_formato,
+)
+from .medios_conceptos_repository import (
+    ConceptoMedioExiste, ConceptoMedioInvalido, ConceptoMedioNoExiste,
+    delete_concepto as delete_medio_concepto,
+    list_conceptos as list_medio_conceptos,
+    save_concepto as save_medio_concepto,
+)
+from .medios_cuentas_repository import (
+    MedioCuentaConflict, MedioCuentaNotFound, MedioCuentaValidation,
+    copy_account_assignments, copy_company_definitions, copy_company_preview,
+    delete_assignment, list_accounts as list_medio_accounts,
+    list_assignments, save_assignment,
+)
+from .medios_generacion_repository import (
+    MediosGeneracionError, generate_medios, generation_status,
+)
 from .ads_repository import (
     AccountAlreadyExists,
     AccountNotFound,
@@ -140,6 +161,7 @@ from .reproceso_mensual_repository import (
     MonthlyReprocessValidationError,
 )
 from .auditoria_documentos_movimiento_repository import audit_documents_movement
+from .extraccion_movimiento_repository import ExtractionConflict, preview_extraction, confirm_extraction
 from .parametros_operacion_repository import (
     OperationParametersValidationError,
 )
@@ -655,6 +677,25 @@ class DocumentMovementAuditRequest(BaseModel):
     mes: int = Field(ge=1, le=12)
 
 
+class MovementExtractionRequest(BaseModel):
+    """Filtros de ESPE06, ESPE07 y ESPE08 reunidos en un solo proceso."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cia: str = Field(pattern=r"^[0-9]{1,3}$")
+    anio: int = Field(ge=1900, le=2100)
+    mes: int = Field(ge=1, le=12)
+    modo: str
+    lote: str
+    comprobante: str = ""
+    tipoDocumento: str = ""
+    documentoDesde: str = ""
+    documentoHasta: str = ""
+    huella: str = ""
+    usuario: str = "WEB"
+    motivo: str = ""
+
+
 class DocumentAnnulmentRequest(BaseModel):
     """Identidad inmutable y trazabilidad requeridas para retirar un documento."""
 
@@ -1118,6 +1159,9 @@ def _service_error(exc: Exception) -> HTTPException:
             TemplateAlreadyExists,
             DocumentFormatAlreadyExists,
             TaxFormatAlreadyExists,
+            FormatoExiste,
+            ConceptoMedioExiste,
+            MedioCuentaConflict,
             MediumConflict,
             TaxFormatConflict,
             AccumulationConflict,
@@ -1139,7 +1183,7 @@ def _service_error(exc: Exception) -> HTTPException:
     if isinstance(
         exc,
         (
-            PostingConflict, LotConflict, AnnulmentConflict, ThirdPartyConflict,
+            PostingConflict, LotConflict, AnnulmentConflict, ExtractionConflict, ThirdPartyConflict,
             CompanyConflict, VatRateConflict, RetentionConceptConflict, IncomeLineConflict,
             TemplateConflict,
         ),
@@ -1160,6 +1204,9 @@ def _service_error(exc: Exception) -> HTTPException:
             TemplateNotFound,
             DocumentFormatNotFound,
             TaxFormatNotFound,
+            FormatoNoExiste,
+            ConceptoMedioNoExiste,
+            MedioCuentaNotFound,
             MediumNotFound,
             ConsolidacionNotFound,
             CierreNotFound,
@@ -1192,6 +1239,10 @@ def _service_error(exc: Exception) -> HTTPException:
             TemplateValidationError,
             DocumentFormatValidationError,
             TaxFormatValidationError,
+            FormatoInvalido,
+            ConceptoMedioInvalido,
+            MedioCuentaValidation,
+            MediosGeneracionError,
             MediumValidationError,
             AccumulationValidationError,
             ConsolidacionValidationError,
@@ -2510,6 +2561,27 @@ def post_movement(
     return {"item": result, "source": "Advantage Data Server"}
 
 
+@app.post("/api/especiales/extraccion/previa", summary="Previsualizar extracción a lote")
+def preview_extraction_endpoint(request: MovementExtractionRequest) -> dict[str, object]:
+    """Selecciona partidas sin modificar la contabilidad."""
+    try:
+        result = preview_extraction(request.model_dump())
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "dryRun": True}
+
+
+@app.post("/api/especiales/extraccion/confirmar", summary="Trasladar movimiento a un lote nuevo")
+def confirm_extraction_endpoint(request: MovementExtractionRequest) -> dict[str, object]:
+    """Crea lote, retira movimiento y reconstruye saldos atómicamente."""
+    try:
+        result = confirm_extraction(request.model_dump(), fingerprint=request.huella,
+                                    user=request.usuario, reason=request.motivo)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "source": "Advantage Data Server"}
+
+
 @app.post("/api/reprocesos/documentos-movimiento", summary="Auditar documentos y partidas del mes")
 def audit_documents_movement_endpoint(request: DocumentMovementAuditRequest) -> dict[str, object]:
     """Detecta descuadres y auxiliares inconsistentes; nunca escribe en ADS."""
@@ -3204,6 +3276,253 @@ _MEDIUM_MEDIA = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 _CIA_QUERY = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$")
+
+
+class MedioFormatoWrite(BaseModel):
+    """Campos del diálogo MEDMAG11; VALOR1/VALOR2 y COMBO no se alteran al editar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(min_length=1, max_length=4)
+    nombre: str = Field(min_length=1, max_length=40)
+    elemento: str = Field("", max_length=10)
+    concepto: bool = True
+    tipodoc: bool = True
+    nit: bool = True
+    digito: bool = True
+    nombreCampo: bool = True
+    direccion: bool = True
+    municipio: bool = True
+    pais: bool = True
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+@app.get("/api/medios/formatos", summary="Formatos de medios magnéticos")
+def medios_formatos_listar(cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return list_medio_formatos(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/formatos", status_code=status.HTTP_201_CREATED,
+          summary="Crear formato de medios magnéticos")
+def medios_formatos_crear(payload: MedioFormatoWrite, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_medio_formato(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/medios/formatos/{codigo}", summary="Modificar formato de medios magnéticos")
+def medios_formatos_modificar(payload: MedioFormatoWrite, codigo: str,
+                             cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_medio_formato(cia, payload.model_dump(), original=codigo,
+                                  user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete("/api/medios/formatos/{codigo}", status_code=status.HTTP_204_NO_CONTENT,
+            summary="Eliminar formato de medios magnéticos")
+def medios_formatos_eliminar(codigo: str, cia: str = _CIA_QUERY,
+                            usuario: str = Query("WEB", max_length=4)) -> Response:
+    try:
+        delete_medio_formato(cia, codigo, user=usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class MedioConceptoWrite(BaseModel):
+    """Formulario MEDMAG21: dos indicadores y siete reglas de salida por concepto."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(min_length=1, max_length=4)
+    nombre: str = Field(min_length=1, max_length=40)
+    monto: float = Field(ge=0, le=99_999_999)
+    valor1: bool = True
+    valor2: bool = True
+    combos: list[str] = Field(min_length=7, max_length=7)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+@app.get("/api/medios/formatos/{formato}/conceptos", summary="Conceptos de un formato")
+def medios_conceptos_listar(formato: str, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return list_medio_conceptos(cia, formato)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/formatos/{formato}/conceptos", status_code=status.HTTP_201_CREATED,
+          summary="Crear concepto de medios")
+def medios_conceptos_crear(formato: str, payload: MedioConceptoWrite,
+                          cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_medio_concepto(cia, formato, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/medios/formatos/{formato}/conceptos/{codigo}", summary="Modificar concepto de medios")
+def medios_conceptos_modificar(formato: str, codigo: str, payload: MedioConceptoWrite,
+                              cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_medio_concepto(cia, formato, payload.model_dump(), original=codigo,
+                                   user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete("/api/medios/formatos/{formato}/conceptos/{codigo}",
+            status_code=status.HTTP_204_NO_CONTENT, summary="Eliminar concepto de medios")
+def medios_conceptos_eliminar(formato: str, codigo: str, cia: str = _CIA_QUERY,
+                             usuario: str = Query("WEB", max_length=4)) -> Response:
+    try:
+        delete_medio_concepto(cia, formato, codigo, user=usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class MedioAsignacionWrite(BaseModel):
+    """Campos de MEDMAG31A/31AG. La clave original se pasa al modificar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    formato: str
+    concepto: str
+    tipo: str = "D"
+    cuenta2: str = ""
+    tipomed: int = 0
+    pmed1: float = 0
+    pmed2: float = 0
+    pmed3: float = 0
+    pmed4: float = 0
+    pmed5: float = 0
+    pmed6: float = 0
+    formato2: str = ""
+    concepto2: str = ""
+    modcxp: int = 0
+    colvalor: int = 0
+    colbase: int = 0
+    movtipo: int = 1
+    columna2: int = 0
+    docx: str = ""
+    docx2: str = ""
+    docx3: str = ""
+    natural: bool = False
+    original: dict[str, Any] | None = None
+
+
+class MedioCuentaCopy(BaseModel):
+    origen: str
+    destino: str
+    confirmar: Literal[True]
+
+
+class MedioCompanyCopy(BaseModel):
+    origen: str
+    confirmar: Literal[True]
+
+
+@app.get("/api/medios/cuentas", summary="Plan de cuentas para asignación de medios")
+def medios_cuentas_listar(cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return list_medio_accounts(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+class MedioGeneracionRequest(BaseModel):
+    mesInicial: int = Field(ge=1, le=12)
+    mesFinal: int = Field(ge=1, le=12)
+    confirmar: Literal[True]
+
+
+@app.get("/api/medios/generacion", summary="Estado de generación de medios")
+def medios_generacion_estado(cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return generation_status(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/generacion", summary="Generar medios anuales")
+def medios_generacion_ejecutar(payload: MedioGeneracionRequest,
+                              cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return generate_medios(cia, payload.mesInicial, payload.mesFinal)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/medios/cuentas/{cuenta}/asignaciones", summary="Asignaciones de la cuenta")
+def medios_asignaciones_listar(cuenta: str, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return list_assignments(cia, cuenta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/cuentas/{cuenta}/asignaciones", status_code=status.HTTP_201_CREATED,
+          summary="Asignar formato y concepto a una cuenta")
+def medios_asignaciones_crear(cuenta: str, payload: MedioAsignacionWrite,
+                             cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_assignment(cia, cuenta, payload.model_dump(exclude={"original"}))
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/medios/cuentas/{cuenta}/asignaciones", summary="Modificar una asignación")
+def medios_asignaciones_modificar(cuenta: str, payload: MedioAsignacionWrite,
+                                cia: str = _CIA_QUERY) -> dict[str, object]:
+    if payload.original is None:
+        raise HTTPException(status_code=422, detail="Se requiere la clave original de la asignación.")
+    try:
+        return save_assignment(cia, cuenta, payload.model_dump(exclude={"original"}), original=payload.original)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete("/api/medios/cuentas/{cuenta}/asignaciones", status_code=status.HTTP_204_NO_CONTENT,
+            summary="Eliminar una asignación")
+def medios_asignaciones_eliminar(cuenta: str, cia: str = _CIA_QUERY,
+                                formato: str = Query(), concepto: str = Query(),
+                                cuenta2: str = Query("")) -> Response:
+    try:
+        delete_assignment(cia, cuenta, formato, concepto, cuenta2)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/api/medios/cuentas/copiar", summary="Copiar asignaciones entre cuentas")
+def medios_asignaciones_copiar(payload: MedioCuentaCopy, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return copy_account_assignments(cia, payload.origen, payload.destino)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/medios/definiciones/preview", summary="Vista previa de copia entre compañías")
+def medios_definiciones_preview(origen: str = Query(), cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return copy_company_preview(cia, origen)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/definiciones/copiar", summary="Copiar definiciones CONMAE entre compañías")
+def medios_definiciones_copiar(payload: MedioCompanyCopy, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return copy_company_definitions(cia, payload.origen)
+    except Exception as exc:
+        raise _service_error(exc) from exc
 
 
 def _validate_month_range(mes_desde: int, mes_hasta: int) -> None:

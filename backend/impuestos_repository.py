@@ -52,6 +52,7 @@ from openpyxl import Workbook
 from .accounting_lock import accounting_write_lock
 from .ads_repository import (
     ADO_TYPE_DOUBLE,
+    ADO_TYPE_INTEGER,
     ADO_TYPE_VARCHAR,
     CompanyNotFound,
     _company_exists,
@@ -145,9 +146,10 @@ LEGACY_MEDIA_MESSAGE = (
     "revisión del medio magnético solo están implementadas con PostgreSQL."
 )
 LEGACY_COPY_MESSAGE = (
-    "La copia de definiciones entre compañías no tiene destino en el legado: "
-    "CONMAG1/CONMAG2/CONMAG3 no tienen columna de compañía (son globales). "
-    "La operación solo está implementada con PostgreSQL."
+    "Esta ruta de copia de formatos completos no existe en el legado: "
+    "CONMAG1/CONMAG2 son globales. Para trasladar los seis campos fiscales "
+    "de CONMAE entre compañías use la opción Medios magnéticos / "
+    "Traer definiciones de otra compañía (MEDMAG03T)."
 )
 
 
@@ -717,7 +719,7 @@ def list_formatos(cia: str, *, anio: int | None = None) -> dict[str, Any]:
     sql = (
         "SELECT f.CODFORMA, f.NOMFORMA, "
         "(SELECT COUNT(*) FROM CONMAG2 c WHERE c.FORMATO = f.CODFORMA) AS CONCEPTOS, "
-        "(SELECT COUNT(*) FROM CONMAG3 a WHERE a.FORMATO = f.CODFORMA) AS CUENTAS "
+        f"(SELECT COUNT(*) FROM CONMAG3 a WHERE a.FORMATO = f.CODFORMA AND a.CIA = {company_id}) AS CUENTAS "
         "FROM CONMAG1 f ORDER BY f.CODFORMA"
     )
     with ads_connection() as connection:
@@ -1046,25 +1048,26 @@ def replace_formato_asignaciones(
             raise TaxFormatNotFound(f"No existe el formato {code}.")
         existentes = {
             _text(fila.get("CUENTA"))
-            for fila in _read(connection, f"SELECT CUENTA FROM CONMAG3 WHERE FORMATO = '{code}'")
+            for fila in _read(connection, f"SELECT CUENTA FROM CONMAG3 WHERE FORMATO = '{code}' AND CIA = {company_id}")
         }
         if not dry_run:
             connection.BeginTrans()
             try:
                 _execute(
                     connection,
-                    "DELETE FROM CONMAG3 WHERE FORMATO = ?",
-                    [(ADO_TYPE_VARCHAR, 4, code)],
+                    "DELETE FROM CONMAG3 WHERE FORMATO = ? AND CIA = ?",
+                    [(ADO_TYPE_VARCHAR, 4, code), (ADO_TYPE_INTEGER, 0, company_id)],
                 )
                 for cuenta in data["cuentas"]:
                     _execute(
                         connection,
-                        "INSERT INTO CONMAG3 (CUENTA, FORMATO, CONCEPTO, TIPO) VALUES (?, ?, ?, ?)",
+                        "INSERT INTO CONMAG3 (CUENTA, FORMATO, CONCEPTO, TIPO, CIA) VALUES (?, ?, ?, ?, ?)",
                         [
                             (ADO_TYPE_VARCHAR, 12, cuenta),
                             (ADO_TYPE_VARCHAR, 4, code),
                             (ADO_TYPE_VARCHAR, 4, ""),
                             (ADO_TYPE_VARCHAR, 1, "C"),
+                            (ADO_TYPE_INTEGER, 0, company_id),
                         ],
                     )
                 connection.CommitTrans()
@@ -1083,8 +1086,7 @@ def replace_formato_asignaciones(
         "retiradas": len(existentes - entrantes),
         "dryRun": dry_run,
         "advertencia": (
-            "CONMAG3 no tiene columna de compañía ni rango CUENTA..CUENTA2 en el "
-            "contrato: cada cuenta se guarda como una fila y no se valida contra el "
+            "Cada cuenta se guarda como una fila y no se valida contra el "
             "plan como hace la FK de PostgreSQL "
             "(db/old_db/MATRIZ_TABLAS_Y_BRECHAS.md P19)."
         ),

@@ -21,6 +21,9 @@ const fmtCOP = (n: number): string => `$ ${n.toLocaleString('es-CO', { minimumFr
 const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
 const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
 const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
+// Las columnas responden al espacio disponible del panel, incluido el menú
+// lateral. Todas las etiquetas mantienen la misma altura dentro de la rejilla.
+const REPORT_TAG_GRID = 'grid grid-cols-1 gap-3 @min-[560px]:grid-cols-2 @min-[880px]:grid-cols-3';
 
 interface Informe {
   id: string;
@@ -753,6 +756,7 @@ export default function Informes({ onNavigate, cia }: Props) {
     documentoAfectado: '',
   });
   const [generando, setGenerando] = useState(false);
+  const [submenuInforme, setSubmenuInforme] = useState<string | null>(null);
   const [showFlowDefinitions, setShowFlowDefinitions] = useState(false);
   const [errorInforme, setErrorInforme] = useState<string | null>(null);
   const [anioOperacion, setAnioOperacion] = useState<number | null>(null);
@@ -1039,48 +1043,50 @@ export default function Informes({ onNavigate, cia }: Props) {
 
   const listaRecientes = recientes.map(id => porId.get(id)).filter(Boolean) as Informe[];
   const listaFavoritos = favoritos.map(id => porId.get(id)).filter(Boolean) as Informe[];
+  const entradaAbierta = MENU_INFORMES.find(entry => entry.numero === submenuInforme);
+
+  // Las etiquetas conservan la numeración y abren el mismo formulario de
+  // parámetros. La estrella sigue siendo una acción independiente del informe.
+  function etiquetaInforme(informe: Informe, nombre: string, numero?: string): ReactNode {
+    return (
+      <div key={informe.id} className="flex h-20 w-full min-w-0 items-center rounded-md border border-gray-200 bg-white transition hover:border-petroleum-300 hover:bg-petroleum-50/60">
+        <button type="button" disabled={generando} onClick={() => abrirInforme(informe)} title={`${nombre} — ${informe.desc}`} className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-4 py-2 text-left text-sm font-medium text-gray-700 hover:text-petroleum-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 disabled:opacity-50">
+          {numero && <span className="shrink-0 font-mono font-semibold text-petroleum-700">{numero}-</span>}
+          <span className="line-clamp-3 break-words leading-5">{nombre}</span>
+        </button>
+        <button type="button" onClick={event => toggleFavorito(informe.id, event)} aria-label={favoritos.includes(informe.id) ? `Quitar ${nombre} de favoritos` : `Añadir ${nombre} a favoritos`} aria-pressed={favoritos.includes(informe.id)} className="mr-1 shrink-0 rounded px-2 py-2 text-base text-petroleum-600 hover:bg-petroleum-100 focus-visible:outline-2 focus-visible:outline-petroleum-500">
+          {favoritos.includes(informe.id) ? '★' : '☆'}
+        </button>
+      </div>
+    );
+  }
 
   function renderEntrada(entry: EntradaMenuInforme, nivel = 0): ReactNode {
     const informe = entry.id ? porId.get(entry.id) : undefined;
     const numero = `${entry.numero}-`;
     if (entry.opciones) return (
-      <details key={`${nivel}-${entry.numero}-${entry.nombre}`} className={nivel === 0 ? 'border-b border-gray-100 last:border-b-0' : 'border-t border-gray-100'}>
-        <summary className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm text-gray-800 hover:bg-petroleum-50/50 ${nivel > 0 ? 'pl-8' : ''}`}>
-          <span className="w-7 shrink-0 font-mono font-semibold text-petroleum-700">{numero}</span>
-          <span className="flex-1 font-medium">{entry.nombre}</span>
-          <span className="text-xs text-gray-400">▾</span>
+      <details key={`${nivel}-${entry.numero}-${entry.nombre}`} className="col-span-full w-full rounded-xl border border-petroleum-100 bg-white p-3">
+        <summary className="flex h-20 w-full cursor-pointer list-none items-center gap-2 rounded-md bg-petroleum-50 px-4 py-2 text-sm text-petroleum-700 focus-visible:outline-2 focus-visible:outline-petroleum-500">
+          <span className="shrink-0 font-mono font-semibold">{numero}</span>
+          <span className="font-medium">{entry.nombre}</span>
+          <span aria-hidden="true">▾</span>
         </summary>
-        <div className="bg-gray-50/60">
+        <div className={`mt-3 ${REPORT_TAG_GRID}`}>
           {entry.opciones.map(opcion => renderEntrada(opcion, nivel + 1))}
         </div>
       </details>
     );
-    return (
-      <div key={`${nivel}-${entry.numero}-${entry.nombre}`} className={`flex items-center gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 ${nivel > 0 ? 'pl-8' : ''}`}>
-        <span className="w-7 shrink-0 font-mono text-xs font-semibold text-petroleum-700">{numero}</span>
-        {informe ? <>
-          <button type="button" disabled={generando} onClick={() => abrirInforme(informe)} className="min-w-0 flex-1 text-left text-sm text-gray-800 hover:text-petroleum-700 disabled:opacity-50">
-            {entry.nombre}
-          </button>
-          <button type="button" onClick={event => toggleFavorito(informe.id, event)} aria-label={favoritos.includes(informe.id) ? `Quitar ${entry.nombre} de favoritos` : `Añadir ${entry.nombre} a favoritos`} className="rounded px-1 text-gray-500 hover:bg-white">
-            {favoritos.includes(informe.id) ? '★' : '☆'}
-          </button>
-          <button type="button" onClick={() => abrirInforme(informe)} disabled={generando} className="rounded bg-petroleum-500 px-3 py-1 text-xs font-medium text-white hover:bg-petroleum-600 disabled:opacity-50">Generar</button>
-        </> : <>
-          <span className="min-w-0 flex-1 text-sm text-gray-500">{entry.nombre}</span>
-          <span className="rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">Pendiente</span>
-        </>}
-      </div>
-    );
+    if (informe) return etiquetaInforme(informe, entry.nombre, entry.numero);
+    return <span key={`${nivel}-${entry.numero}-${entry.nombre}`} title={entry.nombre} className="flex h-20 w-full min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-400"><span className="shrink-0 font-mono">{numero}</span><span className="line-clamp-3 break-words leading-5">{entry.nombre}</span><span className="shrink-0 text-xs">Pendiente</span></span>;
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
+    <div className="@container p-4 space-y-4 max-w-screen-2xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Informes / Centro de informes</div>
           <h1 className="text-lg font-semibold text-gray-800">Centro de informes</h1>
-          <p className="mt-1 text-xs text-gray-500">Informes en el orden del programa original, del 1 al R.</p>
+          <p className="mt-1 text-xs text-gray-500">Seleccione una etiqueta para abrir el informe o desplegar sus opciones.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Informes contables</span>
       </div>
@@ -1143,41 +1149,25 @@ export default function Informes({ onNavigate, cia }: Props) {
       {!showFlowDefinitions && !showIvaAnalisis && !showRetAnalisis && searchInforme && (
         <div className="bg-white rounded border border-gray-200">
           <div className="px-4 py-2.5 border-b border-gray-100 text-xs text-gray-500">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</div>
-          {filtered.map(inf => (
-            <div
-              key={inf.id}
-              className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-50 transition-colors"
-            >
-              <button
-                type="button"
-                onClick={e => toggleFavorito(inf.id, e)}
-                title={favoritos.includes(inf.id) ? 'Quitar de favoritos' : 'Añadir a favoritos'}
-                className="text-sm shrink-0"
-              >
-                {favoritos.includes(inf.id) ? '⭐' : '☆'}
-              </button>
-              <div className="flex-1">
-                <div className="text-sm font-medium text-gray-800">{inf.nombre}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{inf.ruta} · {inf.desc}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => abrirInforme(inf)}
-                disabled={generando}
-                className="text-xs px-3 py-1 rounded shrink-0 bg-petroleum-500 text-white hover:bg-petroleum-600 disabled:opacity-60"
-              >
-                {inf.page ? 'Abrir pantalla' : 'Generar'}
-              </button>
-            </div>
-          ))}
+          <div className={`${REPORT_TAG_GRID} p-4`}>{filtered.map(inf => etiquetaInforme(inf, `${inf.ruta} · ${inf.nombre}`))}</div>
           {filtered.length === 0 && <div className="px-4 py-6 text-center text-xs text-gray-400">Sin resultados para la búsqueda.</div>}
         </div>
       )}
 
       {/* Numeración y jerarquía literal del menú Harbour MENU_INFOR. */}
       {!showFlowDefinitions && !showIvaAnalisis && !showRetAnalisis && !searchInforme && (
-        <section className="overflow-hidden rounded border border-gray-200 bg-white" aria-label="Informes del 1 al R">
-          {MENU_INFORMES.map(entry => renderEntrada(entry))}
+        <section className="space-y-4 rounded border border-gray-200 bg-white p-4" aria-label="Informes del 1 al R">
+          <div className={REPORT_TAG_GRID}>
+            {MENU_INFORMES.map(entry => entry.opciones ? (
+              <button key={entry.numero} type="button" title={entry.nombre} aria-expanded={submenuInforme === entry.numero} aria-controls="submenu-informes" onClick={() => setSubmenuInforme(previous => previous === entry.numero ? null : entry.numero)} className={`flex h-20 w-full min-w-0 items-center gap-2 rounded-md border px-4 py-2 text-left text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 ${submenuInforme === entry.numero ? 'border-petroleum-500 bg-petroleum-500 text-white' : 'border-petroleum-100 bg-petroleum-50 text-petroleum-700 hover:border-petroleum-300 hover:bg-petroleum-100'}`}>
+                <span className="shrink-0 font-mono font-semibold">{entry.numero}-</span><span className="line-clamp-3 flex-1 break-words leading-5">{entry.nombre}</span><span className="shrink-0" aria-hidden="true">{submenuInforme === entry.numero ? '▴' : '▾'}</span>
+              </button>
+            ) : renderEntrada(entry))}
+          </div>
+          {entradaAbierta?.opciones && <div id="submenu-informes" role="region" aria-label={`Opciones de ${entradaAbierta.nombre}`} className="rounded-xl border border-petroleum-100 bg-petroleum-50/40 p-4">
+            <h2 className="mb-3 text-sm font-semibold text-petroleum-800">{entradaAbierta.numero}- {entradaAbierta.nombre}</h2>
+            <div className={REPORT_TAG_GRID}>{entradaAbierta.opciones.map(entry => renderEntrada(entry, 1))}</div>
+          </div>}
         </section>
       )}
 

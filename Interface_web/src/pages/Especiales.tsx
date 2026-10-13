@@ -1,10 +1,13 @@
 /**
  * Definiciones > Especiales (CONTABDSI.PRG, menú E).
  *
- * Esta pantalla es únicamente el índice del menú Harbour. No conecta acciones
- * ni presenta resultados ficticios: cada opción se habilitará cuando su lógica
- * original haya sido revisada, migrada y verificada en Advantage.
+ * Conserva el orden del menú Harbour. ESPE06/07/08 comparten una extracción
+ * real con tres alcances; el resto permanece visible, pero sin ejecución.
  */
+import { useState } from 'react';
+import type { CompaniaSesion } from '../types';
+import ExtraerMovimiento from './ExtraerMovimiento';
+
 type OpcionEspecial = {
   numero: string;
   nombre: string;
@@ -16,9 +19,7 @@ const OPCIONES: OpcionEspecial[] = [
   { numero: '1', nombre: 'Paginación', funcionOriginal: 'ESPE03' },
   { numero: '2', nombre: 'Fusión de movimientos', funcionOriginal: 'ESPE04' },
   { numero: '3', nombre: 'Depuración de terceros', funcionOriginal: 'ESPE05' },
-  { numero: '4', nombre: 'Extractar comprobante', funcionOriginal: 'ESPE06' },
-  { numero: '5', nombre: 'Extractar documento', funcionOriginal: 'ESPE07' },
-  { numero: '6', nombre: 'Extractar movimiento completo', funcionOriginal: 'ESPE08(1)' },
+  { numero: '4–6', nombre: 'Extractar movimiento (comprobante, documentos o mes completo)', funcionOriginal: 'ESPE06 / ESPE07 / ESPE08(1)' },
   { numero: '7', nombre: 'Traslado automático de saldos', funcionOriginal: 'TRASLASA(1)' },
   { numero: '8', nombre: 'Generar lote saldos iniciales', funcionOriginal: 'ESPE10' },
   {
@@ -43,32 +44,36 @@ const OPCIONES: OpcionEspecial[] = [
   { numero: 'M', nombre: 'Enviar movimiento mensual completo a Excel', funcionOriginal: 'EXPORMES' },
 ];
 
-function Opcion({ opcion, hija = false }: { opcion: OpcionEspecial; hija?: boolean }) {
+function Opcion({ opcion, hija = false, onExtract }: { opcion: OpcionEspecial; hija?: boolean; onExtract: () => void }) {
+  const disponible = opcion.numero === '4–6';
   return (
     <div className={`flex items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 ${hija ? 'bg-gray-50 pl-10' : ''}`}>
       <span className="flex h-7 min-w-7 items-center justify-center rounded bg-sky-50 px-1 font-mono text-xs font-semibold text-[#0073C0]">{opcion.numero}</span>
       <span className="min-w-0 flex-1 text-sm text-gray-800">{opcion.nombre}</span>
-      <span className="shrink-0 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">Pendiente</span>
+      {disponible ? <button type="button" onClick={onExtract} className="shrink-0 rounded bg-[#0073C0] px-3 py-1.5 text-xs font-medium text-white">Abrir</button>
+        : <span className="shrink-0 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">Pendiente</span>}
     </div>
   );
 }
 
-export default function Especiales() {
+export default function Especiales({ compania }: { compania: CompaniaSesion }) {
+  const [mostrarExtraccion, setMostrarExtraccion] = useState(false);
   return (
     <div className="max-w-screen-xl space-y-4 p-4">
       <div>
         <p className="mb-1 text-xs text-gray-400">Definiciones / Especiales</p>
         <h1 className="text-lg font-semibold text-gray-800">Especiales</h1>
-        <p className="mt-1 text-xs text-gray-500">Opciones del programa original, en el mismo orden. Las iremos habilitando una por una.</p>
+        <p className="mt-1 text-xs text-gray-500">Opciones del programa original. La extracción reúne comprobante, documentos y movimiento completo.</p>
       </div>
       <div className="overflow-hidden rounded border border-gray-200 bg-white">
         {OPCIONES.map(opcion => (
           <div key={opcion.numero}>
-            <Opcion opcion={opcion} />
-            {opcion.subopciones?.map(hija => <Opcion key={hija.numero} opcion={hija} hija />)}
+            <Opcion opcion={opcion} onExtract={() => setMostrarExtraccion(true)} />
+            {opcion.subopciones?.map(hija => <Opcion key={hija.numero} opcion={hija} hija onExtract={() => setMostrarExtraccion(true)} />)}
           </div>
         ))}
       </div>
+      {mostrarExtraccion && <ExtraerMovimiento compania={compania} onClose={() => setMostrarExtraccion(false)} />}
     </div>
   );
 }
