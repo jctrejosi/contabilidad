@@ -24,6 +24,11 @@ Activar-Desarrollo.bat -WebPort 8444 -ApiPort 8002
   Alternativa si los puertos estan ocupados. No cierra procesos existentes.
 
 REGISTROS Y SEGURIDAD
+Si aparece un error al compilar PyYAML u otra dependencia, actualice el
+activador: ahora actualiza pip e instala exclusivamente paquetes binarios,
+sin exigir Visual C++. Se recomienda Python 3.13 x64 normal. Si no hay un
+paquete compatible con su Python o repositorio, se indicara explicitamente;
+no se instalara un compilador ni se cambiara Python automaticamente.
 Los errores quedan en logs/desarrollo. No publique backend/.env ni sus
 respaldos: contienen credenciales. Proteja la carpeta con permisos Windows.
 La conexion se prueba con ADO y ODBC sin modificar tablas.

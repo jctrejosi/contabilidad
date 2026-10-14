@@ -110,8 +110,14 @@ try {
     $previous = if (Test-Path $marker) { [IO.File]::ReadAllText($marker) } else { '' }
     if (-not $importsOk -or $previous -ne $signature) {
         Write-Host 'Preparando dependencias Python (la primera vez requiere Internet)...'
-        & $python -m pip install -r $requirements
-        Assert-Native 'Fallo la instalacion Python. Revise Internet y el mensaje anterior.'
+        & $python --version
+        # Un pip antiguo puede no reconocer los wheels de un Python reciente.
+        & $python -m pip install --upgrade --only-binary=:all: pip setuptools wheel
+        Assert-Native 'No fue posible actualizar pip. Revise Internet o el repositorio de paquetes configurado.'
+        # En el servidor no se compilan extensiones: evita exigir Visual C++.
+        # Si no hay wheel compatible, se informa en lugar de intentar compilar.
+        & $python -m pip install --only-binary=:all: -r $requirements
+        Assert-Native 'Fallo la instalacion de paquetes precompilados. Revise el paquete indicado arriba y la version de Python. Recomendado: Python 3.13 x64 normal (no free-threaded). Si usa un repositorio privado, verifique que incluya los wheels compatibles.'
     }
     Push-Location $web
     try {
