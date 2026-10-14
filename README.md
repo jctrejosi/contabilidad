@@ -82,3 +82,21 @@ Cada nueva función debe registrar como mínimo:
 5. Endpoints y flujo de datos.
 6. Operaciones permitidas y datos de solo lectura.
 7. Pruebas necesarias para considerar terminada la función.
+
+## Instalación en el servidor del cliente
+
+El protocolo está en [deployment/PROTOCOLO-INSTALACION.txt](deployment/PROTOCOLO-INSTALACION.txt).
+En el equipo de desarrollo, ejecutar `deployment\Preparar-Instalador.bat` para
+generar el ZIP distribuible en `release`. El paquete incluye el ejecutable y
+React compilado; excluye fuentes del proyecto, `.env` y bases del cliente.
+
+En el servidor, extraer el ZIP y ejecutar `Instalar-Contabilidad27.bat`. La
+primera instalación solicita la conexión y configura los archivos de forma
+automática. Advantage y sus conectores x64 deben estar instalados previamente.
+La página y la API se publican en un solo puerto (8443 por defecto).
+
+El instalador deja el módulo detenido. Incorpora el arranque al iniciador
+portable `start-fortuner.ps1` de Fortuner27 y no crea un servicio Windows ni
+una tarea independiente. `dev.js` continúa siendo exclusivamente una herramienta
+de desarrollo. Las pruebas de empaquetado e instalación aislada están en
+`deployment/tests`; no inician el servicio ni escriben tablas Advantage.

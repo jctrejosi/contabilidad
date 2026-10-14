@@ -1,0 +1,33 @@
+ACTIVAR CONTABILIDAD EN DESARROLLO EN WINDOWS
+
+1. Copie la carpeta contabilidad completa al servidor, conservando backend,
+   Interface_web, deployment y Activar-Desarrollo.bat juntos.
+2. Instale previamente Node.js LTS x64 22.12 o superior y Python x64 3.11
+   o superior (con pip y launcher py). Los conectores Advantage OLE DB y
+   StreamlineSQL ODBC deben ser de 64 bits, como los del equipo actual.
+3. Ejecute Activar-Desarrollo.bat. La primera vez requiere Internet para
+   instalar dependencias. Repara un entorno Python copiado que no funcione.
+4. Si falta backend/.env solicitara ruta ADD, usuario y clave automaticamente.
+   Si se copio una conexion incorrecta, ejecute:
+   Activar-Desarrollo.bat -Configurar
+5. Abra http://localhost:8443 en el servidor o http://NOMBRE-SERVIDOR:8443
+   desde la LAN. El administrador debe permitir TCP 8443 en el firewall de
+   la red privada/dominio. La API solo escucha localmente en 8001.
+6. Mantenga abierta la ventana. Pulse Q para detener ambos procesos.
+
+OPCIONES
+Activar-Desarrollo.bat -Check
+  Diagnostico sin instalar dependencias ni iniciar procesos.
+Activar-Desarrollo.bat -Reload
+  Reinicia automaticamente la API al modificar archivos Python.
+Activar-Desarrollo.bat -WebPort 8444 -ApiPort 8002
+  Alternativa si los puertos estan ocupados. No cierra procesos existentes.
+
+REGISTROS Y SEGURIDAD
+Los errores quedan en logs/desarrollo. No publique backend/.env ni sus
+respaldos: contienen credenciales. Proteja la carpeta con permisos Windows.
+La conexion se prueba con ADO y ODBC sin modificar tablas.
+No instala un servicio Windows, no inicia Fortuner27 ni PostgreSQL.
+No inicia el asistente IA. Los formularios contables funcionan sin el.
+Es exclusivamente desarrollo: entrega fuentes y ejecuta Vite. No exponer
+a Internet ni confundir con el paquete compilado de produccion.

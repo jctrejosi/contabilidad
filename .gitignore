@@ -1,11 +1,14 @@
 /ADD_CONTAB
 backend/.env
 backend/.venv/
+backend/.venv-respaldo-*/
+backend/.env.respaldo-*
 backend/.pytest_cache/
 __pycache__/
 *.pyc
 /tmp/
 /logs/
+/release/
 /db/migration/staging/
 
 # Respaldos de la base (datos reales del cliente): el .dump crudo no se versiona.

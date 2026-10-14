@@ -1,0 +1,2 @@
+# Solo se instala en el equipo de desarrollo, nunca en el servidor cliente.
+PyInstaller==6.16.0
