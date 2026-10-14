@@ -29,6 +29,10 @@ activador: ahora actualiza pip e instala exclusivamente paquetes binarios,
 sin exigir Visual C++. Se recomienda Python 3.13 x64 normal. Si no hay un
 paquete compatible con su Python o repositorio, se indicara explicitamente;
 no se instalara un compilador ni se cambiara Python automaticamente.
+Copie tambien backend/requirements.txt actualizado: la API utiliza Uvicorn
+sin extras standard, ya que no usa YAML ni WebSockets. Esto elimina la
+dependencia opcional PyYAML. Reload sigue disponible con el monitor basico
+de archivos Python de Uvicorn.
 Los errores quedan en logs/desarrollo. No publique backend/.env ni sus
 respaldos: contienen credenciales. Proteja la carpeta con permisos Windows.
 La conexion se prueba con ADO y ODBC sin modificar tablas.
