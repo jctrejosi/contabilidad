@@ -5,6 +5,32 @@ type AccessResult =
   | { authorized: false; message: string };
 
 let bootstrapPromise: Promise<AccessResult> | null = null;
+const TAB_AUTHORIZATION_KEY = 'fortuner_contabilidad_tab_authorized';
+
+function hasTabAuthorization(): boolean {
+  try {
+    return window.sessionStorage.getItem(TAB_AUTHORIZATION_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function authorizeCurrentTab(): boolean {
+  try {
+    window.sessionStorage.setItem(TAB_AUTHORIZATION_KEY, 'true');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearTabAuthorization(): void {
+  try {
+    window.sessionStorage.removeItem(TAB_AUTHORIZATION_KEY);
+  } catch {
+    // Si el almacenamiento está bloqueado, la pestaña se considera no autorizada.
+  }
+}
 
 async function responseMessage(response: Response, fallback: string): Promise<string> {
   try {
@@ -28,6 +54,7 @@ async function bootstrapAccess(): Promise<AccessResult> {
   const code = url.searchParams.get('fortuner_code');
 
   if (code) {
+    clearTabAuthorization();
     url.searchParams.delete('fortuner_code');
     window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
 
@@ -44,7 +71,13 @@ async function bootstrapAccess(): Promise<AccessResult> {
           message: await responseMessage(response, 'Fortuner no pudo autorizar el acceso a Contabilidad.'),
         };
       }
-      if (await verifySession()) return { authorized: true };
+      if (await verifySession()) {
+        if (authorizeCurrentTab()) return { authorized: true };
+        return {
+          authorized: false,
+          message: 'El navegador bloqueó el almacenamiento de sesión necesario para esta pestaña.',
+        };
+      }
       return {
         authorized: false,
         message: 'El navegador bloqueó la cookie necesaria para iniciar Contabilidad. Habilite las cookies para este sitio e intente nuevamente desde Fortuner.',
@@ -57,9 +90,18 @@ async function bootstrapAccess(): Promise<AccessResult> {
     }
   }
 
+  if (!hasTabAuthorization()) {
+    return {
+      authorized: false,
+      message: 'Este módulo debe iniciarse desde FORTUNER27.',
+    };
+  }
+
   try {
     if (await verifySession()) return { authorized: true };
+    clearTabAuthorization();
   } catch {
+    clearTabAuthorization();
     return {
       authorized: false,
       message: 'No fue posible comprobar la sesión de Contabilidad.',
@@ -119,7 +161,12 @@ export default function AccessGate({ children }: { children: ReactNode }) {
         return;
       }
       if (!(await verifySession())) {
+        clearTabAuthorization();
         setMessage('El navegador bloqueó la cookie necesaria. Habilite las cookies para este sitio.');
+        return;
+      }
+      if (!authorizeCurrentTab()) {
+        setMessage('El navegador bloqueó el almacenamiento de sesión necesario para esta pestaña.');
         return;
       }
       setStatus('authorized');
