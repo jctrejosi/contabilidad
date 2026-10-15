@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import store
+from .access_session import router as access_router
 from .medios_formatos_repository import (
     FormatoExiste, FormatoInvalido, FormatoNoExiste,
     delete_formato as delete_medio_formato,
@@ -245,6 +246,7 @@ app = FastAPI(
     description="API de transición para consultar y mantener el Plan de cuentas en CONMAE.",
     version="1.0.0",
 )
+app.include_router(access_router)
 
 
 class AccountWrite(BaseModel):
