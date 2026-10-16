@@ -1044,6 +1044,9 @@ export default function Informes({ onNavigate, cia }: Props) {
   const listaRecientes = recientes.map(id => porId.get(id)).filter(Boolean) as Informe[];
   const listaFavoritos = favoritos.map(id => porId.get(id)).filter(Boolean) as Informe[];
   const entradaAbierta = MENU_INFORMES.find(entry => entry.numero === submenuInforme);
+  // Al abrir una categoría, su etiqueta sustituye al resto del menú principal.
+  // Pulsarla de nuevo restaura todas las etiquetas sin cambiar los informes.
+  const entradasVisibles = entradaAbierta ? [entradaAbierta] : MENU_INFORMES;
 
   // Las etiquetas conservan la numeración y abren el mismo formulario de
   // parámetros. La estrella sigue siendo una acción independiente del informe.
@@ -1158,7 +1161,7 @@ export default function Informes({ onNavigate, cia }: Props) {
       {!showFlowDefinitions && !showIvaAnalisis && !showRetAnalisis && !searchInforme && (
         <section className="space-y-4 rounded border border-gray-200 bg-white p-4" aria-label="Informes del 1 al R">
           <div className={REPORT_TAG_GRID}>
-            {MENU_INFORMES.map(entry => entry.opciones ? (
+            {entradasVisibles.map(entry => entry.opciones ? (
               <button key={entry.numero} type="button" title={entry.nombre} aria-expanded={submenuInforme === entry.numero} aria-controls="submenu-informes" onClick={() => setSubmenuInforme(previous => previous === entry.numero ? null : entry.numero)} className={`flex h-20 w-full min-w-0 items-center gap-2 rounded-md border px-4 py-2 text-left text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 ${submenuInforme === entry.numero ? 'border-petroleum-500 bg-petroleum-500 text-white' : 'border-petroleum-100 bg-petroleum-50 text-petroleum-700 hover:border-petroleum-300 hover:bg-petroleum-100'}`}>
                 <span className="shrink-0 font-mono font-semibold">{entry.numero}-</span><span className="line-clamp-3 flex-1 break-words leading-5">{entry.nombre}</span><span className="shrink-0" aria-hidden="true">{submenuInforme === entry.numero ? '▴' : '▾'}</span>
               </button>
