@@ -1,27 +1,13 @@
-"""Conceptos de retención (bloque B3, pantalla ConfigRetenciones).
+"""Mantenimiento de tipos de retención del formulario Harbour RETES.
 
-Misma forma que ConfigIVA (``tarifas_iva_repository``), con los campos y reglas
-propios de ``conceptos_retencion``.
+En Advantage, CONTIRET es global: no tiene CIA. RETES1/DSIGRABA5 editan solo
+CODIGO (dos dígitos), NOMBRE (30) y VLRPOR (porcentaje con dos decimales).
+TIPO y HIST se dejan vacíos en el alta, igual que DBAPPEND del original. La
+cuenta y base mínima pertenecen al modelo PostgreSQL de referencia, no a esta
+pantalla; si se envían a Advantage con valor, la operación se rechaza.
 
-**Doble motor declarado (R10).** En PostgreSQL la tabla es ``conceptos_retencion``
-y es por compañía (``UNIQUE (compania_id, codigo)``); en el legado es
-``CONTIRET``, global (sin ``CIA``). La ruta acepta ``cia``, la usa para validar y
-declara el alcance con ``sharedAcrossCompanies``.
-
-**Diferencias que se declaran** (``db/old_db/DICCIONARIO_DEPURADO_CONTABDSI.md``
-L2582-2598): ``CONTIRET`` solo tiene TIPO, CODIGO, NOMBRE, VLRPOR y HIST. No
-tiene cuenta ni base mínima, así que:
-
-- la cuenta del concepto —obligatoria para el modelo nuevo— se rechaza en
-  Advantage con la causa declarada, porque no hay columna donde guardarla;
-- ``baseMinima`` distinta de cero también se rechaza;
-- la baja es física (sin ``eliminado_en``) y sin comprobación de uso: el legado
-  no persiste el vínculo entre el renglón y el código del concepto
-  (``MOVxx.TIVA_RET`` es la clase ``I``/``R``/``O``).
-
-**Porcentaje ↔ fracción.** ``CONTIRET.VLRPOR`` se guarda como porcentaje
-(``10.00``) y el contrato viaja como fracción (``0.1``), como pedía la matriz
-(``db/old_db/MATRIZ_TABLAS_Y_BRECHAS.md`` L405-415).
+La API expresa el porcentaje como fracción: 0.015 ↔ CONTIRET.VLRPOR 1.50.
+La eliminación heredada es física y requiere confirmación explícita.
 """
 
 from __future__ import annotations
@@ -59,14 +45,16 @@ from .tarifas_iva_repository import ACCOUNT_CODE, PERCENT_FACTOR
 
 
 RETENTION_CONCEPT_CODE = re.compile(r"^[A-Za-z0-9]{1,10}$")
-RETENTION_CONCEPT_LEGACY_CODE = re.compile(r"^[A-Za-z0-9]{1,2}$")
+RETENTION_TYPE_CODE = re.compile(r"^[0-9]{2}$")
 RETENTION_CONCEPT_NAME_SIZE = 40
 # ``CONTIRET.NOMBRE`` es CHARACTER(30).
 RETENTION_CONCEPT_LEGACY_NAME_SIZE = 30
 BASE_MINIMA_DECIMALS = Decimal("0.01")
 # ``CONTIRET`` es la tabla de retenciones: su columna ``TIPO`` (campo no
 # homologado) se llena con la clase del catálogo y el contrato no la expone.
-RETENTION_CONCEPT_LEGACY_TYPE = "R"
+# RETES1/DSIGRABA5 no asignan TIPO ni HIST al crear una fila. DBAPPEND deja
+# ambos campos de carácter vacíos; no se debe inventar una clasificación.
+RETENTION_CONCEPT_LEGACY_TYPE = ""
 
 
 class RetentionConceptAlreadyExists(RuntimeError):
@@ -159,16 +147,9 @@ def retention_concept_item(data: dict[str, Any]) -> dict[str, Any]:
 
 def _codigo_legado(value: Any) -> str:
     """Código recibido por la ruta, validado contra el ancho real del legado."""
-    codigo = str(value or "").strip().upper()
-    if not RETENTION_CONCEPT_CODE.fullmatch(codigo):
-        raise RetentionConceptValidationError(
-            "El código del concepto debe tener entre 1 y 10 letras o dígitos."
-        )
-    if not RETENTION_CONCEPT_LEGACY_CODE.fullmatch(codigo):
-        raise RetentionConceptValidationError(
-            "CONTIRET admite códigos de máximo 2 caracteres: el código largo solo se "
-            "puede usar con PostgreSQL."
-        )
+    codigo = str(value or "").strip()
+    if not RETENTION_TYPE_CODE.fullmatch(codigo):
+        raise RetentionConceptValidationError("El código debe tener exactamente dos dígitos.")
     return codigo
 
 
@@ -182,27 +163,33 @@ def _legacy_fraction(vlrpor: Any) -> float:
     return round(_number(vlrpor) / float(PERCENT_FACTOR), 6)
 
 
-def _reject_unsupported(data: dict[str, Any]) -> None:
-    """Declara lo que ``CONTIRET`` no puede representar, en vez de perderlo."""
-    if not RETENTION_CONCEPT_LEGACY_CODE.fullmatch(data["codigo"]):
-        raise RetentionConceptValidationError(
-            "CONTIRET admite códigos de máximo 2 caracteres: el código largo solo se "
-            "puede usar con PostgreSQL."
-        )
-    if data["cuenta"]:
-        raise RetentionConceptValidationError(
-            "CONTIRET no tiene columna de cuenta: la cuenta del concepto solo se "
-            "puede fijar en PostgreSQL."
-        )
-    if data["baseMinima"]:
-        raise RetentionConceptValidationError(
-            "CONTIRET no tiene columna de base mínima: la base del concepto solo se "
-            "puede fijar en PostgreSQL."
-        )
-    if len(data["nombre"]) > RETENTION_CONCEPT_LEGACY_NAME_SIZE:
-        raise RetentionConceptValidationError(
-            f"CONTIRET.NOMBRE admite máximo {RETENTION_CONCEPT_LEGACY_NAME_SIZE} caracteres."
-        )
+def normalize_legacy_retention_type(payload: dict[str, Any]) -> dict[str, Any]:
+    """Contrato exacto de RETES1: código 99, nombre(30) y porcentaje 99.99.
+
+    La API histórica de conceptos admite cuenta y base para PostgreSQL, pero
+    esos atributos no existen en CONTIRET. Se rechazan si llegan con valor y
+    nunca se exige una cuenta para crear un tipo de retención en Advantage.
+    """
+    codigo = str(payload.get("codigo", "") or "").strip()
+    if not RETENTION_TYPE_CODE.fullmatch(codigo):
+        raise RetentionConceptValidationError("El código debe tener exactamente dos dígitos.")
+    nombre = str(payload.get("nombre", "") or "").strip()
+    if not nombre:
+        raise RetentionConceptValidationError("El nombre es obligatorio.")
+    if len(nombre) > RETENTION_CONCEPT_LEGACY_NAME_SIZE:
+        raise RetentionConceptValidationError("El nombre admite máximo 30 caracteres.")
+    if str(payload.get("cuenta", "") or "").strip():
+        raise RetentionConceptValidationError("CONTIRET no tiene columna de cuenta.")
+    base = _base_minima(payload.get("baseMinima"))
+    if base:
+        raise RetentionConceptValidationError("CONTIRET no tiene columna de base mínima.")
+    tarifa = _tarifa(payload.get("tarifa"))
+    if tarifa > Decimal("0.9999"):
+        raise RetentionConceptValidationError("El porcentaje no puede superar 99,99 %.")
+    if tarifa * PERCENT_FACTOR != (tarifa * PERCENT_FACTOR).quantize(Decimal("0.01")):
+        raise RetentionConceptValidationError("El porcentaje admite máximo dos decimales.")
+    return {"codigo": codigo, "nombre": nombre, "tarifa": tarifa,
+            "cuenta": "", "baseMinima": Decimal("0")}
 
 
 def _retention_concept_from_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -236,13 +223,8 @@ def list_conceptos_retencion(cia: str) -> list[dict[str, Any]]:
 def create_concepto_retencion(
     cia: str, payload: dict[str, Any], *, user: str = "WEB"
 ) -> dict[str, Any]:
-    """Crea un concepto en ``CONTIRET`` (B3.2 de la sección 3).
-
-    La cuenta es obligatoria en el contrato, así que en Advantage el alta queda
-    rechazada con la causa declarada: ``CONTIRET`` no tiene esa columna.
-    """
-    data = normalize_retention_concept(payload)
-    _reject_unsupported(data)
+    """Crea el tipo que RETES1 graba en CONTIRET, sin cuentas ni base mínima."""
+    data = normalize_legacy_retention_type(payload)
     company_id = normalize_company_code(cia)
     with accounting_write_lock, ads_odbc_connection() as connection:
         if not _company_exists(connection, company_id):
@@ -295,8 +277,7 @@ def update_concepto_retencion(
     (``acumulados_retencion``) conservan la base y el concepto ya causados.
     """
     code = _codigo_legado(codigo)
-    data = normalize_retention_concept({**payload, "codigo": code})
-    _reject_unsupported(data)
+    data = normalize_legacy_retention_type({**payload, "codigo": code})
     company_id = normalize_company_code(cia)
     with accounting_write_lock, ads_odbc_connection() as connection:
         if not _company_exists(connection, company_id):

@@ -198,7 +198,7 @@ export const ALERTAS: AlertaContable[] = [
   { id: 'A1', tipo: 'error', mensaje: 'Lote NOM2 tiene 2 errores pendientes de corrección', fecha: '2026-02-28', accion: 'movimientos/lotes' },
   { id: 'A2', tipo: 'error', mensaje: 'Lote IMP-01 tiene 3 errores de importación', fecha: '2026-02-15', accion: 'movimientos/lotes' },
   { id: 'A3', tipo: 'warning', mensaje: 'Lote DEP-01 pendiente de aprobación — lleva 3 días en espera', fecha: '2026-01-31', accion: 'movimientos/lotes' },
-  { id: 'A4', tipo: 'warning', mensaje: 'Acumulado de retenciones no ha sido actualizado este período', fecha: '2026-02-25', accion: 'impuestos/retenciones' },
+  { id: 'A4', tipo: 'warning', mensaje: 'Acumulado de retenciones no ha sido actualizado este período', fecha: '2026-02-25', accion: 'informes/documentos' },
   { id: 'A5', tipo: 'info', mensaje: 'Período enero 2026 pendiente de cierre formal', fecha: '2026-02-01', accion: 'cierres' },
 ];
 

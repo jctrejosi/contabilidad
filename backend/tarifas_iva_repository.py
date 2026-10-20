@@ -61,10 +61,9 @@ VAT_RATE_LEGACY_CODE = re.compile(r"^[A-Za-z0-9]{1,2}$")
 VAT_RATE_NAME_SIZE = 40
 # ``CONTIIVA.NOMBRE`` es CHARACTER(30).
 VAT_RATE_LEGACY_NAME_SIZE = 30
-# ``CONTIIVA`` es la tabla de IVA: su columna ``TIPO`` (campo no homologado,
-# ``db/old_db/HOMOLOGACION_CAMPOS.md`` L942) se llena con la clase del catálogo
-# para que la fila tenga valor en esa columna real; el contrato no la expone.
-VAT_RATE_LEGACY_TYPE = "I"
+# DSIGRABA5 del proyecto original solo escribe CODIGO, NOMBRE y VLRPOR.
+# Los campos TIPO e HIST quedan vacíos al crear el registro.
+VAT_RATE_LEGACY_TYPE = ""
 ACCOUNT_CODE = re.compile(r"^[0-9]{0,12}$")
 PERCENT_FACTOR = Decimal("100")
 
@@ -175,6 +174,11 @@ def _reject_unsupported(data: dict[str, Any]) -> None:
         raise VatRateValidationError(
             f"CONTIIVA.NOMBRE admite máximo {VAT_RATE_LEGACY_NAME_SIZE} caracteres."
         )
+    if not re.fullmatch(r"\d{2}", data["codigo"]):
+        raise VatRateValidationError("El código de IVA debe tener dos dígitos.")
+    percent = data["tarifa"] * PERCENT_FACTOR
+    if percent > Decimal("99.99") or percent != percent.quantize(Decimal("0.01")):
+        raise VatRateValidationError("El porcentaje debe estar entre 0 y 99,99 con máximo dos decimales.")
 
 
 def _vat_rate_from_row(row: dict[str, Any]) -> dict[str, Any]:

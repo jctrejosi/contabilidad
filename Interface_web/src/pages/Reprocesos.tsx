@@ -7,6 +7,7 @@ import {
   type SolicitudReprocesoMensual,
 } from "../api/reprocesoMensual";
 import type { CompaniaSesion } from "../types";
+import AuditoriaDocumentosMovimiento from "./AuditoriaDocumentosMovimiento";
 
 type ProcessCard = {
   id: string;
@@ -29,7 +30,7 @@ const PROCESOS: ProcessCard[] = [
     disponible: true,
   },
   { id: "revalorizacion", nombre: "Revalorización de cuentas", desc: "Ajuste de activos y pasivos monetarios", tipo: "correccion", icono: "⟳", riesgo: "Medio" },
-  { id: "docs-vs-mov", nombre: "Documentos vs movimiento", desc: "Verifica consistencia entre documentos y libro", tipo: "auditoria", icono: "⊟", riesgo: "Bajo" },
+  { id: "docs-vs-mov", nombre: "Análisis de documentos y movimiento mensual", desc: "Detecta descuadres y partidas con tercero o centro inconsistente", tipo: "auditoria", icono: "⊟", riesgo: "Bajo", disponible: true },
   { id: "auditoria-rev", nombre: "Auditoría de revalorización", desc: "Valida que la revalorización esté correcta", tipo: "auditoria", icono: "⊛", riesgo: "Bajo" },
   { id: "mov-vs-ctas", nombre: "Movimiento vs cuentas válidas", desc: "Detecta movimientos en cuentas no afectables", tipo: "auditoria", icono: "⊕", riesgo: "Bajo" },
   { id: "crear-cuentas", nombre: "Crear cuentas faltantes", desc: "Asistente para crear cuentas detectadas en importaciones", tipo: "correccion", icono: "+", riesgo: "Bajo" },
@@ -220,7 +221,8 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
         ))}
       </div>
 
-      {selected && (
+      {selected?.id === "docs-vs-mov" && <AuditoriaDocumentosMovimiento compania={compania} onClose={() => setSelected(null)} />}
+      {selected?.id === "rep-mensual" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="mx-4 max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">

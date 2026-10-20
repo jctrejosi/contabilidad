@@ -24,7 +24,11 @@ import Comparativos from './pages/Comparativos';
 import DocumentoOficial from './pages/DocumentoOficial';
 import Anulacion from './pages/Anulacion';
 import Informes from './pages/Informes';
-import ImpuestosPage from './pages/Impuestos';
+import MediosMagneticos from './pages/MediosMagneticos';
+import MediosConceptos from './pages/MediosConceptos';
+import MediosAsignacion from './pages/MediosAsignacion';
+import MediosGeneracion from './pages/MediosGeneracion';
+import MediosCopiaCompania from './pages/MediosCopiaCompania';
 import Reprocesos from './pages/Reprocesos';
 import Cierres from './pages/Cierres';
 import Consolidacion from './pages/Consolidacion';
@@ -161,14 +165,24 @@ export default function App() {
       case 'informes/generador':
         return <Informes cia={companiaActiva.codigo} onNavigate={navigate} />;
 
-      case 'impuestos/retenciones':
-        return <ImpuestosPage initialTab="retenciones" />;
-
-      case 'impuestos/iva':
-        return <ImpuestosPage initialTab="iva" />;
-
-      case 'impuestos/medios':
-        return <ImpuestosPage initialTab="medios" />;
+      case 'medios/formatos':
+        return <MediosMagneticos opcion={page} cia={companiaActiva.codigo} />;
+      case 'medios/conceptos':
+        return <MediosConceptos cia={companiaActiva.codigo} />;
+      case 'medios/cuentas-manual':
+        return <MediosAsignacion cia={companiaActiva.codigo} />;
+      case 'medios/cuentas-copiar':
+        return <MediosCopiaCompania cia={companiaActiva.codigo} />;
+      case 'medios/generar':
+        return <MediosGeneracion cia={companiaActiva.codigo} />;
+      case 'medios/revision':
+      case 'medios/detalle-tercero':
+      case 'medios/totales-tercero':
+      case 'medios/formato-tercero':
+      case 'medios/documento':
+      case 'medios/depurar-topes':
+      case 'medios/depurar-cruce':
+        return <MediosMagneticos opcion={page} cia={companiaActiva.codigo} />;
 
       case 'reprocesos':
         return <Reprocesos compania={companiaActiva} />;
@@ -201,22 +215,22 @@ export default function App() {
         return <TiposDocumento />;
 
       case 'config/retenciones':
-        return <ConfigRetenciones />;
+        return <ConfigRetenciones cia={companiaActiva.codigo} />;
 
       case 'config/iva':
-        return <ConfigIVA />;
+        return <ConfigIVA cia={companiaActiva.codigo} />;
 
       case 'config/plantillas':
-        return <Plantillas onNavigate={navigate} onCrearLote={crearLote} />;
+        return <Plantillas cia={companiaActiva.codigo} />;
 
       case 'config/companias':
-        return <Companias />;
+        return <Companias cia={companiaActiva.codigo} />;
 
       case 'config/formatos':
         return <FormatosDocumentales />;
 
       case 'config/especiales':
-        return <Especiales />;
+        return <Especiales compania={companiaActiva} />;
 
       case 'config/reclasificaciones':
         return <Reclasificaciones onNavigate={navigate} onCrearLote={crearLote} />;

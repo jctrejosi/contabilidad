@@ -28,9 +28,18 @@ export type NavPage =
   | 'informes/flujo-caja'
   | 'informes/nic-niif'
   | 'informes/generador'
-  | 'impuestos/retenciones'
-  | 'impuestos/iva'
-  | 'impuestos/medios'
+  | 'medios/formatos'
+  | 'medios/conceptos'
+  | 'medios/cuentas-manual'
+  | 'medios/cuentas-copiar'
+  | 'medios/generar'
+  | 'medios/revision'
+  | 'medios/detalle-tercero'
+  | 'medios/totales-tercero'
+  | 'medios/formato-tercero'
+  | 'medios/documento'
+  | 'medios/depurar-topes'
+  | 'medios/depurar-cruce'
   | 'reprocesos'
   | 'cierres'
   | 'consolidacion'
@@ -59,11 +68,17 @@ interface NavItem {
   icon: string;
 }
 
+interface NavSubgroup {
+  label: string;
+  icon: string;
+  children: NavItem[];
+}
+
 interface NavGroup {
   id: string;
   label: string;
   icon: string;
-  items: NavItem[];
+  items: (NavItem | NavSubgroup)[];
 }
 
 const NAV_GROUPS: NavGroup[] = [
@@ -104,13 +119,27 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    id: 'impuestos',
-    label: 'Impuestos',
-    icon: '%',
+    id: 'medios',
+    label: 'Medios magnéticos',
+    icon: '▤',
     items: [
-      { id: 'impuestos/retenciones', label: 'Retenciones', icon: '◻' },
-      { id: 'impuestos/iva', label: 'IVA', icon: '◻' },
-      { id: 'impuestos/medios', label: 'Medios magnéticos', icon: '◻' },
+      { id: 'medios/formatos', label: '1. Mantenimiento de formatos', icon: '◻' },
+      { id: 'medios/conceptos', label: '2. Mantenimiento de conceptos', icon: '◻' },
+      {
+        label: '3. Asignación de cuentas', icon: '▸',
+        children: [
+          { id: 'medios/cuentas-manual', label: 'Manual por plan de cuentas', icon: '◻' },
+          { id: 'medios/cuentas-copiar', label: 'Traer definiciones de otra compañía', icon: '◻' },
+        ],
+      },
+      { id: 'medios/generar', label: '4. Generar medios', icon: '◻' },
+      { id: 'medios/revision', label: '5. Revisión de medios', icon: '◻' },
+      { id: 'medios/detalle-tercero', label: '6. Detalle por tercero', icon: '◻' },
+      { id: 'medios/totales-tercero', label: '7. Totales por tercero', icon: '◻' },
+      { id: 'medios/formato-tercero', label: '8. Formato por tercero', icon: '◻' },
+      { id: 'medios/documento', label: '9. Medios por documento', icon: '◻' },
+      { id: 'medios/depurar-topes', label: 'A. Depuración por topes', icon: '◻' },
+      { id: 'medios/depurar-cruce', label: 'B. Cruce de terceros entre formatos', icon: '◻' },
     ],
   },
   {
@@ -175,7 +204,7 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
   const periodoLabel = `${PERIODO.nombre}`;
   const isGroupActive = (group: NavGroup) =>
     (group.id === 'informes' && currentPage.startsWith('informes/')) ||
-    group.items.some(i => i.id === currentPage);
+    group.items.some(i => 'children' in i ? i.children.some(child => child.id === currentPage) : i.id === currentPage);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-100 font-sans">
@@ -258,7 +287,21 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
               </button>
               {!collapsed && expandedGroups.has(group.id) && (
                 <div className="ml-8 border-l" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-                  {group.items.map(item => (
+                  {group.items.map(item => 'children' in item ? (
+                    <div key={item.label}>
+                      <button type="button" onClick={() => toggleGroup('medios/asignacion')}
+                        className="flex w-full items-center gap-2 py-2 pl-3 pr-4 text-left text-xs transition-colors hover:bg-white/5 hover:text-white"
+                        aria-expanded={expandedGroups.has('medios/asignacion')}>
+                        <span className="flex-1">{item.label}</span><span className="opacity-60">{expandedGroups.has('medios/asignacion') ? '▾' : '▸'}</span>
+                      </button>
+                      {expandedGroups.has('medios/asignacion') && <div className="ml-3 border-l border-white/10">
+                        {item.children.map(child => <button key={child.id} type="button" onClick={() => onNavigate(child.id)}
+                          className={`w-full py-2 pl-3 pr-2 text-left text-xs transition-colors ${currentPage === child.id ? 'bg-white/10 font-medium text-white' : 'hover:bg-white/5 hover:text-white'}`}>
+                          {child.label}
+                        </button>)}
+                      </div>}
+                    </div>
+                  ) : (
                     <button
                       key={item.id}
                       onClick={() => onNavigate(item.id)}

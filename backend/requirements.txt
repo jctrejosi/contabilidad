@@ -1,5 +1,8 @@
 fastapi>=0.116,<1
-uvicorn[standard]>=0.35,<1
+# La API usa HTTP y no configuracion YAML ni WebSockets. Los extras standard
+# agregan extensiones nativas innecesarias (entre ellas PyYAML), que pueden
+# exigir compiladores al instalar en otro servidor. Reload usa el modo basico.
+uvicorn>=0.35,<1
 pywin32>=311; sys_platform == "win32"
 psycopg[binary]>=3.2,<4
 openpyxl>=3.1,<4

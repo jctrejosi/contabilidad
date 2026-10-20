@@ -10,8 +10,10 @@ import {
   type FiltrosBalanceComprobacion,
 } from '../api/balanceComprobacion';
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
-import { consultarInformeAdicional, consultarPaginaInformeAdicional, exportarInformeAdicional, procesarAcumulacionIva, urlImpresionInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional } from '../api/informesAdicionales';
+import { consultarInformeAdicional, consultarMovimientoAnualCentro, consultarMovimientoAnualTercero, consultarPaginaInformeAdicional, exportarInformeAdicional, procesarAcumulacionIva, procesarAcumulacionRetenciones, urlImpresionInformeAdicional, type FiltrosInformeAdicional, type InformeAdicional, type MovimientoAnualCentro, type MovimientoAnualTercero } from '../api/informesAdicionales';
 import IvaAnalisis from './IvaAnalisis';
+import RetencionesAnalisis from './RetencionesAnalisis';
+import DefinicionesFlujo from './DefinicionesFlujo';
 
 // El formato de moneda es de presentación: no depende de los datos de demostración.
 const fmtCOP = (n: number): string => `$ ${n.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -19,6 +21,9 @@ const fmtCOP = (n: number): string => `$ ${n.toLocaleString('es-CO', { minimumFr
 const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
 const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500';
 const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
+// Las columnas responden al espacio disponible del panel, incluido el menú
+// lateral. Todas las etiquetas mantienen la misma altura dentro de la rejilla.
+const REPORT_TAG_GRID = 'grid grid-cols-1 gap-3 @min-[560px]:grid-cols-2 @min-[880px]:grid-cols-3';
 
 interface Informe {
   id: string;
@@ -80,12 +85,27 @@ const CATEGORIAS: Categoria[] = [
     ],
   },
   {
+    id: 'retenciones',
+    nombre: 'Retenciones',
+    icon: '%',
+    informes: [
+      { id: 'ret-acumulacion', nombre: 'Acumulación general', desc: 'Reconstruye los acumulados de retención por cuenta y tercero' },
+      { id: 'ret-analisis', nombre: 'Análisis acumulados y certificados', desc: 'Consulta y corrige acumulados; genera certificados de retenciones' },
+      { id: 'ret-relacion', nombre: 'Relación acumulados', desc: 'Relaciona acumulados por cuenta o tercero' },
+      { id: 'ret-totales-cuenta', nombre: 'Relación totales por cuenta', desc: 'Consolida bases y valores por cuenta' },
+      { id: 'ret-soportes', nombre: 'Soportes y anexos', desc: 'Detalle de movimientos sujetos a retención' },
+    ],
+  },
+  {
     id: 'iva',
     nombre: 'IVA',
     icon: '%',
     informes: [
       { id: 'iva-acumulacion', nombre: 'Acumulación general', desc: 'Reconstruye los acumulados de IVA por cuenta y tercero para el período elegido' },
       { id: 'iva-analisis', nombre: 'Análisis acumulados y certificados', desc: 'Consulta y corrige los valores mensuales; emite certificados de IVA' },
+      { id: 'iva-relacion', nombre: 'Relación acumulados', desc: 'Bases y valores de IVA por cuenta o tercero, resumidos o por mes' },
+      { id: 'iva-totales-cuenta', nombre: 'Relación totales por cuenta', desc: 'Bases y valores de IVA consolidados por cuenta' },
+      { id: 'iva-soportes', nombre: 'Soportes y anexos', desc: 'Partidas de IVA por cuenta y tercero con subtotales y consolidados' },
     ],
   },
   {
@@ -93,10 +113,9 @@ const CATEGORIAS: Categoria[] = [
     nombre: 'Terceros',
     icon: '👤',
     informes: [
-      { id: 'tercero-general', nombre: 'General', desc: 'Listado completo de terceros con saldo y cupo' },
-      { id: 'tercero-acumulacion', nombre: 'Acumulación', desc: 'Saldo y movimientos acumulados por tercero' },
-      { id: 'tercero-cuenta-tercero', nombre: 'Cuenta-tercero', desc: 'Movimiento por cuenta y tercero' },
-      { id: 'tercero-especifico', nombre: 'Tercero específico', desc: 'Detalle de movimiento de un tercero puntual' },
+      { id: 'tercero-general', nombre: 'Consulta', desc: 'Saldos anteriores, débitos, créditos y saldos por cuenta y tercero' },
+      { id: 'tercero-cuenta-tercero', nombre: 'Movimiento cuenta-tercero', desc: 'Partidas detalladas o resumidas por cuenta y tercero' },
+      { id: 'tercero-especifico', nombre: 'Movimiento específico por tercero', desc: 'Resumen o partidas de un tercero en las cuentas seleccionadas' },
       { id: 'tercero-cumpleanos', nombre: 'Cumpleaños', desc: 'Fechas de cumpleaños de los terceros' },
       { id: 'tercero-etiquetas', nombre: 'Etiquetas', desc: 'Terceros organizados por zona comercial' },
     ],
@@ -106,13 +125,20 @@ const CATEGORIAS: Categoria[] = [
     nombre: 'Centros de costo',
     icon: '🏢',
     informes: [
+      { id: 'centro-consulta', nombre: 'Consulta', desc: 'Acumulados por cuenta, centro y tercero' },
+      { id: 'centro-cuenta-centro', nombre: 'Cuenta por centro de costo', desc: 'Saldo y movimiento del mes por cuenta y centro' },
+      { id: 'centro-por-cuenta', nombre: 'Centro de costo por cuenta', desc: 'Informe por centros y cuentas seleccionadas' },
+      { id: 'centro-tercero-centro', nombre: 'Tercero por centro de costo', desc: 'Movimiento agrupado por tercero, centro y cuenta' },
+      { id: 'centro-detallado', nombre: 'Detallado cuenta por centro de costo', desc: 'Partidas contables por fecha, cuenta y centro' },
+      { id: 'centro-columnas-5152', nombre: 'Centro por cuenta · columnas 51–52', desc: 'Débitos y créditos mensuales de cuentas 51 y 52' },
+      { id: 'centro-por-nivel', nombre: 'Consulta acumulada por nivel', desc: 'Saldo al mes por nivel de cuenta y centro' },
       { id: 'diario-rangos-continuos', nombre: 'Diario rangos continuos', desc: 'Diario de centros con rangos continuos de documentos' },
       { id: 'diario-rangos-fijos', nombre: 'Diario rangos fijos', desc: 'Diario de centros con rangos fijos por centro' },
       { id: 'balance-acumulado', nombre: 'Balance acumulado', desc: 'Saldos acumulados por centro' },
       { id: 'balance-mensual-centro', nombre: 'Balance mensual por centro de costo', desc: 'Movimiento mensual por centro' },
       { id: 'clasificacion-centros', nombre: 'Clasificación por centros', desc: 'Cuentas clasificadas por centro de costo' },
       { id: 'clasificacion-centro-tercero', nombre: 'Clasificación centro-tercero', desc: 'Cruce de centros contra terceros' },
-      { id: 'discriminados-mes', nombre: 'Discriminados por mes', desc: 'Variación mensual de centros durante el año' },
+      { id: 'discriminados-mes', nombre: 'Discriminados por mes', desc: 'Balance acumulado de los centros seleccionados, al nivel auxiliar 2' },
     ],
   },
   {
@@ -170,37 +196,35 @@ const MENU_INFORMES: EntradaMenuInforme[] = [
   ] },
   { numero: '5', nombre: 'Balance general y estado de resultados', id: 'bal-gral-resultados' },
   { numero: '6', nombre: 'Informe de retenciones', opciones: [
-    { numero: '1', nombre: 'Acumulación general' },
-    { numero: '2', nombre: 'Análisis acumulados y certificados' },
-    { numero: '3', nombre: 'Relación acumulados' },
-    { numero: '4', nombre: 'Relación totales por cuenta' },
-    { numero: '5', nombre: 'Soportes y anexos' },
-    { numero: '7', nombre: 'Plano reporte anual retenciones' },
+    { numero: '1', nombre: 'Acumulación general', id: 'ret-acumulacion' },
+    { numero: '2', nombre: 'Análisis acumulados y certificados', id: 'ret-analisis' },
+    { numero: '3', nombre: 'Relación acumulados', id: 'ret-relacion' },
+    { numero: '4', nombre: 'Relación totales por cuenta', id: 'ret-totales-cuenta' },
+    { numero: '5', nombre: 'Soportes y anexos', id: 'ret-soportes' },
+    { numero: '7', nombre: 'Plano reporte anual retenciones', id: 'ret-plano-anual' },
   ] },
   { numero: '7', nombre: 'Informe de IVA', opciones: [
     { numero: '1', nombre: 'Acumulación general', id: 'iva-acumulacion' },
     { numero: '2', nombre: 'Análisis acumulados y certificados', id: 'iva-analisis' },
-    { numero: '3', nombre: 'Relación acumulados' },
-    { numero: '4', nombre: 'Relación totales por cuenta' },
-    { numero: '5', nombre: 'Soportes y anexos' },
+    { numero: '3', nombre: 'Relación acumulados', id: 'iva-relacion' },
+    { numero: '4', nombre: 'Relación totales por cuenta', id: 'iva-totales-cuenta' },
+    { numero: '5', nombre: 'Soportes y anexos', id: 'iva-soportes' },
   ] },
   { numero: '8', nombre: 'Informe de terceros', opciones: [
-    { numero: '1', nombre: 'Acumulación general', id: 'tercero-acumulacion' },
     { numero: '2', nombre: 'Consulta', id: 'tercero-general' },
     { numero: '3', nombre: 'Movimiento cuenta-tercero', id: 'tercero-cuenta-tercero' },
     { numero: '4', nombre: 'Movimiento específico por tercero', id: 'tercero-especifico' },
   ] },
   { numero: '9', nombre: 'Informe por centros de costos', opciones: [
-    { numero: '1', nombre: 'Acumulación general' },
-    { numero: '2', nombre: 'Consulta' },
+    { numero: '2', nombre: 'Consulta', id: 'centro-consulta' },
     { numero: '3', nombre: 'Informes', opciones: [
-      { numero: '1', nombre: 'Cuenta por centro de costo' },
-      { numero: '2', nombre: 'Centro de costo por cuenta' },
-      { numero: '3', nombre: 'Tercero por centro de costo' },
-      { numero: '4', nombre: 'Detallado cuenta por centro de costo' },
-      { numero: '5', nombre: 'Centro de costo por cuenta y columnas' },
+      { numero: '1', nombre: 'Cuenta por centro de costo', id: 'centro-cuenta-centro' },
+      { numero: '2', nombre: 'Centro de costo por cuenta', id: 'centro-por-cuenta' },
+      { numero: '3', nombre: 'Tercero por centro de costo', id: 'centro-tercero-centro' },
+      { numero: '4', nombre: 'Detallado cuenta por centro de costo', id: 'centro-detallado' },
+      { numero: '5', nombre: 'Centro de costo por cuenta y columnas (51–52)', id: 'centro-columnas-5152' },
     ] },
-    { numero: '5', nombre: 'Consulta acumulada por nivel' },
+    { numero: '5', nombre: 'Consulta acumulada por nivel', id: 'centro-por-nivel' },
   ] },
   { numero: 'A', nombre: 'Movimiento por comprobante', id: 'mov-comprobante' },
   { numero: 'B', nombre: 'Inventario y balance', id: 'inventario-bal' },
@@ -257,11 +281,18 @@ interface DatosInforme {
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const MESES_LIBRO = ['Mes 00', ...MESES];
 const MESES_BALANCE = [...MESES, 'Mes 13', 'Mes 14', 'Mes 15', 'Mes 16', 'Mes 17', 'Mes 18'];
+const MESES_NIVEL_CENTROS = ['Mes 00', ...MESES_BALANCE];
 const BALANCE_IDS = new Set(['balance-comp', 'balance-mensual']);
 const ACCOUNT_BALANCE_IDS = new Set([
   'inventario-bal', 'mayor-bal', 'saldos-cuenta',
   'bal-comparativo-mensual', 'analisis-anual-acum', 'analisis-anual-mens', 'balance-prueba-anual',
 ]);
+const ANNUAL_ANALYSIS_IDS = new Set(['analisis-anual-acum', 'analisis-anual-mens']);
+// El CONINFOR.PRG recibido no imprime ninguna de estas dos salidas.
+const PENDING_NIC_IDS = new Set(['esfa-apertura', 'nic-saldos']);
+const CENTER_JOURNAL_IDS = new Set(['diario-rangos-continuos', 'diario-rangos-fijos']);
+const CENTER_BALANCE_IDS = new Set(['balance-acumulado', 'balance-mensual-centro',
+  'clasificacion-centros', 'clasificacion-centro-tercero', 'discriminados-mes']);
 const CENTER_REPORT_IDS = new Set([
   'balance-acumulado', 'balance-mensual-centro', 'clasificacion-centros',
   'clasificacion-centro-tercero', 'discriminados-mes',
@@ -269,7 +300,13 @@ const CENTER_REPORT_IDS = new Set([
 const THIRD_SUMMARY_IDS = new Set([
   'tercero-acumulacion', 'tercero-cuenta-tercero', 'comp-cta-tercero', 'resumen-tipo-contribuyente',
 ]);
-const THIRD_DIRECTORY_IDS = new Set(['tercero-general', 'tercero-cumpleanos', 'tercero-etiquetas']);
+const THIRD_DIRECTORY_IDS = new Set(['tercero-cumpleanos', 'tercero-etiquetas']);
+const THIRD_ORIGINAL_IDS = new Set(['tercero-general', 'tercero-cuenta-tercero']);
+const CENTER_ORIGINAL_IDS = new Set(['centro-consulta', 'centro-cuenta-centro', 'centro-por-cuenta',
+  'centro-tercero-centro', 'centro-detallado', 'centro-columnas-5152', 'centro-por-nivel']);
+const CENTER_SINGLE_MONTH_IDS = new Set(['centro-cuenta-centro', 'centro-por-cuenta',
+  'centro-tercero-centro', 'centro-columnas-5152', 'centro-por-nivel']);
+const CENTER_ZERO_MONTH_IDS = new Set(['centro-cuenta-centro', 'centro-por-cuenta', 'centro-tercero-centro']);
 
 function mostrarFiltro(id: string, key: string): boolean {
   const account = ['cuentaDesde', 'cuentaHasta', 'buscar'].includes(key);
@@ -279,9 +316,30 @@ function mostrarFiltro(id: string, key: string): boolean {
   if (id === 'aux-gral') return ['cuentaDesde', 'cuentaHasta'].includes(key);
   if (id === 'aux-doc-afectado') return false;
   if (id === 'bal-gral-resultados') return false;
-  if (id === 'iva-acumulacion') return false;
+  if (id === 'iva-acumulacion' || id === 'ret-acumulacion') return false;
+  if (id === 'iva-relacion' || id === 'iva-totales-cuenta') return ['cuentaDesde', 'cuentaHasta'].includes(key);
+  if (id === 'iva-soportes') return ['cuentaDesde', 'cuentaHasta'].includes(key);
+  if (id === 'tercero-especifico') return key === 'nit';
+  if (id === 'mov-comprobante' || id === 'mov-tipo-doc') return false;
+  if (CENTER_JOURNAL_IDS.has(id)) return false;
+  if (CENTER_BALANCE_IDS.has(id)) return false;
+  if (id === 'mov-cuenta') return false;
+  if (id === 'resumen-tipo-contribuyente' || id === 'comp-cta-tercero') return false;
+  if (id === 'flujo-comparativo') return false;
+  if (id === 'diario-cta') return ['cuentaDesde', 'cuentaHasta'].includes(key);
+  if (id === 'caja-diario-comp') return false;
+  if (id === 'caja-diario-cta') return false;
+  if (id === 'saldos-cuenta') return false;
+  if (id === 'bal-comparativo-mensual') return false;
+  if (ANNUAL_ANALYSIS_IDS.has(id)) return false;
+  if (id === 'balance-prueba-anual') return false;
+  if (id === 'ret-relacion' || id === 'ret-totales-cuenta') return ['cuentaDesde', 'cuentaHasta', 'nit', 'buscar'].includes(key);
+  if (id === 'ret-soportes') return ['cuentaDesde', 'cuentaHasta', 'nit', 'fechaDesde', 'fechaHasta', 'buscar'].includes(key);
   if (ACCOUNT_BALANCE_IDS.has(id)) return account;
   if (THIRD_DIRECTORY_IDS.has(id)) return ['nit', 'buscar'].includes(key);
+  if (THIRD_ORIGINAL_IDS.has(id)) return ['cuentaDesde', 'cuentaHasta'].includes(key);
+  if (CENTER_ORIGINAL_IDS.has(id)) return ['centro-consulta', 'centro-cuenta-centro', 'centro-tercero-centro', 'centro-detallado'].includes(id)
+    && ['cuentaDesde', 'cuentaHasta'].includes(key);
   if (THIRD_SUMMARY_IDS.has(id)) return third;
   if (CENTER_REPORT_IDS.has(id)) return center;
   if (id === 'doc-formato') return ['tipoDocumento', 'documentoDesde', 'documentoHasta'].includes(key);
@@ -372,6 +430,8 @@ interface PreviewState {
 
 function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () => void }) {
   const [reportPage, setReportPage] = useState(preview.report);
+  const [annualThird, setAnnualThird] = useState<MovimientoAnualTercero | MovimientoAnualCentro | null>(null);
+  const [annualLoading, setAnnualLoading] = useState(false);
   const datos = useMemo<DatosInforme>(() => {
     if (reportPage) return {
       columnas: reportPage.columnas,
@@ -405,6 +465,23 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
   const paginas = Math.max(1, Math.ceil(totalFilas / PAGE_SIZE));
   const inicio = pagina * PAGE_SIZE;
   const visibles = cargandoPagina ? [] : paginadoServidor ? datos.filas : datos.filas.slice(inicio, inicio + PAGE_SIZE);
+
+  async function abrirAnualTercero(row: Celda[]) {
+    if (!['tercero-general', 'centro-consulta'].includes(preview.inf.id) || !preview.filtrosReport || String(row[0]).startsWith('TOTAL')) return;
+    setAnnualLoading(true);
+    setAviso(null);
+    try {
+      setAnnualThird(preview.inf.id === 'centro-consulta'
+        ? await consultarMovimientoAnualCentro(preview.filtrosReport.cia, preview.filtrosReport.anio,
+            String(row[0]), String(row[2]), String(row[4]))
+        : await consultarMovimientoAnualTercero(preview.filtrosReport.cia, preview.filtrosReport.anio,
+            String(row[0]), String(row[2])));
+    } catch (error) {
+      setAviso(error instanceof Error ? error.message : 'No fue posible abrir el movimiento anual.');
+    } finally {
+      setAnnualLoading(false);
+    }
+  }
 
   useEffect(() => {
     const snapshotId = preview.report?.snapshotId;
@@ -561,6 +638,7 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
           <button type="button" onClick={imprimir} className={BUTTON_SECONDARY}>⎙ Imprimir</button>
           <div className="flex-1" />
           {aviso && <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">{aviso}</span>}
+          {annualLoading && <span className="text-xs text-gray-500">Consultando movimiento anual…</span>}
         </div>
 
         {/* Tabla */}
@@ -582,10 +660,10 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
                 </tr>
               )}
               {visibles.map((fila, i) => (
-                <tr key={i} className={datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' && preview.inf.id !== 'aux-gral' ? 'bg-petroleum-500 text-white font-semibold' :
+                <tr key={i} onClick={() => abrirAnualTercero(fila)} className={datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' && preview.inf.id !== 'aux-gral' ? 'bg-petroleum-500 text-white font-semibold' :
                   datos.tipos?.[paginadoServidor ? i : inicio + i]?.startsWith('total') || datos.tipos?.[paginadoServidor ? i : inicio + i] === 'resultado' ||
                   datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' || datos.tipos?.[paginadoServidor ? i : inicio + i] === 'subtotal' ||
-                  datos.tipos?.[paginadoServidor ? i : inicio + i] === 'apertura' ? 'bg-petroleum-50 font-semibold' : 'hoverable'}>
+                  datos.tipos?.[paginadoServidor ? i : inicio + i] === 'apertura' ? 'bg-petroleum-50 font-semibold' : ['tercero-general', 'centro-consulta'].includes(preview.inf.id) && !String(fila[0]).startsWith('TOTAL') ? 'hoverable cursor-pointer' : 'hoverable'}>
                   {datos.tipos?.[paginadoServidor ? i : inicio + i] === 'seccion' && preview.inf.id !== 'aux-gral'
                     ? <td colSpan={datos.columnas.length} className="px-3 py-2 text-white font-semibold">{fila[2]}</td>
                     : fila.map((celda, j) => <CeldaValor key={j} valor={celda} money={!!datos.columnas[j]?.money} />)}
@@ -617,6 +695,19 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
           </div>
         </div>
       </div>
+      {annualThird && <Modal title={`Movimiento anual · ${annualThird.cuenta} · ${'centro' in annualThird ? `${annualThird.centro} · ` : ''}${annualThird.tercero}`} onClose={() => setAnnualThird(null)} ancho="max-w-3xl">
+        <div className="px-5 py-4 text-xs text-gray-600">{annualThird.nombreCuenta} · {'nombreCentro' in annualThird ? `${annualThird.nombreCentro} · ` : ''}{annualThird.nombreTercero}</div>
+        <div className="overflow-auto px-5 pb-5">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 text-gray-600"><tr><th className="px-3 py-2 text-left">Mes</th><th className="px-3 py-2 text-right">Débitos</th><th className="px-3 py-2 text-right">Créditos</th><th className="px-3 py-2 text-right">Saldo</th></tr></thead>
+            <tbody>
+              <tr className="border-t border-gray-100 font-semibold"><td className="px-3 py-2">Saldo inicial</td><td /><td /><td className="px-3 py-2 text-right">{fmtMonto(annualThird.saldoInicial)}</td></tr>
+              {annualThird.meses.map(item => <tr key={item.mes} className="border-t border-gray-100"><td className="px-3 py-2">{MESES[item.mes - 1]}</td><td className="px-3 py-2 text-right">{fmtMonto(item.debito)}</td><td className="px-3 py-2 text-right">{fmtMonto(item.credito)}</td><td className="px-3 py-2 text-right">{fmtMonto(item.saldo)}</td></tr>)}
+            </tbody>
+            <tfoot className="border-t-2 border-gray-200 bg-gray-50 font-semibold"><tr><td className="px-3 py-2">Saldo final</td><td /><td /><td className="px-3 py-2 text-right">{fmtMonto(annualThird.saldoFinal)}</td></tr></tfoot>
+          </table>
+        </div>
+      </Modal>}
     </Modal>
   );
 }
@@ -643,20 +734,30 @@ export default function Informes({ onNavigate, cia }: Props) {
   const [searchInforme, setSearchInforme] = useState('');
   const [showParams, setShowParams] = useState<Informe | null>(null);
   const [showIvaAnalisis, setShowIvaAnalisis] = useState(false);
+  const [showRetAnalisis, setShowRetAnalisis] = useState(false);
   const [favoritos, setFavoritos] = useState<string[]>(() => leerLista(STORAGE_FAVS));
   const [recientes, setRecientes] = useState<string[]>(() => leerLista(STORAGE_RECIENTES));
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [params, setParams] = useState({
     mesDesde: 'Enero', mesHasta: 'Febrero', mesLote: '1', nivel: '4', incluirCeros: false,
+    incluirSubtotales: false,
     incluirResultados: true, incluirTerceros: false, incluirCentros: false,
+    modoComparativo: 'saldo' as 'saldo' | 'movimiento',
+    operacionComparativa: 'diferencia' as 'diferencia' | 'sumatoria',
     detalleCuentaDesde: '', detalleCuentaHasta: '',
     cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '', comprobanteHasta: '',
-    tipoDocumento: '', tipoDocumentoHasta: '',
+    nitDesde: '', nitHasta: '', ordenTerceros: 'cuenta' as 'cuenta' | 'tercero',
+    ordenMovimiento: 'documento' as 'documento' | 'fecha',
+    centroDesde: '', centroHasta: '', ordenCentros: 'cuenta' as 'cuenta' | 'centro',
+    cuentasSeleccionadas: '', centrosSeleccionados: '', prefijoCuenta: '', incluirSaldoAnterior: true,
+    tipoDocumento: '', tipoDocumentoHasta: '', tipoContribuyente: '', companiaAnterior: '',
     documentoDesde: '', documentoHasta: '', buscar: '',
     fechaDesde: '', fechaHasta: '', modalidad: 'detallado' as 'detallado' | 'resumido',
     documentoAfectado: '',
   });
   const [generando, setGenerando] = useState(false);
+  const [submenuInforme, setSubmenuInforme] = useState<string | null>(null);
+  const [showFlowDefinitions, setShowFlowDefinitions] = useState(false);
   const [errorInforme, setErrorInforme] = useState<string | null>(null);
   const [anioOperacion, setAnioOperacion] = useState<number | null>(null);
   const [errorPeriodo, setErrorPeriodo] = useState<string | null>(null);
@@ -694,13 +795,25 @@ export default function Informes({ onNavigate, cia }: Props) {
     try { localStorage.setItem(STORAGE_RECIENTES, JSON.stringify(recientes)); } catch { /* sin almacenamiento */ }
   }, [recientes]);
 
-  const allInformes = entradasConInforme(MENU_INFORMES);
+  const allInformes = entradasConInforme(MENU_INFORMES).filter(inf => !PENDING_NIC_IDS.has(inf.id));
   const porId = new Map(allInformes.map(i => [i.id, i]));
   const filtered = searchInforme
     ? allInformes.filter(i => i.nombre.toLowerCase().includes(searchInforme.toLowerCase()) || i.desc.toLowerCase().includes(searchInforme.toLowerCase()) || i.ruta.toLowerCase().includes(searchInforme.toLowerCase()))
     : [];
 
   function abrirInforme(inf: Informe) {
+    if (inf.id === 'def-cuentas-flujo') {
+      setShowFlowDefinitions(true);
+      setShowParams(null);
+      setPreview(null);
+      return;
+    }
+    if (inf.id === 'ret-analisis') {
+      setShowRetAnalisis(true);
+      setShowParams(null);
+      setPreview(null);
+      return;
+    }
     if (inf.id === 'iva-analisis') {
       setShowIvaAnalisis(true);
       setShowParams(null);
@@ -713,18 +826,64 @@ export default function Informes({ onNavigate, cia }: Props) {
     }
     setParams(p => ({
       ...p, nivel: BALANCE_IDS.has(inf.id) || inf.id === 'bal-gral-resultados' ? '4' : p.nivel,
-      mesDesde: inf.id === 'iva-acumulacion' ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
+      mesDesde: ['iva-acumulacion', 'ret-acumulacion', 'iva-relacion', 'iva-totales-cuenta', 'tercero-especifico', 'mov-comprobante', 'mov-tipo-doc'].includes(inf.id) || THIRD_ORIGINAL_IDS.has(inf.id) || CENTER_ORIGINAL_IDS.has(inf.id) ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
         : BALANCE_IDS.has(inf.id) ? p.mesDesde : (MESES.includes(p.mesDesde) ? p.mesDesde : 'Enero'),
-      mesHasta: inf.id === 'iva-acumulacion' ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
+      mesHasta: ['iva-acumulacion', 'ret-acumulacion', 'iva-relacion', 'iva-totales-cuenta', 'tercero-especifico', 'mov-comprobante', 'mov-tipo-doc'].includes(inf.id) || THIRD_ORIGINAL_IDS.has(inf.id) || CENTER_ORIGINAL_IDS.has(inf.id) ? (MESES[Number(p.mesLote) - 1] ?? 'Enero')
         : BALANCE_IDS.has(inf.id) || inf.id === 'bal-gral-resultados'
         ? (MESES_BALANCE.includes(p.mesHasta) ? p.mesHasta : 'Diciembre')
         : (MESES.includes(p.mesHasta) ? p.mesHasta : 'Diciembre'),
-      cuentaDesde: '', cuentaHasta: '', nit: '', centro: '', comprobante: '',
-      comprobanteHasta: '', tipoDocumento: '', tipoDocumentoHasta: '',
+      cuentaDesde: '', cuentaHasta: '', nit: '', nitDesde: '', nitHasta: '', ordenTerceros: 'cuenta', ordenMovimiento: 'documento', centro: '', comprobante: '',
+      centroDesde: '', centroHasta: '', ordenCentros: 'cuenta', cuentasSeleccionadas: '', centrosSeleccionados: '', prefijoCuenta: '', incluirSaldoAnterior: true,
+      comprobanteHasta: '', tipoDocumento: '', tipoDocumentoHasta: '', tipoContribuyente: '', companiaAnterior: '',
       documentoDesde: '', documentoHasta: '', buscar: '',
-      modalidad: 'detallado', documentoAfectado: '',
-      ...(inf.id === 'bal-gral-resultados' ? {
+      modalidad: ['iva-relacion', 'tercero-especifico'].includes(inf.id) ? 'resumido' : 'detallado', documentoAfectado: '',
+      ...(['mov-comprobante', 'mov-tipo-doc'].includes(inf.id) ? { ordenMovimiento: 'fecha' as const, incluirSubtotales: false } : {}),
+      ...(CENTER_ORIGINAL_IDS.has(inf.id) ? { incluirTerceros: true } : {}),
+      ...(['bal-gral-resultados', 'inventario-bal'].includes(inf.id) ? {
         incluirResultados: true, incluirCeros: false, incluirTerceros: false,
+      } : {}),
+      ...(inf.id === 'inventario-bal' ? { mesHasta: MESES_BALANCE[new Date().getMonth()] } : {}),
+      ...(inf.id === 'mayor-bal' ? {
+        mesDesde: MESES_BALANCE[new Date().getMonth()],
+        mesHasta: MESES_BALANCE[new Date().getMonth()],
+        nivel: '1', incluirCeros: false,
+      } : {}),
+      ...(inf.id === 'diario-cta' ? { mesHasta: MESES_BALANCE[new Date().getMonth()] } : {}),
+      ...(CENTER_JOURNAL_IDS.has(inf.id) ? {
+        mesHasta: MESES_BALANCE[new Date().getMonth()],
+        ordenCentros: 'cuenta' as const, modalidad: 'detallado' as const,
+      } : {}),
+      ...(CENTER_BALANCE_IDS.has(inf.id) ? {
+        mesDesde: MESES_BALANCE[new Date().getMonth()],
+        mesHasta: MESES_BALANCE[new Date().getMonth()],
+        nivel: '4', incluirResultados: true, incluirCeros: false, incluirTerceros: false,
+      } : {}),
+      ...(inf.id === 'caja-diario-comp' ? {
+        mesHasta: MESES_BALANCE[new Date().getMonth()],
+        nivel: '1', comprobante: '', comprobanteHasta: '',
+      } : {}),
+      ...(inf.id === 'caja-diario-cta' ? {
+        mesHasta: MESES_BALANCE[new Date().getMonth()],
+        nivel: '1', cuentaDesde: '', cuentaHasta: '',
+      } : {}),
+      ...(inf.id === 'saldos-cuenta' ? {
+        mesHasta: MESES_BALANCE[new Date().getMonth()],
+        nivel: '4', cuentaDesde: '', cuentaHasta: '',
+        incluirCeros: false, incluirTerceros: false,
+      } : {}),
+      ...(inf.id === 'bal-comparativo-mensual' ? {
+        mesDesde: MESES_BALANCE[new Date().getMonth()],
+        mesHasta: MESES_BALANCE[new Date().getMonth()], nivel: '4',
+        incluirResultados: true, incluirCeros: false, incluirTerceros: false,
+        modoComparativo: 'saldo' as const,
+        operacionComparativa: 'diferencia' as const,
+      } : {}),
+      ...(ANNUAL_ANALYSIS_IDS.has(inf.id) ? {
+        mesDesde: 'Enero', mesHasta: 'Diciembre', nivel: '4',
+      } : {}),
+      ...(inf.id === 'balance-prueba-anual' ? {
+        nivel: '4', incluirResultados: true, incluirCeros: false,
+        incluirTerceros: false, incluirCentros: false,
       } : {}),
     }));
     setErrorInforme(null);
@@ -770,24 +929,58 @@ export default function Informes({ onNavigate, cia }: Props) {
     const filtros: FiltrosInformeAdicional = {
       cia,
       anio: anioOperacion,
-      mesDesde: inf.id === 'bal-gral-resultados' ? MESES_BALANCE.indexOf(params.mesHasta) + 1
+      mesDesde: ANNUAL_ANALYSIS_IDS.has(inf.id) || ['balance-prueba-anual', 'flujo-comparativo'].includes(inf.id) ? 1
+        : ['bal-gral-resultados', 'inventario-bal', 'diario-cta', 'caja-diario-comp', 'caja-diario-cta', 'saldos-cuenta', 'comp-cta-tercero'].includes(inf.id) || CENTER_JOURNAL_IDS.has(inf.id) || CENTER_BALANCE_IDS.has(inf.id) ? MESES_BALANCE.indexOf(params.mesHasta) + 1
         : inf.id === 'doc-formato' ? mesSeleccionado
-        : inf.id === 'aux-doc-afectado' ? MESES_LIBRO.indexOf(params.mesDesde)
+        : ['mov-comprobante', 'mov-tipo-doc'].includes(inf.id) ? MESES_LIBRO.indexOf(params.mesHasta)
+        : inf.id === 'tercero-especifico' ? MESES_BALANCE.indexOf(params.mesDesde) + 1
+        : inf.id === 'iva-soportes' || inf.id === 'mov-cuenta' ? Number(params.fechaDesde.slice(5, 7))
+        : inf.id === 'centro-detallado' ? Number(params.fechaDesde.slice(5, 7))
+        : inf.id === 'centro-por-nivel' ? MESES_NIVEL_CENTROS.indexOf(params.mesHasta)
+        : CENTER_ZERO_MONTH_IDS.has(inf.id) ? MESES_LIBRO.indexOf(params.mesHasta)
+        : CENTER_SINGLE_MONTH_IDS.has(inf.id) ? MESES.indexOf(params.mesHasta) + 1
+        : inf.id === 'aux-doc-afectado' || THIRD_ORIGINAL_IDS.has(inf.id) || inf.id === 'centro-consulta' ? MESES_LIBRO.indexOf(params.mesDesde)
         : inf.id === 'aux-gral' ? Number(params.fechaDesde.slice(5, 7))
+        : ['mayor-bal', 'bal-comparativo-mensual'].includes(inf.id) ? MESES_BALANCE.indexOf(params.mesDesde) + 1
         : MESES.indexOf(params.mesDesde) + 1,
-      mesHasta: inf.id === 'bal-gral-resultados' ? MESES_BALANCE.indexOf(params.mesHasta) + 1
+      mesHasta: inf.id === 'balance-prueba-anual' ? 13
+        : inf.id === 'flujo-comparativo' ? 12
+        : ANNUAL_ANALYSIS_IDS.has(inf.id) ? 12
+        : ['bal-gral-resultados', 'inventario-bal', 'diario-cta', 'caja-diario-comp', 'caja-diario-cta', 'saldos-cuenta', 'comp-cta-tercero'].includes(inf.id) || CENTER_JOURNAL_IDS.has(inf.id) || CENTER_BALANCE_IDS.has(inf.id) ? MESES_BALANCE.indexOf(params.mesHasta) + 1
         : inf.id === 'doc-formato' ? mesSeleccionado
-        : inf.id === 'aux-doc-afectado' ? MESES_LIBRO.indexOf(params.mesHasta)
+        : ['mov-comprobante', 'mov-tipo-doc'].includes(inf.id) ? MESES_LIBRO.indexOf(params.mesHasta)
+        : inf.id === 'tercero-especifico' ? MESES_BALANCE.indexOf(params.mesHasta) + 1
+        : inf.id === 'iva-soportes' || inf.id === 'mov-cuenta' ? Number(params.fechaHasta.slice(5, 7))
+        : inf.id === 'centro-detallado' ? Number(params.fechaHasta.slice(5, 7))
+        : inf.id === 'centro-por-nivel' ? MESES_NIVEL_CENTROS.indexOf(params.mesHasta)
+        : CENTER_ZERO_MONTH_IDS.has(inf.id) ? MESES_LIBRO.indexOf(params.mesHasta)
+        : CENTER_SINGLE_MONTH_IDS.has(inf.id) ? MESES.indexOf(params.mesHasta) + 1
+        : inf.id === 'aux-doc-afectado' || THIRD_ORIGINAL_IDS.has(inf.id) || inf.id === 'centro-consulta' ? MESES_LIBRO.indexOf(params.mesHasta)
         : inf.id === 'aux-gral' ? Number(params.fechaHasta.slice(5, 7))
+        : ['mayor-bal', 'bal-comparativo-mensual'].includes(inf.id) ? MESES_BALANCE.indexOf(params.mesHasta) + 1
         : MESES.indexOf(params.mesHasta) + 1,
       cuentaDesde: params.cuentaDesde,
       cuentaHasta: params.cuentaHasta,
       nit: params.nit,
+      nitDesde: params.nitDesde,
+      nitHasta: params.nitHasta,
+      ordenTerceros: params.ordenTerceros,
+      ordenMovimiento: params.ordenMovimiento,
       centro: params.centro,
+      centroDesde: params.centroDesde,
+      centroHasta: params.centroHasta,
+      ordenCentros: params.ordenCentros,
+      cuentasSeleccionadas: params.cuentasSeleccionadas,
+      centrosSeleccionados: params.centrosSeleccionados,
+      prefijoCuenta: params.prefijoCuenta,
+      incluirSaldoAnterior: params.incluirSaldoAnterior,
+      incluirSubtotales: params.incluirSubtotales,
       comprobante: params.comprobante,
       comprobanteHasta: params.comprobanteHasta,
       tipoDocumento: params.tipoDocumento,
       tipoDocumentoHasta: params.tipoDocumentoHasta,
+      tipoContribuyente: params.tipoContribuyente,
+      companiaAnterior: params.companiaAnterior,
       documentoDesde: params.documentoDesde,
       documentoHasta: params.documentoHasta,
       buscar: params.buscar,
@@ -797,12 +990,24 @@ export default function Informes({ onNavigate, cia }: Props) {
       documentoAfectado: params.documentoAfectado,
       nivel: Number(params.nivel),
       incluirCeros: params.incluirCeros,
-      ...(inf.id === 'bal-gral-resultados' ? {
+      ...((CENTER_ORIGINAL_IDS.has(inf.id) || CENTER_BALANCE_IDS.has(inf.id) || ['saldos-cuenta', 'bal-comparativo-mensual'].includes(inf.id)) ? { incluirTerceros: params.incluirTerceros } : {}),
+      ...(CENTER_BALANCE_IDS.has(inf.id) ? { incluirResultados: params.incluirResultados } : {}),
+      ...(inf.id === 'bal-comparativo-mensual' ? {
+        incluirResultados: params.incluirResultados,
+        modoComparativo: params.modoComparativo,
+        operacionComparativa: params.operacionComparativa,
+      } : {}),
+      ...(inf.id === 'balance-prueba-anual' ? {
         incluirResultados: params.incluirResultados,
         incluirTerceros: params.incluirTerceros,
+        incluirCentros: params.incluirCentros,
+      } : {}),
+      ...(['bal-gral-resultados', 'inventario-bal'].includes(inf.id) ? {
+        incluirResultados: params.incluirResultados,
+        ...(inf.id === 'bal-gral-resultados' ? { incluirTerceros: params.incluirTerceros } : {}),
       } : {}),
     };
-    if (inf.id === 'iva-acumulacion' && filtros.mesDesde > filtros.mesHasta) {
+    if (['iva-acumulacion', 'ret-acumulacion'].includes(inf.id) && filtros.mesDesde > filtros.mesHasta) {
       setErrorInforme('El mes inicial no puede ser posterior al mes final.');
       return;
     }
@@ -810,6 +1015,8 @@ export default function Informes({ onNavigate, cia }: Props) {
     try {
       const report = inf.id === 'iva-acumulacion'
         ? await procesarAcumulacionIva(filtros)
+        : inf.id === 'ret-acumulacion'
+        ? await procesarAcumulacionRetenciones(filtros)
         : await consultarInformeAdicional(inf.id, filtros);
       setShowParams(null);
       setRecientes(prev => [inf.id, ...prev.filter(id => id !== inf.id)].slice(0, 6));
@@ -836,48 +1043,53 @@ export default function Informes({ onNavigate, cia }: Props) {
 
   const listaRecientes = recientes.map(id => porId.get(id)).filter(Boolean) as Informe[];
   const listaFavoritos = favoritos.map(id => porId.get(id)).filter(Boolean) as Informe[];
+  const entradaAbierta = MENU_INFORMES.find(entry => entry.numero === submenuInforme);
+  // Al abrir una categoría, su etiqueta sustituye al resto del menú principal.
+  // Pulsarla de nuevo restaura todas las etiquetas sin cambiar los informes.
+  const entradasVisibles = entradaAbierta ? [entradaAbierta] : MENU_INFORMES;
+
+  // Las etiquetas conservan la numeración y abren el mismo formulario de
+  // parámetros. La estrella sigue siendo una acción independiente del informe.
+  function etiquetaInforme(informe: Informe, nombre: string, numero?: string): ReactNode {
+    return (
+      <div key={informe.id} className="flex h-20 w-full min-w-0 items-center rounded-md border border-gray-200 bg-white transition hover:border-petroleum-300 hover:bg-petroleum-50/60">
+        <button type="button" disabled={generando} onClick={() => abrirInforme(informe)} title={`${nombre} — ${informe.desc}`} className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-4 py-2 text-left text-sm font-medium text-gray-700 hover:text-petroleum-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 disabled:opacity-50">
+          {numero && <span className="shrink-0 font-mono font-semibold text-petroleum-700">{numero}-</span>}
+          <span className="line-clamp-3 break-words leading-5">{nombre}</span>
+        </button>
+        <button type="button" onClick={event => toggleFavorito(informe.id, event)} aria-label={favoritos.includes(informe.id) ? `Quitar ${nombre} de favoritos` : `Añadir ${nombre} a favoritos`} aria-pressed={favoritos.includes(informe.id)} className="mr-1 shrink-0 rounded px-2 py-2 text-base text-petroleum-600 hover:bg-petroleum-100 focus-visible:outline-2 focus-visible:outline-petroleum-500">
+          {favoritos.includes(informe.id) ? '★' : '☆'}
+        </button>
+      </div>
+    );
+  }
 
   function renderEntrada(entry: EntradaMenuInforme, nivel = 0): ReactNode {
     const informe = entry.id ? porId.get(entry.id) : undefined;
     const numero = `${entry.numero}-`;
     if (entry.opciones) return (
-      <details key={`${nivel}-${entry.numero}-${entry.nombre}`} className={nivel === 0 ? 'border-b border-gray-100 last:border-b-0' : 'border-t border-gray-100'}>
-        <summary className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm text-gray-800 hover:bg-petroleum-50/50 ${nivel > 0 ? 'pl-8' : ''}`}>
-          <span className="w-7 shrink-0 font-mono font-semibold text-petroleum-700">{numero}</span>
-          <span className="flex-1 font-medium">{entry.nombre}</span>
-          <span className="text-xs text-gray-400">▾</span>
+      <details key={`${nivel}-${entry.numero}-${entry.nombre}`} className="col-span-full w-full rounded-xl border border-petroleum-100 bg-white p-3">
+        <summary className="flex h-20 w-full cursor-pointer list-none items-center gap-2 rounded-md bg-petroleum-50 px-4 py-2 text-sm text-petroleum-700 focus-visible:outline-2 focus-visible:outline-petroleum-500">
+          <span className="shrink-0 font-mono font-semibold">{numero}</span>
+          <span className="font-medium">{entry.nombre}</span>
+          <span aria-hidden="true">▾</span>
         </summary>
-        <div className="bg-gray-50/60">
+        <div className={`mt-3 ${REPORT_TAG_GRID}`}>
           {entry.opciones.map(opcion => renderEntrada(opcion, nivel + 1))}
         </div>
       </details>
     );
-    return (
-      <div key={`${nivel}-${entry.numero}-${entry.nombre}`} className={`flex items-center gap-3 border-b border-gray-100 px-4 py-2.5 last:border-b-0 ${nivel > 0 ? 'pl-8' : ''}`}>
-        <span className="w-7 shrink-0 font-mono text-xs font-semibold text-petroleum-700">{numero}</span>
-        {informe ? <>
-          <button type="button" disabled={generando} onClick={() => abrirInforme(informe)} className="min-w-0 flex-1 text-left text-sm text-gray-800 hover:text-petroleum-700 disabled:opacity-50">
-            {entry.nombre}
-          </button>
-          <button type="button" onClick={event => toggleFavorito(informe.id, event)} aria-label={favoritos.includes(informe.id) ? `Quitar ${entry.nombre} de favoritos` : `Añadir ${entry.nombre} a favoritos`} className="rounded px-1 text-gray-500 hover:bg-white">
-            {favoritos.includes(informe.id) ? '★' : '☆'}
-          </button>
-          <button type="button" onClick={() => abrirInforme(informe)} disabled={generando} className="rounded bg-petroleum-500 px-3 py-1 text-xs font-medium text-white hover:bg-petroleum-600 disabled:opacity-50">Generar</button>
-        </> : <>
-          <span className="min-w-0 flex-1 text-sm text-gray-500">{entry.nombre}</span>
-          <span className="rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">Pendiente</span>
-        </>}
-      </div>
-    );
+    if (informe) return etiquetaInforme(informe, entry.nombre, entry.numero);
+    return <span key={`${nivel}-${entry.numero}-${entry.nombre}`} title={entry.nombre} className="flex h-20 w-full min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-400"><span className="shrink-0 font-mono">{numero}</span><span className="line-clamp-3 break-words leading-5">{entry.nombre}</span><span className="shrink-0 text-xs">Pendiente</span></span>;
   }
 
   return (
-    <div className="p-4 space-y-4 max-w-screen-2xl">
+    <div className="@container p-4 space-y-4 max-w-screen-2xl">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Informes / Centro de informes</div>
           <h1 className="text-lg font-semibold text-gray-800">Centro de informes</h1>
-          <p className="mt-1 text-xs text-gray-500">Informes en el orden del programa original, del 1 al R.</p>
+          <p className="mt-1 text-xs text-gray-500">Seleccione una etiqueta para abrir el informe o desplegar sus opciones.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Informes contables</span>
       </div>
@@ -890,9 +1102,10 @@ export default function Informes({ onNavigate, cia }: Props) {
       )}
 
       {showIvaAnalisis && anioOperacion !== null && <IvaAnalisis cia={cia} anio={anioOperacion} onClose={() => setShowIvaAnalisis(false)} />}
+      {showRetAnalisis && anioOperacion !== null && <RetencionesAnalisis cia={cia} anio={anioOperacion} onClose={() => setShowRetAnalisis(false)} />}
 
       {/* Búsqueda transversal y accesos frecuentes */}
-      {!showIvaAnalisis && <div className="bg-white rounded border border-gray-200 p-3 space-y-2.5">
+      {!showIvaAnalisis && !showRetAnalisis && <div className="bg-white rounded border border-gray-200 p-3 space-y-2.5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 max-w-lg">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">⌕</span>
@@ -933,45 +1146,31 @@ export default function Informes({ onNavigate, cia }: Props) {
         )}
       </div>}
 
+      {showFlowDefinitions && <DefinicionesFlujo cia={cia} onClose={() => setShowFlowDefinitions(false)} />}
+
       {/* Resultados de búsqueda */}
-      {!showIvaAnalisis && searchInforme && (
+      {!showFlowDefinitions && !showIvaAnalisis && !showRetAnalisis && searchInforme && (
         <div className="bg-white rounded border border-gray-200">
           <div className="px-4 py-2.5 border-b border-gray-100 text-xs text-gray-500">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</div>
-          {filtered.map(inf => (
-            <div
-              key={inf.id}
-              className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 border-b border-gray-50 transition-colors"
-            >
-              <button
-                type="button"
-                onClick={e => toggleFavorito(inf.id, e)}
-                title={favoritos.includes(inf.id) ? 'Quitar de favoritos' : 'Añadir a favoritos'}
-                className="text-sm shrink-0"
-              >
-                {favoritos.includes(inf.id) ? '⭐' : '☆'}
-              </button>
-              <div className="flex-1">
-                <div className="text-sm font-medium text-gray-800">{inf.nombre}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{inf.ruta} · {inf.desc}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => abrirInforme(inf)}
-                disabled={generando}
-                className="text-xs px-3 py-1 rounded shrink-0 bg-petroleum-500 text-white hover:bg-petroleum-600 disabled:opacity-60"
-              >
-                {inf.page ? 'Abrir pantalla' : 'Generar'}
-              </button>
-            </div>
-          ))}
+          <div className={`${REPORT_TAG_GRID} p-4`}>{filtered.map(inf => etiquetaInforme(inf, `${inf.ruta} · ${inf.nombre}`))}</div>
           {filtered.length === 0 && <div className="px-4 py-6 text-center text-xs text-gray-400">Sin resultados para la búsqueda.</div>}
         </div>
       )}
 
       {/* Numeración y jerarquía literal del menú Harbour MENU_INFOR. */}
-      {!showIvaAnalisis && !searchInforme && (
-        <section className="overflow-hidden rounded border border-gray-200 bg-white" aria-label="Informes del 1 al R">
-          {MENU_INFORMES.map(entry => renderEntrada(entry))}
+      {!showFlowDefinitions && !showIvaAnalisis && !showRetAnalisis && !searchInforme && (
+        <section className="space-y-4 rounded border border-gray-200 bg-white p-4" aria-label="Informes del 1 al R">
+          <div className={REPORT_TAG_GRID}>
+            {entradasVisibles.map(entry => entry.opciones ? (
+              <button key={entry.numero} type="button" title={entry.nombre} aria-expanded={submenuInforme === entry.numero} aria-controls="submenu-informes" onClick={() => setSubmenuInforme(previous => previous === entry.numero ? null : entry.numero)} className={`flex h-20 w-full min-w-0 items-center gap-2 rounded-md border px-4 py-2 text-left text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 ${submenuInforme === entry.numero ? 'border-petroleum-500 bg-petroleum-500 text-white' : 'border-petroleum-100 bg-petroleum-50 text-petroleum-700 hover:border-petroleum-300 hover:bg-petroleum-100'}`}>
+                <span className="shrink-0 font-mono font-semibold">{entry.numero}-</span><span className="line-clamp-3 flex-1 break-words leading-5">{entry.nombre}</span><span className="shrink-0" aria-hidden="true">{submenuInforme === entry.numero ? '▴' : '▾'}</span>
+              </button>
+            ) : renderEntrada(entry))}
+          </div>
+          {entradaAbierta?.opciones && <div id="submenu-informes" role="region" aria-label={`Opciones de ${entradaAbierta.nombre}`} className="rounded-xl border border-petroleum-100 bg-petroleum-50/40 p-4">
+            <h2 className="mb-3 text-sm font-semibold text-petroleum-800">{entradaAbierta.numero}- {entradaAbierta.nombre}</h2>
+            <div className={REPORT_TAG_GRID}>{entradaAbierta.opciones.map(entry => renderEntrada(entry, 1))}</div>
+          </div>}
         </section>
       )}
 
@@ -983,22 +1182,122 @@ export default function Informes({ onNavigate, cia }: Props) {
               {showParams.id === 'iva-acumulacion' && <p className="col-span-2 text-xs text-gray-600">
                 Se recalcularán los acumulados de IVA de los meses elegidos para la compañía actual. Los demás meses no se modificarán.
               </p>}
+              {showParams.id === 'ret-acumulacion' && <p className="col-span-2 text-xs text-gray-600">
+                Se reemplazarán los acumulados de retenciones de los meses elegidos para la compañía actual. Los demás meses no se modificarán.
+              </p>}
+              {THIRD_ORIGINAL_IDS.has(showParams.id) && <p className="col-span-2 text-xs text-gray-600">
+                Consulte los saldos y movimientos de los terceros para el período y rangos elegidos.
+              </p>}
               {showParams.id === 'doc-formato' && <div>
                 <label htmlFor="param-mes-lote" className="block text-xs font-medium text-gray-600 mb-1">Mes o lote</label>
                 <select id="param-mes-lote" data-initial-focus value={params.mesLote} onChange={e => setParams(p => ({ ...p, mesLote: e.target.value }))} className={INPUT}>
                   {MESES.map((mes, index) => <option key={mes} value={index + 1}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
                 </select>
               </div>}
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && showParams.id !== 'bal-gral-resultados' && <div>
+              {['mov-comprobante', 'mov-tipo-doc'].includes(showParams.id) && <>
+                <div className="col-span-2"><label htmlFor="param-mes-comprobante" className="block text-xs font-medium text-gray-600 mb-1">Mes del movimiento</label>
+                  <select id="param-mes-comprobante" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_LIBRO.map((mes, index) => <option key={mes} value={mes}>{String(index).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-comprobante-desde" className="block text-xs font-medium text-gray-600 mb-1">{showParams.id === 'mov-tipo-doc' ? 'Tipo documental desde' : 'Comprobante desde'}</label>
+                  <input id="param-comprobante-desde" maxLength={2} value={showParams.id === 'mov-tipo-doc' ? params.tipoDocumento : params.comprobante} onChange={e => setParams(p => ({ ...p, [showParams.id === 'mov-tipo-doc' ? 'tipoDocumento' : 'comprobante']: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-comprobante-hasta" className="block text-xs font-medium text-gray-600 mb-1">{showParams.id === 'mov-tipo-doc' ? 'Tipo documental hasta' : 'Comprobante hasta'}</label>
+                  <input id="param-comprobante-hasta" maxLength={2} value={showParams.id === 'mov-tipo-doc' ? params.tipoDocumentoHasta : params.comprobanteHasta} onChange={e => setParams(p => ({ ...p, [showParams.id === 'mov-tipo-doc' ? 'tipoDocumentoHasta' : 'comprobanteHasta']: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-orden-comprobante" className="block text-xs font-medium text-gray-600 mb-1">Ordenar dentro del {showParams.id === 'mov-tipo-doc' ? 'tipo documental' : 'comprobante'}</label>
+                  <select id="param-orden-comprobante" value={params.ordenMovimiento} onChange={e => setParams(p => ({ ...p, ordenMovimiento: e.target.value as 'documento' | 'fecha' }))} className={INPUT}>
+                    <option value="fecha">Por fecha</option><option value="documento">Por documento</option>
+                  </select></div>
+                <label className="flex items-center gap-2 self-end pb-1 text-xs text-gray-600">
+                  <input type="checkbox" checked={params.incluirSubtotales} onChange={e => setParams(p => ({ ...p, incluirSubtotales: e.target.checked }))} />Subtotal por fecha/documento
+                </label>
+              </>}
+              {CENTER_JOURNAL_IDS.has(showParams.id) && <>
+                <div className="col-span-2"><label htmlFor="param-mes-diario-centro" className="block text-xs font-medium text-gray-600 mb-1">Mes del diario</label>
+                  <select id="param-mes-diario-centro" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-k-cuenta-desde" className="block text-xs font-medium text-gray-600 mb-1">Cuenta desde</label>
+                  <input id="param-k-cuenta-desde" maxLength={12} value={params.cuentaDesde} onChange={e => setParams(p => ({ ...p, cuentaDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-k-cuenta-hasta" className="block text-xs font-medium text-gray-600 mb-1">Cuenta hasta</label>
+                  <input id="param-k-cuenta-hasta" maxLength={12} value={params.cuentaHasta} onChange={e => setParams(p => ({ ...p, cuentaHasta: e.target.value }))} className={INPUT} /></div>
+                {showParams.id === 'diario-rangos-continuos' ? <>
+                  <div><label htmlFor="param-k-centro-desde" className="block text-xs font-medium text-gray-600 mb-1">Centro desde</label>
+                    <input id="param-k-centro-desde" maxLength={7} value={params.centroDesde} onChange={e => setParams(p => ({ ...p, centroDesde: e.target.value }))} className={INPUT} /></div>
+                  <div><label htmlFor="param-k-centro-hasta" className="block text-xs font-medium text-gray-600 mb-1">Centro hasta</label>
+                    <input id="param-k-centro-hasta" maxLength={7} value={params.centroHasta} onChange={e => setParams(p => ({ ...p, centroHasta: e.target.value }))} className={INPUT} /></div>
+                </> : <div className="col-span-2"><label htmlFor="param-k-centros-fijos" className="block text-xs font-medium text-gray-600 mb-1">Centros fijos (máximo 10, separados por coma)</label>
+                  <input id="param-k-centros-fijos" value={params.centrosSeleccionados} onChange={e => setParams(p => ({ ...p, centrosSeleccionados: e.target.value }))} className={INPUT} /></div>}
+                <div><label htmlFor="param-k-orden" className="block text-xs font-medium text-gray-600 mb-1">Presentación</label>
+                  <select id="param-k-orden" value={params.ordenCentros} onChange={e => setParams(p => ({ ...p, ordenCentros: e.target.value as 'cuenta' | 'centro' }))} className={INPUT}>
+                    <option value="cuenta">Por cuenta y centro</option><option value="centro">Unificado por centro</option>
+                  </select></div>
+                {showParams.id === 'diario-rangos-continuos' && params.ordenCentros === 'centro' && <div><label htmlFor="param-k-detalle" className="block text-xs font-medium text-gray-600 mb-1">Información</label>
+                  <select id="param-k-detalle" value={params.modalidad} onChange={e => setParams(p => ({ ...p, modalidad: e.target.value as 'detallado' | 'resumido' }))} className={INPUT}>
+                    <option value="detallado">Detallada</option><option value="resumido">Resumida por día</option>
+                  </select></div>}
+              </>}
+              {CENTER_BALANCE_IDS.has(showParams.id) && <>
+                {['balance-acumulado', 'balance-mensual-centro'].includes(showParams.id)
+                  ? <div className="col-span-2"><label htmlFor="param-l-centro" className="block text-xs font-medium text-gray-600 mb-1">Centro de costo</label>
+                      <input id="param-l-centro" data-initial-focus maxLength={7} value={params.centro} onChange={e => setParams(p => ({ ...p, centro: e.target.value }))} className={INPUT} /></div>
+                  : <div className="col-span-2"><label htmlFor="param-l-centros" className="block text-xs font-medium text-gray-600 mb-1">Centros a clasificar (separados por coma)</label>
+                      <input id="param-l-centros" data-initial-focus value={params.centrosSeleccionados} onChange={e => setParams(p => ({ ...p, centrosSeleccionados: e.target.value }))} className={INPUT} /></div>}
+                <div><label htmlFor="param-l-mes" className="block text-xs font-medium text-gray-600 mb-1">Mes de corte</label>
+                  <select id="param-l-mes" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value, mesDesde: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-l-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel máximo</label>
+                  <select id="param-l-nivel" value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                    <option value="4">Cuenta</option><option value="6">Subcuenta</option><option value="9">Auxiliar 1</option><option value="12">Auxiliar 2</option>
+                  </select></div>
+                <div className="col-span-2 space-y-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirResultados} onChange={e => setParams(p => ({ ...p, incluirResultados: e.target.checked }))} />Incluir estado de resultados</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />Incluir cuentas sin movimiento</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />Incluir terceros</label>
+                </div>
+              </>}
+              {showParams.id === 'mov-cuenta' && <>
+                <div><label htmlFor="param-o-fecha-desde" className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
+                  <input id="param-o-fecha-desde" data-initial-focus type="date" value={params.fechaDesde} onChange={e => setParams(p => ({ ...p, fechaDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-o-fecha-hasta" className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
+                  <input id="param-o-fecha-hasta" type="date" value={params.fechaHasta} onChange={e => setParams(p => ({ ...p, fechaHasta: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-o-cuenta-desde" className="block text-xs font-medium text-gray-600 mb-1">Cuenta desde</label>
+                  <input id="param-o-cuenta-desde" maxLength={12} value={params.cuentaDesde} onChange={e => setParams(p => ({ ...p, cuentaDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-o-cuenta-hasta" className="block text-xs font-medium text-gray-600 mb-1">Cuenta hasta</label>
+                  <input id="param-o-cuenta-hasta" maxLength={12} value={params.cuentaHasta} onChange={e => setParams(p => ({ ...p, cuentaHasta: e.target.value }))} className={INPUT} /></div>
+              </>}
+              {showParams.id === 'comp-cta-tercero' && <>
+                <div className="col-span-2"><label htmlFor="param-p-mes" className="block text-xs font-medium text-gray-600 mb-1">Mes del informe</label>
+                  <select id="param-p-mes" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value, mesDesde: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-p-cuenta-desde" className="block text-xs font-medium text-gray-600 mb-1">Cuenta desde</label>
+                  <input id="param-p-cuenta-desde" maxLength={12} value={params.cuentaDesde} onChange={e => setParams(p => ({ ...p, cuentaDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-p-cuenta-hasta" className="block text-xs font-medium text-gray-600 mb-1">Cuenta hasta</label>
+                  <input id="param-p-cuenta-hasta" maxLength={12} value={params.cuentaHasta} onChange={e => setParams(p => ({ ...p, cuentaHasta: e.target.value }))} className={INPUT} /></div>
+              </>}
+              {showParams.id === 'resumen-tipo-contribuyente' && <>
+                <div className="col-span-2"><label htmlFor="param-q-tipo" className="block text-xs font-medium text-gray-600 mb-1">Tipo de contribuyente</label>
+                  <input id="param-q-tipo" data-initial-focus maxLength={2} value={params.tipoContribuyente} onChange={e => setParams(p => ({ ...p, tipoContribuyente: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-q-cuenta-uno" className="block text-xs font-medium text-gray-600 mb-1">Primera cuenta a reportar</label>
+                  <input id="param-q-cuenta-uno" maxLength={12} value={params.cuentaDesde} onChange={e => setParams(p => ({ ...p, cuentaDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-q-cuenta-dos" className="block text-xs font-medium text-gray-600 mb-1">Segunda cuenta a reportar</label>
+                  <input id="param-q-cuenta-dos" maxLength={12} value={params.cuentaHasta} onChange={e => setParams(p => ({ ...p, cuentaHasta: e.target.value }))} className={INPUT} /></div>
+              </>}
+              {showParams.id === 'flujo-comparativo' && <div className="col-span-2">
+                <label htmlFor="param-m-compania" className="block text-xs font-medium text-gray-600 mb-1">Compañía comparativa (ejercicio anterior)</label>
+                <input id="param-m-compania" data-initial-focus maxLength={3} value={params.companiaAnterior} onChange={e => setParams(p => ({ ...p, companiaAnterior: e.target.value }))} className={INPUT} />
+              </div>}
+              {showParams.id !== 'flujo-comparativo' && showParams.id !== 'comp-cta-tercero' && showParams.id !== 'mov-cuenta' && !CENTER_BALANCE_IDS.has(showParams.id) && !CENTER_JOURNAL_IDS.has(showParams.id) && !THIRD_DIRECTORY_IDS.has(showParams.id) && !CENTER_SINGLE_MONTH_IDS.has(showParams.id) && !ANNUAL_ANALYSIS_IDS.has(showParams.id) && showParams.id !== 'balance-prueba-anual' && showParams.id !== 'centro-detallado' && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && showParams.id !== 'iva-soportes' && showParams.id !== 'mov-comprobante' && showParams.id !== 'mov-tipo-doc' && showParams.id !== 'bal-gral-resultados' && showParams.id !== 'inventario-bal' && showParams.id !== 'mayor-bal' && showParams.id !== 'diario-cta' && showParams.id !== 'caja-diario-comp' && showParams.id !== 'caja-diario-cta' && showParams.id !== 'saldos-cuenta' && showParams.id !== 'bal-comparativo-mensual' && <div>
                 <label htmlFor="param-mes-desde" className="block text-xs font-medium text-gray-600 mb-1">Mes desde</label>
                 <select id="param-mes-desde" data-initial-focus value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
-                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) || showParams.id === 'tercero-especifico' ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' || THIRD_ORIGINAL_IDS.has(showParams.id) || showParams.id === 'centro-consulta' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
-              {!THIRD_DIRECTORY_IDS.has(showParams.id) && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && showParams.id !== 'bal-gral-resultados' && <div>
+              {showParams.id !== 'flujo-comparativo' && showParams.id !== 'comp-cta-tercero' && showParams.id !== 'mov-cuenta' && !CENTER_BALANCE_IDS.has(showParams.id) && !CENTER_JOURNAL_IDS.has(showParams.id) && !THIRD_DIRECTORY_IDS.has(showParams.id) && !CENTER_SINGLE_MONTH_IDS.has(showParams.id) && !ANNUAL_ANALYSIS_IDS.has(showParams.id) && showParams.id !== 'balance-prueba-anual' && showParams.id !== 'centro-detallado' && showParams.id !== 'doc-formato' && showParams.id !== 'listado-cuentas' && showParams.id !== 'aux-gral' && showParams.id !== 'iva-soportes' && showParams.id !== 'mov-comprobante' && showParams.id !== 'mov-tipo-doc' && showParams.id !== 'bal-gral-resultados' && showParams.id !== 'inventario-bal' && showParams.id !== 'mayor-bal' && showParams.id !== 'diario-cta' && showParams.id !== 'caja-diario-comp' && showParams.id !== 'caja-diario-cta' && showParams.id !== 'saldos-cuenta' && showParams.id !== 'bal-comparativo-mensual' && <div>
                 <label htmlFor="param-mes-hasta" className="block text-xs font-medium text-gray-600 mb-1">Mes hasta</label>
                 <select id="param-mes-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
-                  {(BALANCE_IDS.has(showParams.id) ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
+                  {(BALANCE_IDS.has(showParams.id) || showParams.id === 'tercero-especifico' ? MESES_BALANCE : showParams.id === 'aux-doc-afectado' || THIRD_ORIGINAL_IDS.has(showParams.id) || showParams.id === 'centro-consulta' ? MESES_LIBRO : MESES).map(m => <option key={m}>{m}</option>)}
                 </select>
               </div>}
               {showParams.id === 'bal-gral-resultados' && <>
@@ -1021,7 +1320,174 @@ export default function Informes({ onNavigate, cia }: Props) {
                   <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />Incluir terceros</label>
                 </div>
               </>}
-              {showParams.id === 'aux-gral' && <>
+              {showParams.id === 'inventario-bal' && <>
+                <div className="col-span-2">
+                  <label htmlFor="param-mes-inventario" className="block text-xs font-medium text-gray-600 mb-1">Mes del informe</label>
+                  <select id="param-mes-inventario" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select>
+                </div>
+                <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirResultados} onChange={e => setParams(p => ({ ...p, incluirResultados: e.target.checked }))} />Incluir estado de resultados</label>
+                <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />Incluir cuentas sin saldo ni movimiento</label>
+              </>}
+              {showParams.id === 'mayor-bal' && <>
+                <div><label htmlFor="param-mayor-desde" className="block text-xs font-medium text-gray-600 mb-1">Mes desde</label>
+                  <select id="param-mayor-desde" data-initial-focus value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-mayor-hasta" className="block text-xs font-medium text-gray-600 mb-1">Mes hasta</label>
+                  <select id="param-mayor-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-mayor-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel</label>
+                  <select id="param-mayor-nivel" value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                    <option value="1">Clase</option><option value="2">Grupo</option><option value="4">Cuenta</option>
+                    <option value="6">Subcuenta</option><option value="9">Auxiliar 1</option><option value="12">Auxiliar 2</option>
+                  </select></div>
+                <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />Incluir cuentas sin saldo ni movimiento</label>
+              </>}
+              {showParams.id === 'diario-cta' && <div className="col-span-2">
+                <label htmlFor="param-mes-diario-cuenta" className="block text-xs font-medium text-gray-600 mb-1">Mes del diario</label>
+                <select id="param-mes-diario-cuenta" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                  {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                </select>
+              </div>}
+              {showParams.id === 'caja-diario-comp' && <>
+                <div className="col-span-2"><label htmlFor="param-mes-caja-comprobante" className="block text-xs font-medium text-gray-600 mb-1">Mes del libro</label>
+                  <select id="param-mes-caja-comprobante" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-caja-comprobante-desde" className="block text-xs font-medium text-gray-600 mb-1">Comprobante desde</label>
+                  <input id="param-caja-comprobante-desde" maxLength={2} value={params.comprobante} onChange={e => setParams(p => ({ ...p, comprobante: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-caja-comprobante-hasta" className="block text-xs font-medium text-gray-600 mb-1">Comprobante hasta</label>
+                  <input id="param-caja-comprobante-hasta" maxLength={2} value={params.comprobanteHasta} onChange={e => setParams(p => ({ ...p, comprobanteHasta: e.target.value }))} className={INPUT} /></div>
+                <div className="col-span-2"><label htmlFor="param-caja-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel de cuentas</label>
+                  <select id="param-caja-nivel" value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                    <option value="1">1 — Grupo</option><option value="2">2 — Cuenta</option>
+                    <option value="3">3 — Subcuenta</option><option value="4">4 — Auxiliar 1</option>
+                  </select></div>
+              </>}
+              {showParams.id === 'caja-diario-cta' && <>
+                <div className="col-span-2"><label htmlFor="param-mes-caja-cuenta" className="block text-xs font-medium text-gray-600 mb-1">Mes del libro</label>
+                  <select id="param-mes-caja-cuenta" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-caja-cuenta-desde" className="block text-xs font-medium text-gray-600 mb-1">Cuenta desde</label>
+                  <input id="param-caja-cuenta-desde" maxLength={12} value={params.cuentaDesde} onChange={e => setParams(p => ({ ...p, cuentaDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-caja-cuenta-hasta" className="block text-xs font-medium text-gray-600 mb-1">Cuenta hasta</label>
+                  <input id="param-caja-cuenta-hasta" maxLength={12} value={params.cuentaHasta} onChange={e => setParams(p => ({ ...p, cuentaHasta: e.target.value }))} className={INPUT} /></div>
+                <div className="col-span-2"><label htmlFor="param-caja-cuenta-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel de cuentas</label>
+                  <select id="param-caja-cuenta-nivel" value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                    <option value="1">1 — Grupo</option><option value="2">2 — Cuenta</option>
+                    <option value="3">3 — Subcuenta</option><option value="4">4 — Auxiliar 1</option>
+                  </select></div>
+              </>}
+              {showParams.id === 'saldos-cuenta' && <>
+                <div className="col-span-2"><label htmlFor="param-mes-saldos-cuenta" className="block text-xs font-medium text-gray-600 mb-1">Mes del informe</label>
+                  <select id="param-mes-saldos-cuenta" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-saldos-cuenta-desde" className="block text-xs font-medium text-gray-600 mb-1">Cuenta desde</label>
+                  <input id="param-saldos-cuenta-desde" maxLength={12} value={params.cuentaDesde} onChange={e => setParams(p => ({ ...p, cuentaDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-saldos-cuenta-hasta" className="block text-xs font-medium text-gray-600 mb-1">Cuenta hasta</label>
+                  <input id="param-saldos-cuenta-hasta" maxLength={12} value={params.cuentaHasta} onChange={e => setParams(p => ({ ...p, cuentaHasta: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-saldos-cuenta-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel máximo</label>
+                  <select id="param-saldos-cuenta-nivel" value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                    <option value="4">Cuenta</option><option value="6">Subcuenta</option>
+                    <option value="9">Auxiliar 1</option><option value="12">Auxiliar 2</option>
+                  </select></div>
+                <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />Incluir cuentas sin saldo ni movimiento</label>
+                <label className="col-span-2 flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />Incluir terceros</label>
+              </>}
+              {showParams.id === 'bal-comparativo-mensual' && <>
+                <div><label htmlFor="param-comparativo-desde" className="block text-xs font-medium text-gray-600 mb-1">Primer mes</label>
+                  <select id="param-comparativo-desde" data-initial-focus value={params.mesDesde} onChange={e => setParams(p => ({ ...p, mesDesde: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-comparativo-hasta" className="block text-xs font-medium text-gray-600 mb-1">Segundo mes</label>
+                  <select id="param-comparativo-hasta" value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                    {MESES_BALANCE.map((mes, index) => <option key={mes} value={mes}>{String(index + 1).padStart(2, '0')} — {mes}</option>)}
+                  </select></div>
+                <div><label htmlFor="param-comparativo-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel máximo</label>
+                  <select id="param-comparativo-nivel" value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                    <option value="4">Cuenta</option><option value="6">Subcuenta</option><option value="9">Auxiliar 1</option><option value="12">Auxiliar 2</option>
+                  </select></div>
+                <div><label htmlFor="param-comparativo-dato" className="block text-xs font-medium text-gray-600 mb-1">Comparar</label>
+                  <select id="param-comparativo-dato" value={params.modoComparativo} onChange={e => setParams(p => ({ ...p, modoComparativo: e.target.value as 'saldo' | 'movimiento' }))} className={INPUT}>
+                    <option value="saldo">Saldo de cada mes</option><option value="movimiento">Movimiento de cada mes</option>
+                  </select></div>
+                <div><label htmlFor="param-comparativo-operacion" className="block text-xs font-medium text-gray-600 mb-1">Tercera columna</label>
+                  <select id="param-comparativo-operacion" value={params.operacionComparativa} onChange={e => setParams(p => ({ ...p, operacionComparativa: e.target.value as 'diferencia' | 'sumatoria' }))} className={INPUT}>
+                    <option value="diferencia">Diferencia: primero − segundo</option><option value="sumatoria">Sumatoria</option>
+                  </select></div>
+                <div className="col-span-2 space-y-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirResultados} onChange={e => setParams(p => ({ ...p, incluirResultados: e.target.checked }))} />Incluir estado de resultados</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />Incluir cuentas sin saldo ni movimiento</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />Incluir terceros</label>
+                </div>
+              </>}
+              {ANNUAL_ANALYSIS_IDS.has(showParams.id) && <div className="col-span-2">
+                <label htmlFor="param-analisis-anual-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel máximo</label>
+                <select id="param-analisis-anual-nivel" data-initial-focus value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                  <option value="4">Cuenta</option><option value="6">Subcuenta</option>
+                  <option value="9">Auxiliar 1</option><option value="12">Auxiliar 2</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">El análisis incluye enero a diciembre del ejercicio.</p>
+              </div>}
+              {showParams.id === 'balance-prueba-anual' && <>
+                <div className="col-span-2"><label htmlFor="param-balance-anual-nivel" className="block text-xs font-medium text-gray-600 mb-1">Nivel máximo</label>
+                  <select id="param-balance-anual-nivel" data-initial-focus value={params.nivel} onChange={e => setParams(p => ({ ...p, nivel: e.target.value }))} className={INPUT}>
+                    <option value="4">Cuenta</option><option value="6">Subcuenta</option>
+                    <option value="9">Auxiliar 1</option><option value="12">Auxiliar 2</option>
+                  </select></div>
+                <div className="col-span-2 space-y-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirResultados} onChange={e => setParams(p => ({ ...p, incluirResultados: e.target.checked }))} />Incluir estado de resultados</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirCeros} onChange={e => setParams(p => ({ ...p, incluirCeros: e.target.checked }))} />Incluir cuentas sin saldo ni movimiento</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />Incluir terceros</label>
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirCentros} onChange={e => setParams(p => ({ ...p, incluirCentros: e.target.checked }))} />Incluir centros de costo</label>
+                </div>
+              </>}
+              {CENTER_SINGLE_MONTH_IDS.has(showParams.id) && <div className="col-span-2">
+                <label htmlFor="param-mes-centro" className="block text-xs font-medium text-gray-600 mb-1">Mes a reportar</label>
+                <select id="param-mes-centro" data-initial-focus value={params.mesHasta} onChange={e => setParams(p => ({ ...p, mesHasta: e.target.value }))} className={INPUT}>
+                  {(showParams.id === 'centro-por-nivel' ? MESES_NIVEL_CENTROS : CENTER_ZERO_MONTH_IDS.has(showParams.id) ? MESES_LIBRO : MESES).map((mes, index) => <option key={mes} value={mes}>{String(index + (showParams.id === 'centro-por-nivel' || CENTER_ZERO_MONTH_IDS.has(showParams.id) ? 0 : 1)).padStart(2, '0')} — {mes}</option>)}
+                </select>
+              </div>}
+              {showParams.id === 'centro-detallado' && <>
+                <div><label htmlFor="param-fecha-centro-desde" className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
+                  <input id="param-fecha-centro-desde" data-initial-focus type="date" value={params.fechaDesde} onChange={e => setParams(p => ({ ...p, fechaDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-fecha-centro-hasta" className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
+                  <input id="param-fecha-centro-hasta" type="date" value={params.fechaHasta} onChange={e => setParams(p => ({ ...p, fechaHasta: e.target.value }))} className={INPUT} /></div>
+              </>}
+              {CENTER_ORIGINAL_IDS.has(showParams.id) && <>
+                {['centro-consulta', 'centro-cuenta-centro', 'centro-tercero-centro', 'centro-detallado'].includes(showParams.id) && <>
+                  <div><label htmlFor="param-centro-desde" className="block text-xs font-medium text-gray-600 mb-1">Centro desde</label>
+                    <input id="param-centro-desde" maxLength={7} value={params.centroDesde} onChange={e => setParams(p => ({ ...p, centroDesde: e.target.value }))} className={INPUT} /></div>
+                  <div><label htmlFor="param-centro-hasta" className="block text-xs font-medium text-gray-600 mb-1">Centro hasta</label>
+                    <input id="param-centro-hasta" maxLength={7} value={params.centroHasta} onChange={e => setParams(p => ({ ...p, centroHasta: e.target.value }))} className={INPUT} /></div>
+                </>}
+                {['centro-consulta', 'centro-cuenta-centro', 'centro-por-cuenta', 'centro-tercero-centro'].includes(showParams.id) && <>
+                  <div><label htmlFor="param-centro-nit-desde" className="block text-xs font-medium text-gray-600 mb-1">Tercero desde</label>
+                    <input id="param-centro-nit-desde" maxLength={15} value={params.nitDesde} onChange={e => setParams(p => ({ ...p, nitDesde: e.target.value }))} className={INPUT} /></div>
+                  <div><label htmlFor="param-centro-nit-hasta" className="block text-xs font-medium text-gray-600 mb-1">Tercero hasta</label>
+                    <input id="param-centro-nit-hasta" maxLength={15} value={params.nitHasta} onChange={e => setParams(p => ({ ...p, nitHasta: e.target.value }))} className={INPUT} /></div>
+                </>}
+                {showParams.id === 'centro-consulta' && <div className="col-span-2"><label htmlFor="param-orden-centros" className="block text-xs font-medium text-gray-600 mb-1">Ordenar por</label>
+                  <select id="param-orden-centros" value={params.ordenCentros} onChange={e => setParams(p => ({ ...p, ordenCentros: e.target.value as 'cuenta' | 'centro' }))} className={INPUT}>
+                    <option value="cuenta">Cuenta y centro</option><option value="centro">Centro y cuenta</option>
+                  </select></div>}
+                {showParams.id === 'centro-por-cuenta' && <div className="col-span-2"><label htmlFor="param-cuentas-seleccionadas" className="block text-xs font-medium text-gray-600 mb-1">Cuentas seleccionadas</label>
+                  <input id="param-cuentas-seleccionadas" required value={params.cuentasSeleccionadas} onChange={e => setParams(p => ({ ...p, cuentasSeleccionadas: e.target.value }))} placeholder="Separe varios códigos con coma" className={INPUT} /></div>}
+                {['centro-por-cuenta', 'centro-columnas-5152'].includes(showParams.id) && <div className="col-span-2"><label htmlFor="param-centros-seleccionados" className="block text-xs font-medium text-gray-600 mb-1">Centros seleccionados</label>
+                  <input id="param-centros-seleccionados" value={params.centrosSeleccionados} onChange={e => setParams(p => ({ ...p, centrosSeleccionados: e.target.value }))} placeholder="Deje vacío para todos, o separe códigos con coma" className={INPUT} /></div>}
+                {showParams.id === 'centro-por-nivel' && <div className="col-span-2"><label htmlFor="param-prefijo-cuenta" className="block text-xs font-medium text-gray-600 mb-1">Cuenta o nivel</label>
+                  <input id="param-prefijo-cuenta" required maxLength={12} value={params.prefijoCuenta} onChange={e => setParams(p => ({ ...p, prefijoCuenta: e.target.value }))} className={INPUT} /></div>}
+                {['centro-cuenta-centro', 'centro-por-cuenta', 'centro-tercero-centro'].includes(showParams.id) && <div className="col-span-2 space-y-2">
+                  {showParams.id !== 'centro-tercero-centro' && <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirTerceros} onChange={e => setParams(p => ({ ...p, incluirTerceros: e.target.checked }))} />Detalle por tercero</label>}
+                  <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={params.incluirSaldoAnterior} onChange={e => setParams(p => ({ ...p, incluirSaldoAnterior: e.target.checked }))} />Mostrar saldo anterior</label>
+                </div>}
+              </>}
+              {(showParams.id === 'aux-gral' || showParams.id === 'ret-soportes' || showParams.id === 'iva-soportes') && <>
                 <div>
                   <label htmlFor="param-fecha-desde" className="block text-xs font-medium text-gray-600 mb-1">Fecha desde</label>
                   <input id="param-fecha-desde" data-initial-focus type="date" required value={params.fechaDesde} onChange={e => setParams(p => ({ ...p, fechaDesde: e.target.value }))} className={INPUT} />
@@ -1030,17 +1496,68 @@ export default function Informes({ onNavigate, cia }: Props) {
                   <label htmlFor="param-fecha-hasta" className="block text-xs font-medium text-gray-600 mb-1">Fecha hasta</label>
                   <input id="param-fecha-hasta" type="date" required value={params.fechaHasta} onChange={e => setParams(p => ({ ...p, fechaHasta: e.target.value }))} className={INPUT} />
                 </div>
-                <div>
+                {showParams.id !== 'iva-soportes' && <div>
                   <label htmlFor="param-modalidad" className="block text-xs font-medium text-gray-600 mb-1">Detalle</label>
                   <select id="param-modalidad" value={params.modalidad} onChange={e => setParams(p => ({ ...p, modalidad: e.target.value as 'detallado' | 'resumido' }))} className={INPUT}>
                     <option value="detallado">Detallado</option><option value="resumido">Resumido</option>
                   </select>
-                </div>
+                </div>}
               </>}
               {showParams.id === 'aux-doc-afectado' && <div className="col-span-2">
                 <label htmlFor="param-documento-afectado" className="block text-xs font-medium text-gray-600 mb-1">Documento afectado</label>
                 <input id="param-documento-afectado" required maxLength={12} value={params.documentoAfectado} onChange={e => setParams(p => ({ ...p, documentoAfectado: e.target.value }))} className={INPUT} />
               </div>}
+              {THIRD_ORIGINAL_IDS.has(showParams.id) && <>
+                <div>
+                  <label htmlFor="param-nit-desde" className="block text-xs font-medium text-gray-600 mb-1">Tercero desde</label>
+                  <input id="param-nit-desde" maxLength={15} value={params.nitDesde} onChange={e => setParams(p => ({ ...p, nitDesde: e.target.value }))} className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor="param-nit-hasta" className="block text-xs font-medium text-gray-600 mb-1">Tercero hasta</label>
+                  <input id="param-nit-hasta" maxLength={15} value={params.nitHasta} onChange={e => setParams(p => ({ ...p, nitHasta: e.target.value }))} className={INPUT} />
+                </div>
+                <div>
+                  <label htmlFor="param-orden-terceros" className="block text-xs font-medium text-gray-600 mb-1">Ordenar por</label>
+                  <select id="param-orden-terceros" value={params.ordenTerceros} onChange={e => setParams(p => ({ ...p, ordenTerceros: e.target.value as 'cuenta' | 'tercero' }))} className={INPUT}>
+                    <option value="cuenta">Cuenta y tercero</option><option value="tercero">Tercero y cuenta</option>
+                  </select>
+                </div>
+                {showParams.id === 'tercero-cuenta-tercero' && <div>
+                  <label htmlFor="param-modalidad-terceros" className="block text-xs font-medium text-gray-600 mb-1">Presentación</label>
+                  <select id="param-modalidad-terceros" value={params.modalidad} onChange={e => setParams(p => ({ ...p, modalidad: e.target.value as 'detallado' | 'resumido' }))} className={INPUT}>
+                    <option value="detallado">Detallado</option><option value="resumido">Resumido</option>
+                  </select>
+                </div>}
+                {showParams.id === 'tercero-cuenta-tercero' && <div>
+                  <label htmlFor="param-orden-movimiento" className="block text-xs font-medium text-gray-600 mb-1">Orden del movimiento</label>
+                  <select id="param-orden-movimiento" value={params.ordenMovimiento} onChange={e => setParams(p => ({ ...p, ordenMovimiento: e.target.value as 'documento' | 'fecha' }))} className={INPUT}>
+                    <option value="documento">Documento y fecha</option><option value="fecha">Fecha y documento</option>
+                  </select>
+                </div>}
+              </>}
+              {['iva-relacion', 'iva-totales-cuenta', 'iva-soportes'].includes(showParams.id) && <>
+                <div><label htmlFor="param-iva-nit-desde" className="block text-xs font-medium text-gray-600 mb-1">Tercero desde</label>
+                  <input id="param-iva-nit-desde" maxLength={15} value={params.nitDesde} onChange={e => setParams(p => ({ ...p, nitDesde: e.target.value }))} className={INPUT} /></div>
+                <div><label htmlFor="param-iva-nit-hasta" className="block text-xs font-medium text-gray-600 mb-1">Tercero hasta</label>
+                  <input id="param-iva-nit-hasta" maxLength={15} value={params.nitHasta} onChange={e => setParams(p => ({ ...p, nitHasta: e.target.value }))} className={INPUT} /></div>
+                {showParams.id === 'iva-relacion' && <div><label htmlFor="param-iva-orden" className="block text-xs font-medium text-gray-600 mb-1">Ordenar por</label>
+                  <select id="param-iva-orden" value={params.ordenTerceros} onChange={e => setParams(p => ({ ...p, ordenTerceros: e.target.value as 'cuenta' | 'tercero' }))} className={INPUT}>
+                    <option value="cuenta">Cuenta y tercero</option><option value="tercero">Tercero y cuenta</option>
+                  </select></div>}
+                {showParams.id === 'iva-relacion' && <div><label htmlFor="param-iva-presentacion" className="block text-xs font-medium text-gray-600 mb-1">Presentación</label>
+                  <select id="param-iva-presentacion" value={params.modalidad} onChange={e => setParams(p => ({ ...p, modalidad: e.target.value as 'detallado' | 'resumido' }))} className={INPUT}>
+                    <option value="resumido">Resumido</option><option value="detallado">Detallado por mes</option>
+                  </select></div>}
+              </>}
+              {showParams.id === 'tercero-especifico' && <>
+                <div className="col-span-2"><label htmlFor="param-tercero-cuentas" className="block text-xs font-medium text-gray-600 mb-1">Cuentas seleccionadas</label>
+                  <input id="param-tercero-cuentas" required value={params.cuentasSeleccionadas} onChange={e => setParams(p => ({ ...p, cuentasSeleccionadas: e.target.value }))} placeholder="Códigos de cuentas separados por coma" className={INPUT} />
+                  <p className="mt-1 text-xs text-gray-500">Solo cuentas de movimiento que manejan terceros.</p></div>
+                <div className="col-span-2"><label htmlFor="param-tercero-presentacion" className="block text-xs font-medium text-gray-600 mb-1">Presentación</label>
+                  <select id="param-tercero-presentacion" value={params.modalidad} onChange={e => setParams(p => ({ ...p, modalidad: e.target.value as 'detallado' | 'resumido' }))} className={INPUT}>
+                    <option value="resumido">Resumen por cuenta</option><option value="detallado">Partidas detalladas</option>
+                  </select></div>
+              </>}
               {BALANCE_IDS.has(showParams.id) && (
                 <>
                   <div>
@@ -1081,7 +1598,7 @@ export default function Informes({ onNavigate, cia }: Props) {
                   </>}
                 </>
               )}
-              {!BALANCE_IDS.has(showParams.id) && showParams.id !== 'bal-gral-resultados' && (
+              {!BALANCE_IDS.has(showParams.id) && !ANNUAL_ANALYSIS_IDS.has(showParams.id) && showParams.id !== 'balance-prueba-anual' && showParams.id !== 'bal-gral-resultados' && showParams.id !== 'inventario-bal' && showParams.id !== 'mayor-bal' && showParams.id !== 'caja-diario-comp' && showParams.id !== 'caja-diario-cta' && showParams.id !== 'saldos-cuenta' && showParams.id !== 'bal-comparativo-mensual' && (
                 <>
                   {([
                     ['cuentaDesde', 'Cuenta desde'], ['cuentaHasta', 'Cuenta hasta'],
@@ -1117,9 +1634,9 @@ export default function Informes({ onNavigate, cia }: Props) {
             <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
               <button type="button" onClick={() => setShowParams(null)} className={BUTTON_SECONDARY}>Cancelar</button>
               <button type="submit" data-report-submit disabled={generando || anioOperacion === null} className={`${BUTTON_PRIMARY} disabled:opacity-60`}>
-                {generando ? (showParams.id === 'iva-acumulacion' ? 'Acumulando IVA…' : 'Consultando Advantage…')
+                {generando ? (showParams.id === 'iva-acumulacion' ? 'Acumulando IVA…' : showParams.id === 'ret-acumulacion' ? 'Acumulando retenciones…' : 'Consultando Advantage…')
                   : anioOperacion === null && !errorPeriodo ? 'Consultando período…'
-                  : showParams.id === 'iva-acumulacion' ? 'Procesar acumulación' : 'Generar informe'}
+                  : ['iva-acumulacion', 'ret-acumulacion'].includes(showParams.id) ? 'Procesar acumulación' : 'Generar informe'}
               </button>
             </div>
           </form>

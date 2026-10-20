@@ -284,22 +284,13 @@ def test_company_item_declares_the_years_and_composes_the_nit() -> None:
     }
 
 
-def test_company_write_declares_the_engine_branch_with_503(monkeypatch) -> None:
-    # Advantage: la rama declarada lanza la excepción que la capa HTTP traduce a
-    # 503 con su causa, no a un error genérico de motor no disponible.
+def test_company_update_and_delete_remain_unavailable_in_advantage(monkeypatch) -> None:
+    # Solo la creación fue migrada; modificación y baja siguen pendientes.
     monkeypatch.setattr(store, "is_postgres", lambda: False)
-    with pytest.raises(CompanyWriteNotImplemented, match="carpeta de tablas"):
-        store.create_company({"codigo": "2", "nombre": "F", "nit": "9", "anio": 2026})
     with pytest.raises(CompanyWriteNotImplemented):
         store.update_company("2", COMPANIA_ESCRITURA)
     with pytest.raises(CompanyWriteNotImplemented):
         store.delete_company("2", reason="sin movimiento")
-
-    payload = CompanyCreate(codigo="002", nombre="Filial S.A.S.", nit="900123456", anio=2026)
-    with pytest.raises(app_module.HTTPException) as error:
-        create_company_endpoint(payload)
-    assert error.value.status_code == 503
-    assert error.value.detail == LEGACY_BRANCH_MESSAGE
 
 
 def test_company_create_endpoint_delegates_to_postgres(monkeypatch) -> None:
@@ -526,11 +517,11 @@ def test_retention_concept_model_and_rules() -> None:
 
 def test_ads_retention_concept_rejects_the_unsupported_columns_before_connecting() -> None:
     with pytest.raises(RetentionConceptValidationError, match="CONTIRET no tiene columna de cuenta"):
-        conceptos_retencion_repository.create_concepto_retencion("027", {"codigo": "HO", **CONCEPTO_ESCRITURA})
-    with pytest.raises(RetentionConceptValidationError, match="máximo 2 caracteres"):
+        conceptos_retencion_repository.create_concepto_retencion("027", {"codigo": "01", **CONCEPTO_ESCRITURA})
+    with pytest.raises(RetentionConceptValidationError, match="dos dígitos"):
         conceptos_retencion_repository.create_concepto_retencion("027", {"codigo": "HON", **CONCEPTO_ESCRITURA})
     with pytest.raises(RetentionConceptValidationError, match="obligatorio"):
-        conceptos_retencion_repository.create_concepto_retencion("027", {"codigo": "HO", "tarifa": 0.1})
+        conceptos_retencion_repository.create_concepto_retencion("027", {"codigo": "01", "tarifa": 0.1})
 
 
 def test_retention_concept_row_and_pg_listing_share_the_contract(monkeypatch) -> None:

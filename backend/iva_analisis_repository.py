@@ -309,8 +309,8 @@ def export_iva_certificates(report: dict[str, Any], format_name: str) -> bytes:
                               line["base"], line["porcentaje"], line["iva"]])
             sheet.append(["", "", "TOTAL", certificate["totalBase"], "", certificate["totalIva"]])
             for cell in sheet[sheet.max_row]:
-                cell.font = Font(bold=True, color="174E5A")
-                cell.fill = PatternFill("solid", fgColor="EAF1F2")
+                cell.font = Font(bold=True, color="003366")
+                cell.fill = PatternFill("solid", fgColor="EFFAFF")
             sheet.append([])
         sheet.column_dimensions["A"].width = 24
         sheet.column_dimensions["B"].width = 20
@@ -325,6 +325,10 @@ def export_iva_certificates(report: dict[str, Any], format_name: str) -> bytes:
         document = SimpleDocTemplate(output, pagesize=letter,
                                      leftMargin=32, rightMargin=32, topMargin=35, bottomMargin=35)
         styles = getSampleStyleSheet()
+        styles["Heading1"].textColor = colors.HexColor("#003366")
+        styles["Heading2"].textColor = colors.HexColor("#0073C0")
+        styles["Normal"].textColor = colors.HexColor("#001F4C")
+        styles["BodyText"].textColor = colors.HexColor("#001F4C")
         story = []
         for index, certificate in enumerate(report["certificados"]):
             if index:
@@ -348,12 +352,12 @@ def export_iva_certificates(report: dict[str, Any], format_name: str) -> bytes:
                                f"{certificate['totalIva']:,.2f}"])
             table = LongTable(table_rows, colWidths=[75, 73, 162, 92, 55, 91], repeatRows=1)
             table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174E5A")),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#003366")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                 ("GRID", (0, 0), (-1, -1), .2, colors.lightgrey),
                 ("FONTSIZE", (0, 0), (-1, -1), 8),
                 ("ALIGN", (3, 1), (-1, -1), "RIGHT"),
-                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EAF1F2")),
+                ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EFFAFF")),
             ]))
             story.extend([table, Spacer(1, 18)])
         document.build(story or [Paragraph("No hay importes de IVA para emitir certificados.", styles["Normal"])])

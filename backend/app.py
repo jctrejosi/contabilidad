@@ -16,6 +16,28 @@ from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import store
+from .access_session import router as access_router
+from .medios_formatos_repository import (
+    FormatoExiste, FormatoInvalido, FormatoNoExiste,
+    delete_formato as delete_medio_formato,
+    list_formatos as list_medio_formatos,
+    save_formato as save_medio_formato,
+)
+from .medios_conceptos_repository import (
+    ConceptoMedioExiste, ConceptoMedioInvalido, ConceptoMedioNoExiste,
+    delete_concepto as delete_medio_concepto,
+    list_conceptos as list_medio_conceptos,
+    save_concepto as save_medio_concepto,
+)
+from .medios_cuentas_repository import (
+    MedioCuentaConflict, MedioCuentaNotFound, MedioCuentaValidation,
+    copy_account_assignments, copy_company_definitions, copy_company_preview,
+    delete_assignment, list_accounts as list_medio_accounts,
+    list_assignments, save_assignment,
+)
+from .medios_generacion_repository import (
+    MediosGeneracionError, generate_medios, generation_status,
+)
 from .ads_repository import (
     AccountAlreadyExists,
     AccountNotFound,
@@ -89,6 +111,8 @@ from .plantillas_contables_repository import (
     TemplateNotFound,
     TemplateValidationError,
 )
+from .plantillas_original_repository import list_plantillas_original, guardar_plantilla_original
+from .retenciones_acumulacion_repository import rebuild_retention_accumulation
 from .formatos_documentales_repository import (
     DocumentFormatAlreadyExists,
     DocumentFormatNotFound,
@@ -123,6 +147,10 @@ from .iva_analisis_repository import (
     IvaAnalysisConflict, build_iva_certificates, export_iva_certificates,
     get_iva_analysis_item, list_iva_analysis, update_iva_analysis_item,
 )
+from .retenciones_analisis_repository import (
+    build_retention_certificates, export_retention_certificates,
+    get_retention_analysis_item, list_retention_analysis, update_retention_analysis_item,
+)
 from .balance_mensual_repository import (
     build_monthly_balance,
     export_monthly_balance_pdf,
@@ -133,6 +161,8 @@ from .report_snapshots import SnapshotNotFound, load as load_report_snapshot, sa
 from .reproceso_mensual_repository import (
     MonthlyReprocessValidationError,
 )
+from .auditoria_documentos_movimiento_repository import audit_documents_movement
+from .extraccion_movimiento_repository import ExtractionConflict, preview_extraction, confirm_extraction
 from .parametros_operacion_repository import (
     OperationParametersValidationError,
 )
@@ -216,6 +246,7 @@ app = FastAPI(
     description="API de transición para consultar y mantener el Plan de cuentas en CONMAE.",
     version="1.0.0",
 )
+app.include_router(access_router)
 
 
 class AccountWrite(BaseModel):
@@ -423,6 +454,8 @@ class CompanyCreate(BaseModel):
     codigo: str = Field(pattern=r"^[0-9]{1,3}$", description="EMPCOD de 3 posiciones.")
     nombre: str = Field(min_length=1, max_length=40)
     nit: str = Field(min_length=1, max_length=15)
+    clave: str = Field("", max_length=5, description="Clave de la compañía en CONEMP; obligatoria con Advantage.")
+    habilitada: bool = Field(False, description="Permite seleccionar la compañía al ingresar.")
     digito: str = Field("", pattern=r"^[0-9]?$", max_length=1)
     soloConsolidacion: bool = Field(False, description="Destino de consolidación.")
     anio: int = Field(ge=1900, le=2999, description="Primer año de operación.")
@@ -471,10 +504,10 @@ class VatRateCreate(VatRateWrite):
 
 
 class RetentionConceptWrite(BaseModel):
-    """Campos de ``conceptos_retencion`` comunes al alta y a la modificación (B3).
+    """Contrato compartido: en Advantage, RETES solo edita nombre y tarifa.
 
-    ``cuenta`` llega opcional, como en la tabla, pero la pantalla la exige al
-    confirmar: sin cuenta la operación responde 422 (regla de B3, sección 3.2).
+    ``cuenta`` y ``baseMinima`` se reservan para el modelo PostgreSQL de
+    referencia; Advantage rechaza ambos cuando tienen valor.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -636,6 +669,35 @@ class MonthlyReprocessRequest(BaseModel):
     motivo: str = Field("", max_length=180)
 
 
+class DocumentMovementAuditRequest(BaseModel):
+    """Período que se examina sin modificar los registros contables."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cia: str = Field(pattern=r"^[0-9]{1,3}$")
+    anio: int = Field(ge=1900, le=2100)
+    mes: int = Field(ge=1, le=12)
+
+
+class MovementExtractionRequest(BaseModel):
+    """Filtros de ESPE06, ESPE07 y ESPE08 reunidos en un solo proceso."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cia: str = Field(pattern=r"^[0-9]{1,3}$")
+    anio: int = Field(ge=1900, le=2100)
+    mes: int = Field(ge=1, le=12)
+    modo: str
+    lote: str
+    comprobante: str = ""
+    tipoDocumento: str = ""
+    documentoDesde: str = ""
+    documentoHasta: str = ""
+    huella: str = ""
+    usuario: str = "WEB"
+    motivo: str = ""
+
+
 class DocumentAnnulmentRequest(BaseModel):
     """Identidad inmutable y trazabilidad requeridas para retirar un documento."""
 
@@ -718,6 +780,18 @@ class OperationParametersWrite(BaseModel):
     controlaUsuarioLotes: bool
     comentarioCertificado: str = Field("", max_length=120)
     periodosHabilitados: dict[str, bool]
+
+
+class FlowDefinitionWrite(BaseModel):
+    """Fila de CONINF1 para el comparativo anual de flujo."""
+
+    model_config = ConfigDict(extra="forbid")
+    nivel: str = Field(min_length=1, max_length=4)
+    cuenta: str = Field(min_length=1, max_length=12)
+    nombre: str = Field(min_length=1, max_length=30)
+    tipo: Literal["+", "-"] = "+"
+    presupuesto: float = Field(0, ge=0)
+    valorBase: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -1087,6 +1161,9 @@ def _service_error(exc: Exception) -> HTTPException:
             TemplateAlreadyExists,
             DocumentFormatAlreadyExists,
             TaxFormatAlreadyExists,
+            FormatoExiste,
+            ConceptoMedioExiste,
+            MedioCuentaConflict,
             MediumConflict,
             TaxFormatConflict,
             AccumulationConflict,
@@ -1108,7 +1185,7 @@ def _service_error(exc: Exception) -> HTTPException:
     if isinstance(
         exc,
         (
-            PostingConflict, LotConflict, AnnulmentConflict, ThirdPartyConflict,
+            PostingConflict, LotConflict, AnnulmentConflict, ExtractionConflict, ThirdPartyConflict,
             CompanyConflict, VatRateConflict, RetentionConceptConflict, IncomeLineConflict,
             TemplateConflict,
         ),
@@ -1129,6 +1206,9 @@ def _service_error(exc: Exception) -> HTTPException:
             TemplateNotFound,
             DocumentFormatNotFound,
             TaxFormatNotFound,
+            FormatoNoExiste,
+            ConceptoMedioNoExiste,
+            MedioCuentaNotFound,
             MediumNotFound,
             ConsolidacionNotFound,
             CierreNotFound,
@@ -1161,6 +1241,10 @@ def _service_error(exc: Exception) -> HTTPException:
             TemplateValidationError,
             DocumentFormatValidationError,
             TaxFormatValidationError,
+            FormatoInvalido,
+            ConceptoMedioInvalido,
+            MedioCuentaValidation,
+            MediosGeneracionError,
             MediumValidationError,
             AccumulationValidationError,
             ConsolidacionValidationError,
@@ -1272,12 +1356,12 @@ def _config_catalog(table_postgres: str, table_ads: str) -> dict[str, object]:
 
 @app.post("/api/companias", status_code=status.HTTP_201_CREATED, summary="Crear compañía")
 def create_company_endpoint(payload: CompanyCreate) -> dict[str, object]:
-    """Crea la compañía con su primer año; en Advantage devuelve 503 declarado."""
+    """Crea la compañía en el motor activo; Advantage comparte tablas por CIA."""
     try:
         item = store.create_company(payload.model_dump(), user=payload.usuario)
     except Exception as exc:
         raise _service_error(exc) from exc
-    return {"item": item, "source": "companias"}
+    return {"item": item, "source": "companias" if store.is_postgres() else "CONEMP"}
 
 
 @app.put("/api/companias/{codigo}", summary="Modificar compañía")
@@ -1659,7 +1743,7 @@ def create_retention_concept(
     payload: RetentionConceptCreate,
     cia: str = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
-    """Crea el concepto; sin cuenta responde 422 (regla de la pantalla)."""
+    """Crea un tipo global en CONTIRET sin exigir cuenta ni base mínima."""
     try:
         item = store.create_concepto_retencion(cia, payload.model_dump(), user=payload.usuario)
     except Exception as exc:
@@ -1780,6 +1864,41 @@ def delete_income_line(
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     response.status_code = status.HTTP_200_OK
     return {"item": item, **_config_catalog("renglones_renta", "CONDECLA"), "dryRun": True}
+
+
+class PlantillaPosicionOriginal(BaseModel):
+    """Una de las ocho posiciones editables de PLANTICO."""
+
+    orden: int = Field(ge=1, le=8)
+    concepto: str = Field("", max_length=20)
+    cuentaDebito: str = Field("", pattern=r"^[0-9]{0,12}$")
+    cuentaCredito: str = Field("", pattern=r"^[0-9]{0,12}$")
+
+
+class PlantillaOriginalWrite(BaseModel):
+    posiciones: list[PlantillaPosicionOriginal] = Field(min_length=8, max_length=8)
+
+
+@app.get("/api/plantillas-original", summary="Documentos y plantillas del formulario original")
+def plantillas_original(cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> dict[str, object]:
+    try:
+        items = list_plantillas_original(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"items": items, "count": len(items), "source": "VISDOCUM"}
+
+
+@app.put("/api/plantillas-original/{codigo}", summary="Guardar los ocho renglones de una plantilla")
+def guardar_plantilla_original_endpoint(
+    payload: PlantillaOriginalWrite,
+    codigo: str = Path(pattern=r"^[A-Za-z0-9]{1,2}$"),
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    try:
+        item = guardar_plantilla_original(cia, codigo, [p.model_dump() for p in payload.posiciones])
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": item, "source": "VISDOCUM"}
 
 
 @app.get("/api/plantillas-contables", summary="Consultar plantillas contables")
@@ -2444,6 +2563,37 @@ def post_movement(
     return {"item": result, "source": "Advantage Data Server"}
 
 
+@app.post("/api/especiales/extraccion/previa", summary="Previsualizar extracción a lote")
+def preview_extraction_endpoint(request: MovementExtractionRequest) -> dict[str, object]:
+    """Selecciona partidas sin modificar la contabilidad."""
+    try:
+        result = preview_extraction(request.model_dump())
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "dryRun": True}
+
+
+@app.post("/api/especiales/extraccion/confirmar", summary="Trasladar movimiento a un lote nuevo")
+def confirm_extraction_endpoint(request: MovementExtractionRequest) -> dict[str, object]:
+    """Crea lote, retira movimiento y reconstruye saldos atómicamente."""
+    try:
+        result = confirm_extraction(request.model_dump(), fingerprint=request.huella,
+                                    user=request.usuario, reason=request.motivo)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "source": "Advantage Data Server"}
+
+
+@app.post("/api/reprocesos/documentos-movimiento", summary="Auditar documentos y partidas del mes")
+def audit_documents_movement_endpoint(request: DocumentMovementAuditRequest) -> dict[str, object]:
+    """Detecta descuadres y auxiliares inconsistentes; nunca escribe en ADS."""
+    try:
+        result = audit_documents_movement(request.cia, request.anio, request.mes)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return {"item": result, "source": "MOV01", "dryRun": True}
+
+
 @app.post("/api/reprocesos/mensual/simular", summary="Simular el reproceso mensual")
 def simulate_monthly_reprocess_endpoint(request: MonthlyReprocessRequest) -> dict[str, object]:
     """Compara MOV01 contra CONMAE/CONTERCE sin efectuar escrituras."""
@@ -2612,6 +2762,20 @@ def rebuild_iva_accumulation_endpoint(
         raise _service_error(exc) from exc
 
 
+@app.post("/api/informes/retenciones-acumulacion", summary="Reconstruir la acumulación general de retenciones")
+def rebuild_retention_accumulation_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    mes_desde: int = Query(alias="mesDesde", ge=1, le=12),
+    mes_hasta: int = Query(alias="mesHasta", ge=1, le=12),
+) -> dict[str, object]:
+    """Sustituye los meses elegidos de CONRET en una sola transacción."""
+    try:
+        return rebuild_retention_accumulation(cia, anio, mes_desde, mes_hasta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
 class IvaAnalysisSave(BaseModel):
     """Los importes de los doce meses y la versión vista por el usuario."""
     version: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -2714,6 +2878,173 @@ def iva_certificates_export_endpoint(
                     headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})
 
 
+@app.get("/api/informes/retenciones/analisis", summary="Consultar acumulados de retenciones")
+def retention_analysis_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    buscar: str = Query("", max_length=12),
+    cursor_cuenta: str = Query("", alias="cursorCuenta", max_length=12),
+    cursor_tercero: str = Query("", alias="cursorTercero", max_length=15),
+) -> dict[str, Any]:
+    try:
+        return list_retention_analysis(cia, anio, account_from=cuenta_desde, account_to=cuenta_hasta,
+                                       nit_from=nit_desde, nit_to=nit_hasta, search=buscar,
+                                       cursor_account=cursor_cuenta, cursor_nit=cursor_tercero)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/retenciones/analisis/detalle", summary="Ver los doce meses de una retención acumulada")
+def retention_analysis_detail_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12), nit: str = Query(max_length=15),
+) -> dict[str, Any]:
+    try:
+        return get_retention_analysis_item(cia, anio, cuenta, nit)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.patch("/api/informes/retenciones/analisis/detalle", summary="Corregir acumulados mensuales de retenciones")
+def retention_analysis_save_endpoint(
+    payload: IvaAnalysisSave,
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12), nit: str = Query(max_length=15),
+) -> dict[str, Any]:
+    try:
+        return update_retention_analysis_item(cia, anio, cuenta, nit, payload.version, payload.meses)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+def _retention_certificate_report(cia: str, anio: int, cuenta_desde: str, cuenta_hasta: str,
+                                  nit_desde: str, nit_hasta: str, periodicidad: str,
+                                  periodo: str, presentacion: str, incluir_iva: bool) -> dict[str, Any]:
+    return build_retention_certificates(cia, anio, account_from=cuenta_desde, account_to=cuenta_hasta,
+                                        nit_from=nit_desde, nit_to=nit_hasta, frequency=periodicidad,
+                                        period=periodo, presentation=presentacion, include_iva=incluir_iva)
+
+
+@app.get("/api/informes/retenciones/certificados", summary="Previsualizar certificados de retenciones")
+def retention_certificates_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    periodicidad: Literal["mensual", "bimestral", "anual"] = Query("anual"),
+    periodo: str = Query("todos", max_length=5),
+    presentacion: Literal["detallado", "sencillo", "porcentaje"] = Query("detallado"),
+    incluir_iva: bool = Query(False, alias="incluirIva"),
+) -> dict[str, Any]:
+    try:
+        return _retention_certificate_report(cia, anio, cuenta_desde, cuenta_hasta, nit_desde,
+                                             nit_hasta, periodicidad, periodo, presentacion, incluir_iva)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/retenciones/certificados/exportar", summary="Exportar certificados de retenciones")
+def retention_certificates_export_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"), anio: int = Query(ge=1900, le=2100),
+    cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
+    cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    periodicidad: Literal["mensual", "bimestral", "anual"] = Query("anual"),
+    periodo: str = Query("todos", max_length=5),
+    presentacion: Literal["detallado", "sencillo", "porcentaje"] = Query("detallado"),
+    incluir_iva: bool = Query(False, alias="incluirIva"),
+    formato: Literal["pdf", "xlsx"] = Query("pdf"),
+) -> Response:
+    try:
+        report = _retention_certificate_report(cia, anio, cuenta_desde, cuenta_hasta, nit_desde,
+                                               nit_hasta, periodicidad, periodo, presentacion, incluir_iva)
+        if not report["certificados"]:
+            raise ValueError("No hay retenciones para emitir certificados con estos filtros.")
+        content = export_retention_certificates(report, formato)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    media = "application/pdf" if formato == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    disposition = "inline" if formato == "pdf" else "attachment"
+    filename = f"certificados_retenciones_{int(cia):03d}_{anio}.{formato}"
+    return Response(content=content, media_type=media,
+                    headers={"Content-Disposition": f'{disposition}; filename="{filename}"'})
+
+
+@app.get("/api/informes/terceros/anual", summary="Movimiento anual de una cuenta y tercero")
+def third_party_annual_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12),
+    nit: str = Query(max_length=15),
+) -> dict[str, object]:
+    try:
+        from .informes_terceros_repository import read_third_party_annual
+        return read_third_party_annual(cia, anio, cuenta, nit)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/centros/anual", summary="Movimiento anual de cuenta, centro y tercero")
+def center_annual_endpoint(
+    cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+    anio: int = Query(ge=1900, le=2100),
+    cuenta: str = Query(max_length=12),
+    centro: str = Query(max_length=7),
+    nit: str = Query(max_length=15),
+) -> dict[str, object]:
+    try:
+        from .informes_centros_repository import read_center_annual
+        return read_center_annual(cia, anio, cuenta, centro, nit)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/informes/flujo/definiciones")
+def flow_definitions(cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> list[dict[str, object]]:
+    try:
+        from .flujo_comparativo_original_repository import list_flow_definitions
+        return list_flow_definitions(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/informes/flujo/definiciones")
+def create_flow_definition(data: FlowDefinitionWrite,
+                           cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> dict[str, object]:
+    try:
+        from .flujo_comparativo_original_repository import save_flow_definition
+        return save_flow_definition(cia, data.model_dump())
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/informes/flujo/definiciones/{nivel}")
+def update_flow_definition(data: FlowDefinitionWrite,
+                           nivel: str = Path(pattern=r"^[A-Za-z0-9]{1,4}$"),
+                           cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> dict[str, object]:
+    try:
+        from .flujo_comparativo_original_repository import save_flow_definition
+        return save_flow_definition(cia, data.model_dump(), old_level=nivel)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete("/api/informes/flujo/definiciones/{nivel}")
+def remove_flow_definition(nivel: str = Path(pattern=r"^[A-Za-z0-9]{1,4}$"),
+                           cia: str = Query(pattern=r"^[0-9]{1,3}$")) -> dict[str, bool]:
+    try:
+        from .flujo_comparativo_original_repository import delete_flow_definition
+        delete_flow_definition(cia, nivel)
+        return {"eliminado": True}
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
 @app.get("/api/informes/adicionales/{report_id}", summary="Generar informe contable adicional")
 def additional_report_endpoint(
     report_id: str = Path(pattern=r"^[a-z0-9-]{1,50}$"),
@@ -2724,11 +3055,24 @@ def additional_report_endpoint(
     cuenta_desde: str = Query("", alias="cuentaDesde", max_length=12),
     cuenta_hasta: str = Query("", alias="cuentaHasta", max_length=12),
     nit: str = Query("", max_length=15),
+    nit_desde: str = Query("", alias="nitDesde", max_length=15),
+    nit_hasta: str = Query("", alias="nitHasta", max_length=15),
+    orden_terceros: Literal["cuenta", "tercero"] = Query("cuenta", alias="ordenTerceros"),
+    orden_movimiento: Literal["documento", "fecha"] = Query("documento", alias="ordenMovimiento"),
+    centro_desde: str = Query("", alias="centroDesde", max_length=7),
+    centro_hasta: str = Query("", alias="centroHasta", max_length=7),
+    orden_centros: Literal["cuenta", "centro"] = Query("cuenta", alias="ordenCentros"),
+    cuentas_seleccionadas: str = Query("", alias="cuentasSeleccionadas", max_length=3500),
+    centros_seleccionados: str = Query("", alias="centrosSeleccionados", max_length=2000),
+    prefijo_cuenta: str = Query("", alias="prefijoCuenta", max_length=12),
+    incluir_saldo_anterior: bool = Query(True, alias="incluirSaldoAnterior"),
       centro: str = Query("", max_length=7),
       comprobante: str = Query("", max_length=2),
       comprobante_hasta: str = Query("", alias="comprobanteHasta", max_length=2),
       tipo_documento: str = Query("", alias="tipoDocumento", max_length=2),
       tipo_documento_hasta: str = Query("", alias="tipoDocumentoHasta", max_length=2),
+    tipo_contribuyente: str = Query("", alias="tipoContribuyente", max_length=2),
+    compania_anterior: str = Query("", alias="companiaAnterior", max_length=3),
     documento_desde: str = Query("", alias="documentoDesde", max_length=12),
     documento_hasta: str = Query("", alias="documentoHasta", max_length=12),
     fecha_desde: str = Query("", alias="fechaDesde", max_length=10),
@@ -2736,10 +3080,14 @@ def additional_report_endpoint(
     modalidad: Literal["detallado", "resumido"] = Query("detallado"),
     documento_afectado: str = Query("", alias="documentoAfectado", max_length=12),
     buscar: str = Query("", max_length=60),
-    nivel: int = Query(6, ge=4, le=12),
+    nivel: int = Query(6, ge=1, le=12),
     incluir_ceros: bool = Query(False, alias="incluirCeros"),
     incluir_resultados: bool = Query(True, alias="incluirResultados"),
     incluir_terceros: bool = Query(False, alias="incluirTerceros"),
+    incluir_subtotales: bool = Query(False, alias="incluirSubtotales"),
+    incluir_centros: bool = Query(False, alias="incluirCentros"),
+    modo_comparativo: Literal["saldo", "movimiento"] = Query("saldo", alias="modoComparativo"),
+    operacion_comparativa: Literal["diferencia", "sumatoria"] = Query("diferencia", alias="operacionComparativa"),
     vista_paginada: bool = Query(False, alias="vistaPaginada"),
 ) -> dict[str, object]:
     """Lee el motor activo con los parámetros originales; no modifica tablas.
@@ -2752,17 +3100,54 @@ def additional_report_endpoint(
         report = store.build_additional_report(
             report_id, cia, anio, mes_desde, mes_hasta,
             account_from=cuenta_desde, account_to=cuenta_hasta, nit=nit,
+            **({"movement_order": orden_movimiento, "subtotals": incluir_subtotales}
+               if report_id in {"mov-comprobante", "mov-tipo-doc"} else {}),
+            **({"value_mode": modo_comparativo, "operation": operacion_comparativa}
+               if report_id == "bal-comparativo-mensual" else {}),
+            **({"selected_accounts": cuentas_seleccionadas}
+               if report_id == "tercero-especifico" else {}),
+            **({"center_from": centro_desde, "center_to": centro_hasta,
+                "selected_centers": centros_seleccionados, "order": orden_centros}
+               if report_id in {"diario-rangos-continuos", "diario-rangos-fijos"} else {}),
+            **({"selected_centers": centros_seleccionados,
+                "include_results": incluir_resultados,
+                "include_thirds": incluir_terceros}
+               if report_id in {"balance-acumulado", "balance-mensual-centro",
+                                "clasificacion-centros", "clasificacion-centro-tercero",
+                                "discriminados-mes"} else {}),
+            **({"nit_from": nit_desde, "nit_to": nit_hasta, "order": orden_terceros,
+                "movement_order": orden_movimiento}
+               if report_id in {"tercero-general", "tercero-cuenta-tercero", "iva-relacion", "iva-totales-cuenta", "iva-soportes"} else {}),
+            **({"nit_from": nit_desde, "nit_to": nit_hasta,
+                "center_from": centro_desde, "center_to": centro_hasta,
+                "order": orden_centros, "include_opening": incluir_saldo_anterior,
+                "selected_accounts": cuentas_seleccionadas,
+                "selected_centers": centros_seleccionados,
+                "account_prefix": prefijo_cuenta,
+                "include_thirds": incluir_terceros}
+               if report_id in {"centro-consulta", "centro-cuenta-centro", "centro-por-cuenta",
+                                "centro-tercero-centro", "centro-detallado", "centro-columnas-5152",
+                                "centro-por-nivel"} else {}),
               center=centro, voucher=comprobante, voucher_to=comprobante_hasta,
               document_type=tipo_documento, document_type_to=tipo_documento_hasta,
+            taxpayer_type=tipo_contribuyente,
+            prior_company=compania_anterior,
             document_from=documento_desde, document_to=documento_hasta,
             date_from=fecha_desde, date_to=fecha_hasta,
             detail_mode=modalidad,
             affected_document=documento_afectado,
             search=buscar, level=nivel, include_zero=incluir_ceros,
             **({"include_results": incluir_resultados, "include_thirds": incluir_terceros}
-               if report_id == "bal-gral-resultados" else {}),
+               if report_id in {"bal-gral-resultados", "bal-comparativo-mensual"} else
+               {"include_results": incluir_resultados, "include_thirds": incluir_terceros,
+                "include_centers": incluir_centros} if report_id == "balance-prueba-anual" else
+               {"include_thirds": incluir_terceros} if report_id == "saldos-cuenta" else
+               {"include_results": incluir_resultados} if report_id == "inventario-bal" else {}),
         )
-        if vista_paginada and report_id in {"aux-gral", "aux-doc-afectado"}:
+        if vista_paginada and report_id in {"aux-gral", "aux-doc-afectado", "mov-comprobante", "mov-tipo-doc", "mov-cuenta", "diario-cta", "diario-rangos-continuos", "diario-rangos-fijos", "tercero-general", "tercero-cuenta-tercero", "tercero-especifico", "iva-relacion", "iva-totales-cuenta", "iva-soportes",
+                                            "centro-consulta", "centro-cuenta-centro", "centro-por-cuenta",
+                                            "centro-tercero-centro", "centro-detallado", "centro-columnas-5152",
+                                            "centro-por-nivel"}:
             snapshot_id = save_report_snapshot(report)
             return load_report_snapshot(snapshot_id, page=0)
         return report
@@ -2893,6 +3278,253 @@ _MEDIUM_MEDIA = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
 _CIA_QUERY = Query(description="Código EMPCOD/CIA seleccionado.", pattern=r"^[0-9]{1,3}$")
+
+
+class MedioFormatoWrite(BaseModel):
+    """Campos del diálogo MEDMAG11; VALOR1/VALOR2 y COMBO no se alteran al editar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(min_length=1, max_length=4)
+    nombre: str = Field(min_length=1, max_length=40)
+    elemento: str = Field("", max_length=10)
+    concepto: bool = True
+    tipodoc: bool = True
+    nit: bool = True
+    digito: bool = True
+    nombreCampo: bool = True
+    direccion: bool = True
+    municipio: bool = True
+    pais: bool = True
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+@app.get("/api/medios/formatos", summary="Formatos de medios magnéticos")
+def medios_formatos_listar(cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return list_medio_formatos(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/formatos", status_code=status.HTTP_201_CREATED,
+          summary="Crear formato de medios magnéticos")
+def medios_formatos_crear(payload: MedioFormatoWrite, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_medio_formato(cia, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/medios/formatos/{codigo}", summary="Modificar formato de medios magnéticos")
+def medios_formatos_modificar(payload: MedioFormatoWrite, codigo: str,
+                             cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_medio_formato(cia, payload.model_dump(), original=codigo,
+                                  user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete("/api/medios/formatos/{codigo}", status_code=status.HTTP_204_NO_CONTENT,
+            summary="Eliminar formato de medios magnéticos")
+def medios_formatos_eliminar(codigo: str, cia: str = _CIA_QUERY,
+                            usuario: str = Query("WEB", max_length=4)) -> Response:
+    try:
+        delete_medio_formato(cia, codigo, user=usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class MedioConceptoWrite(BaseModel):
+    """Formulario MEDMAG21: dos indicadores y siete reglas de salida por concepto."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    codigo: str = Field(min_length=1, max_length=4)
+    nombre: str = Field(min_length=1, max_length=40)
+    monto: float = Field(ge=0, le=99_999_999)
+    valor1: bool = True
+    valor2: bool = True
+    combos: list[str] = Field(min_length=7, max_length=7)
+    usuario: str = Field("WEB", min_length=1, max_length=4)
+
+
+@app.get("/api/medios/formatos/{formato}/conceptos", summary="Conceptos de un formato")
+def medios_conceptos_listar(formato: str, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return list_medio_conceptos(cia, formato)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/formatos/{formato}/conceptos", status_code=status.HTTP_201_CREATED,
+          summary="Crear concepto de medios")
+def medios_conceptos_crear(formato: str, payload: MedioConceptoWrite,
+                          cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_medio_concepto(cia, formato, payload.model_dump(), user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/medios/formatos/{formato}/conceptos/{codigo}", summary="Modificar concepto de medios")
+def medios_conceptos_modificar(formato: str, codigo: str, payload: MedioConceptoWrite,
+                              cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_medio_concepto(cia, formato, payload.model_dump(), original=codigo,
+                                   user=payload.usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete("/api/medios/formatos/{formato}/conceptos/{codigo}",
+            status_code=status.HTTP_204_NO_CONTENT, summary="Eliminar concepto de medios")
+def medios_conceptos_eliminar(formato: str, codigo: str, cia: str = _CIA_QUERY,
+                             usuario: str = Query("WEB", max_length=4)) -> Response:
+    try:
+        delete_medio_concepto(cia, formato, codigo, user=usuario)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class MedioAsignacionWrite(BaseModel):
+    """Campos de MEDMAG31A/31AG. La clave original se pasa al modificar."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    formato: str
+    concepto: str
+    tipo: str = "D"
+    cuenta2: str = ""
+    tipomed: int = 0
+    pmed1: float = 0
+    pmed2: float = 0
+    pmed3: float = 0
+    pmed4: float = 0
+    pmed5: float = 0
+    pmed6: float = 0
+    formato2: str = ""
+    concepto2: str = ""
+    modcxp: int = 0
+    colvalor: int = 0
+    colbase: int = 0
+    movtipo: int = 1
+    columna2: int = 0
+    docx: str = ""
+    docx2: str = ""
+    docx3: str = ""
+    natural: bool = False
+    original: dict[str, Any] | None = None
+
+
+class MedioCuentaCopy(BaseModel):
+    origen: str
+    destino: str
+    confirmar: Literal[True]
+
+
+class MedioCompanyCopy(BaseModel):
+    origen: str
+    confirmar: Literal[True]
+
+
+@app.get("/api/medios/cuentas", summary="Plan de cuentas para asignación de medios")
+def medios_cuentas_listar(cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return list_medio_accounts(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+class MedioGeneracionRequest(BaseModel):
+    mesInicial: int = Field(ge=1, le=12)
+    mesFinal: int = Field(ge=1, le=12)
+    confirmar: Literal[True]
+
+
+@app.get("/api/medios/generacion", summary="Estado de generación de medios")
+def medios_generacion_estado(cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return generation_status(cia)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/generacion", summary="Generar medios anuales")
+def medios_generacion_ejecutar(payload: MedioGeneracionRequest,
+                              cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return generate_medios(cia, payload.mesInicial, payload.mesFinal)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/medios/cuentas/{cuenta}/asignaciones", summary="Asignaciones de la cuenta")
+def medios_asignaciones_listar(cuenta: str, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return list_assignments(cia, cuenta)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/cuentas/{cuenta}/asignaciones", status_code=status.HTTP_201_CREATED,
+          summary="Asignar formato y concepto a una cuenta")
+def medios_asignaciones_crear(cuenta: str, payload: MedioAsignacionWrite,
+                             cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return save_assignment(cia, cuenta, payload.model_dump(exclude={"original"}))
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.put("/api/medios/cuentas/{cuenta}/asignaciones", summary="Modificar una asignación")
+def medios_asignaciones_modificar(cuenta: str, payload: MedioAsignacionWrite,
+                                cia: str = _CIA_QUERY) -> dict[str, object]:
+    if payload.original is None:
+        raise HTTPException(status_code=422, detail="Se requiere la clave original de la asignación.")
+    try:
+        return save_assignment(cia, cuenta, payload.model_dump(exclude={"original"}), original=payload.original)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.delete("/api/medios/cuentas/{cuenta}/asignaciones", status_code=status.HTTP_204_NO_CONTENT,
+            summary="Eliminar una asignación")
+def medios_asignaciones_eliminar(cuenta: str, cia: str = _CIA_QUERY,
+                                formato: str = Query(), concepto: str = Query(),
+                                cuenta2: str = Query("")) -> Response:
+    try:
+        delete_assignment(cia, cuenta, formato, concepto, cuenta2)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.post("/api/medios/cuentas/copiar", summary="Copiar asignaciones entre cuentas")
+def medios_asignaciones_copiar(payload: MedioCuentaCopy, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return copy_account_assignments(cia, payload.origen, payload.destino)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.get("/api/medios/definiciones/preview", summary="Vista previa de copia entre compañías")
+def medios_definiciones_preview(origen: str = Query(), cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return copy_company_preview(cia, origen)
+    except Exception as exc:
+        raise _service_error(exc) from exc
+
+
+@app.post("/api/medios/definiciones/copiar", summary="Copiar definiciones CONMAE entre compañías")
+def medios_definiciones_copiar(payload: MedioCompanyCopy, cia: str = _CIA_QUERY) -> dict[str, object]:
+    try:
+        return copy_company_definitions(cia, payload.origen)
+    except Exception as exc:
+        raise _service_error(exc) from exc
 
 
 def _validate_month_range(mes_desde: int, mes_hasta: int) -> None:

@@ -1,0 +1,110 @@
+PROTOCOLO DE INSTALACION - CONTABILIDAD 27 DSI
+
+OBJETIVO
+Instalar Contabilidad en el servidor del cliente y dejarla detenida.
+Fortuner27 sera el unico encargado de iniciarla. No se crea un servicio
+Windows, una tarea de arranque propia ni un acceso directo que la inicie.
+
+ANTES DE INSTALAR
+1. Servidor Windows de 64 bits. Preparar el paquete en Windows x64.
+2. Fortuner27 instalado con su iniciador portable start-fortuner.ps1,
+   Config/modules.json y Frontend. Node/npm ya debe funcionar para Fortuner.
+3. Advantage Data Server funcionando y conectores Advantage OLE DB y
+   Advantage StreamlineSQL ODBC de 64 bits previamente instalados.
+4. Diccionario ADD, tablas, indices y catalogos reales disponibles.
+   El instalador no distribuye bases ni datos de clientes.
+5. Conocer ruta del ADD, usuario y clave de Advantage. La cuenta Windows
+   que ejecuta Fortuner necesita acceso a esos archivos/carpetas.
+6. Puerto 8443 disponible. Si es una actualizacion, detener el modulo
+   antes de instalar. El instalador no detiene procesos por la fuerza.
+7. Copiar el ZIP completo al servidor y extraerlo. No ejecutar solo el BAT
+   separado de su carpeta. No se necesita Python ni compilar React alli.
+
+INSTALAR - UN SOLO BAT
+Ejecutar Instalar-Contabilidad27.bat y aceptar la elevacion de Windows.
+En la primera instalacion, indicar la carpeta de Fortuner si no se detecta,
+la ruta completa del ADD, usuario, clave y carpeta de catalogos/VISAUDI.
+No es necesario editar .env, JSON, rutas ni scripts manualmente.
+
+El instalador realiza automaticamente:
+- Verificacion SHA256 de los archivos del paquete.
+- Verificacion de los conectores Advantage de 64 bits.
+- Copia de la version en C:\ProgramData\DSI\CONTABDSI27\releases.
+- Configuracion del servicio y cifrado de credenciales con DPAPI de Windows.
+- Proteccion de la carpeta de credenciales mediante permisos Windows.
+- Comprobacion de carga de la interfaz/API y lectura de tablas esenciales
+  a traves de ADO/OLE DB y ADO/ODBC. Esta prueba no abre ningun puerto.
+- Registro del modulo contabilidad en la configuracion actual de Fortuner.
+- Incorporacion de un adaptador al iniciador portable de Fortuner.
+- Configuracion de la URL del modulo en el Frontend de Fortuner.
+- Regla de firewall del puerto web, solo en perfiles Privado/Dominio y
+  para la subred local. No abre el puerto 8001 ni publica la base de datos.
+- Deshabilitacion de la tarea antigua de inicio autonomo de Contabilidad,
+  si existe y corresponde al dev.js del modulo.
+- Respaldo de los archivos modificados. Ante un error se restaura su
+  contenido y se revierte la regla de firewall creada por esta instalacion.
+
+Al finalizar debe mostrar: INSTALADO Y DETENIDO.
+
+INICIAR DESPUES DE INSTALAR
+Cuando corresponda, iniciar/reiniciar Fortuner con su entrada habitual
+Iniciar-Fortuner-Servidor.bat o su tarea que llama start-fortuner.ps1.
+Ese iniciador ejecutara el modulo instalado. La instalacion no lo ejecuta.
+No usar el antiguo Iniciar-servicios-DSI.bat como entrada del paquete:
+esa version de desarrollo contiene rutas fijas y arranques independientes.
+
+La aplicacion instalada atiende pagina y API en el mismo puerto 8443.
+Ejemplo en la red local: http://NOMBRE-SERVIDOR:8443/
+8443 es el numero de puerto, no significa que exista HTTPS. Para exponer
+fuera de la LAN hay que preparar el acceso, autenticacion y TLS del servidor.
+El BAT no configura ni publica acceso por Internet.
+
+CUENTAS Y CONFIGURACION
+La instalacion utiliza por defecto la misma cuenta Windows que ejecuta el
+instalador. Fortuner debe ejecutarse con esa cuenta o con SYSTEM. Si utiliza
+otra, pasar -FortunerAccount "DOMINIO\Usuario" al BAT: el permiso se configura
+automaticamente. Esa cuenta necesita acceso propio al ADD y los catalogos.
+Las credenciales cifradas solo sirven en el servidor donde se instalaron.
+No copiar config/credentials.dpapi a otro servidor como metodo de migracion.
+La clave no se incluye en el ZIP, archivos de log ni argumentos de inicio.
+
+PARAMETROS OPCIONALES DEL MISMO BAT
+-FortunerRoot "D:\DSI\Fortuner27"
+-InstallRoot "D:\DSI\CONTABDSI27"
+-ModulesConfiguration "C:\ProgramData\DSI\Fortuner\modules.json"
+-FortunerAccount "DOMINIO\UsuarioFortuner"
+-Port 8443
+-BindHost 0.0.0.0
+-NoFirewall (si el acceso lo administra un proxy o una politica existente)
+-Plan (solo verifica el paquete y muestra el plan; no instala ni inicia)
+
+ACTUALIZACIONES
+Preparar una version nueva y ejecutar el mismo BAT en el servidor con el
+modulo detenido. Se conservan las credenciales existentes y versiones
+anteriores. La integracion de Fortuner queda apuntando a la version nueva.
+Se puede repetir el mismo BAT para reparar una instalacion detenida. Se
+reutilizan rutas, cuenta Windows, puerto y conexion guardados anteriormente.
+No se actualiza automaticamente la estructura de las tablas Advantage.
+
+REGISTROS Y RECUPERACION
+C:\ProgramData\DSI\CONTABDSI27\INSTALACION.txt resume la instalacion.
+logs\servicio.log contiene el registro rotativo del ejecutable.
+logs\fortuner.stdout.log y fortuner.stderr.log contienen el arranque.
+backups\ contiene los archivos anteriores de configuracion e integracion.
+Una instalacion fallida puede dejar una carpeta de version sin activar;
+no elimina las versiones previas ni los datos del cliente.
+
+ALCANCE DEL PAQUETE
+Incluye el ejecutable, dependencias y frontend compilado. No incluye los
+archivos Python/React/Harbour fuente, .env de desarrollo ni bases de datos.
+Empaquetar con PyInstaller evita entregar fuentes legibles; no ofrece
+proteccion absoluta contra ingenieria inversa del bytecode. El JavaScript
+que recibe el navegador tambien se puede inspeccionar.
+El asistente IA es un servicio independiente con su propia clave y no se
+incluye en este instalador. Las funciones contables no dependen de el.
+
+PREPARACION INTERNA - EQUIPO DE DESARROLLO
+Ejecutar deployment\Preparar-Instalador.bat. Compila React, empaqueta Python,
+verifica el ejecutable sin iniciarlo, excluye fuentes y genera un ZIP en
+release\. Se entrega al cliente solo ese ZIP, no el repositorio del proyecto.
+Documentacion del empaquetador: https://pyinstaller.org/en/stable/usage.html

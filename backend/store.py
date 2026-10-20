@@ -539,11 +539,7 @@ def delete_formato_documental(
 
 
 def create_company(payload: dict[str, Any], *, user: str = "WEB") -> dict[str, Any]:
-    """Crea una compañía con su primer año (solo PostgreSQL; 503 en Advantage).
-
-    El legado no tiene fila de compañía: en Advantage la rama declarada lanza
-    ``CompanyWriteNotImplemented``, que la capa HTTP traduce a 503 con su causa.
-    """
+    """Crea la compañía en el catálogo del motor activo."""
     if is_postgres():
         from .postgres_writes import create_company as implementation
     else:
@@ -1039,6 +1035,243 @@ def build_additional_report(
     generan las tablas nuevas; en Advantage declaran la carencia con 422 (§0).
     """
     from .flujo_caja_niif_repository import NUEVOS_INFORME_IDS
+
+    if report_id == "flujo-comparativo":
+        from .flujo_comparativo_original_repository import build_flow_comparison
+        return build_flow_comparison(cia, year, filtros.get("prior_company", ""))
+
+    if report_id == "resumen-tipo-contribuyente":
+        from .contribuyente_movimiento_original_repository import build_taxpayer_movement
+        return build_taxpayer_movement(cia, year, month_from, month_to,
+            taxpayer_type=filtros.get("taxpayer_type", ""),
+            account_one=filtros.get("account_from", ""),
+            account_two=filtros.get("account_to", ""))
+
+    if report_id == "comp-cta-tercero":
+        if month_from != month_to:
+            raise ValueError("El comparativo cuenta-tercero solicita un único mes.")
+        from .comparativo_cuenta_tercero_original_repository import build_account_third_comparison
+        return build_account_third_comparison(cia, year, month_to,
+            account_from=filtros.get("account_from", ""), account_to=filtros.get("account_to", ""))
+
+    if report_id == "mov-cuenta":
+        from .movimiento_cuenta_original_repository import build_account_movement
+        return build_account_movement(cia, year,
+            date_from=filtros.get("date_from", ""), date_to=filtros.get("date_to", ""),
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""))
+
+    if report_id in {"balance-acumulado", "balance-mensual-centro", "clasificacion-centros",
+                     "clasificacion-centro-tercero", "discriminados-mes"}:
+        if month_from != month_to and report_id != "discriminados-mes":
+            raise ValueError("El balance por centro solicita un único mes de corte.")
+        from .balance_centros_original_repository import build_center_trial_balance
+        return build_center_trial_balance(
+            report_id, cia, year, month_to,
+            center=filtros.get("center", ""),
+            selected_centers=filtros.get("selected_centers", ""),
+            level=filtros.get("level", 4),
+            include_results=filtros.get("include_results", True),
+            include_zero=filtros.get("include_zero", False),
+            include_thirds=filtros.get("include_thirds", False) or report_id == "clasificacion-centro-tercero",
+        )
+
+    if report_id in {"diario-rangos-continuos", "diario-rangos-fijos"}:
+        if month_from != month_to:
+            raise ValueError("El diario por centro solicita un único mes.")
+        from .diario_centros_original_repository import build_center_journal
+        return build_center_journal(
+            report_id, cia, year, month_from,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            center_from=filtros.get("center_from", ""),
+            center_to=filtros.get("center_to", ""),
+            selected_centers=filtros.get("selected_centers", ""),
+            order=filtros.get("order", "cuenta"),
+            detailed=filtros.get("detail_mode", "detallado") == "detallado",
+        )
+
+    if report_id == "balance-prueba-anual":
+        from .balance_prueba_anual_repository import build_annual_trial_balance
+        return build_annual_trial_balance(
+            cia, year,
+            level=filtros.get("level", 4),
+            include_results=filtros.get("include_results", True),
+            include_zero=filtros.get("include_zero", False),
+            include_thirds=filtros.get("include_thirds", False),
+            include_centers=filtros.get("include_centers", False),
+        )
+
+    if report_id in {"analisis-anual-acum", "analisis-anual-mens"}:
+        from .analisis_anual_balances_repository import build_annual_balance_analysis
+        return build_annual_balance_analysis(
+            cia, year, accumulated=report_id == "analisis-anual-acum",
+            level=filtros.get("level", 4),
+        )
+
+    if report_id == "bal-comparativo-mensual":
+        from .balance_comparativo_repository import build_monthly_comparison
+        return build_monthly_comparison(
+            cia, year, month_from, month_to,
+            level=filtros.get("level", 4),
+            include_results=filtros.get("include_results", True),
+            include_zero=filtros.get("include_zero", False),
+            include_thirds=filtros.get("include_thirds", False),
+            value_mode=filtros.get("value_mode", "saldo"),
+            operation=filtros.get("operation", "diferencia"),
+        )
+
+    if report_id == "saldos-cuenta":
+        if month_from != month_to:
+            raise ValueError("Saldos por cuenta solicita un solo mes.")
+        from .saldos_por_cuenta_repository import build_account_balances
+        return build_account_balances(
+            cia, year, month_to,
+            level=filtros.get("level", 4),
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            include_zero=filtros.get("include_zero", False),
+            include_thirds=filtros.get("include_thirds", False),
+        )
+
+    if report_id == "caja-diario-cta":
+        if month_from != month_to:
+            raise ValueError("Caja diario por cuenta solicita un solo mes.")
+        from .caja_diario_comprobante_repository import build_cash_journal_by_account
+        return build_cash_journal_by_account(
+            cia, year, month_to,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            level=filtros.get("level", 1),
+        )
+
+    if report_id == "caja-diario-comp":
+        if month_from != month_to:
+            raise ValueError("Caja diario por comprobante solicita un solo mes.")
+        from .caja_diario_comprobante_repository import build_cash_journal_by_voucher
+        return build_cash_journal_by_voucher(
+            cia, year, month_to,
+            voucher_from=filtros.get("voucher", ""),
+            voucher_to=filtros.get("voucher_to", ""),
+            level=filtros.get("level", 1),
+        )
+
+    if report_id == "diario-cta":
+        if month_from != month_to:
+            raise ValueError("Diario por cuenta solicita un solo mes.")
+        from .diario_cuenta_repository import build_account_journal
+        return build_account_journal(
+            cia, year, month_to,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+        )
+
+    if report_id == "mayor-bal":
+        from .mayor_balance_repository import build_mayor_balance
+        return build_mayor_balance(
+            cia, year, month_from, month_to,
+            level=filtros.get("level", 1), include_zero=filtros.get("include_zero", False),
+        )
+
+    if report_id == "inventario-bal":
+        if month_from != month_to:
+            raise ValueError("Inventario y balance solicita un solo mes.")
+        from .inventario_balance_repository import build_inventory_balance
+        return build_inventory_balance(
+            cia, year, month_to,
+            include_results=filtros.get("include_results", True),
+            include_zero=filtros.get("include_zero", False),
+        )
+
+    if report_id in {"mov-comprobante", "mov-tipo-doc"}:
+        from .informe_movimiento_comprobante_repository import build_voucher_journal
+        return build_voucher_journal(
+            cia, year, month_from, month_to,
+            voucher_from=filtros.get("document_type", "") if report_id == "mov-tipo-doc" else filtros.get("voucher", ""),
+            voucher_to=filtros.get("document_type_to", "") if report_id == "mov-tipo-doc" else filtros.get("voucher_to", ""),
+            order=filtros.get("movement_order", "fecha"),
+            subtotals=filtros.get("subtotals", False),
+            by_document_type=report_id == "mov-tipo-doc",
+        )
+
+    if report_id == "tercero-especifico":
+        from .informe_tercero_especifico_repository import build_specific_third_report
+        return build_specific_third_report(
+            cia, year, month_from, month_to,
+            nit=filtros.get("nit", ""),
+            selected_accounts=filtros.get("selected_accounts", ""),
+            detailed=filtros.get("detail_mode", "resumido") == "detallado",
+        )
+
+    if report_id == "iva-soportes":
+        from .iva_soportes_repository import build_iva_supports
+        return build_iva_supports(
+            cia, year, date_from=filtros.get("date_from", ""),
+            date_to=filtros.get("date_to", ""),
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            nit_from=filtros.get("nit_from", ""),
+            nit_to=filtros.get("nit_to", ""),
+        )
+
+    if report_id in {"iva-relacion", "iva-totales-cuenta"}:
+        from .iva_relacion_repository import build_iva_relation, build_iva_totals_by_account
+        implementation = build_iva_relation if report_id == "iva-relacion" else build_iva_totals_by_account
+        return implementation(
+            cia, year, month_from, month_to,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            nit_from=filtros.get("nit_from", ""),
+            nit_to=filtros.get("nit_to", ""),
+            **({"order": filtros.get("order", "cuenta"),
+                "detailed": filtros.get("detail_mode", "resumido") == "detallado"}
+               if report_id == "iva-relacion" else {}),
+        )
+
+    from .informes_centros_repository import REPORTS as CENTER_REPORTS
+    if report_id in CENTER_REPORTS:
+        from .informes_centros_repository import build_center_report
+        return build_center_report(
+            report_id, cia, year, month_from, month_to,
+            account_from=filtros.get("account_from", ""), account_to=filtros.get("account_to", ""),
+            center_from=filtros.get("center_from", "") or filtros.get("center", ""),
+            center_to=filtros.get("center_to", "") or filtros.get("center", ""),
+            nit_from=filtros.get("nit_from", "") or filtros.get("nit", ""),
+            nit_to=filtros.get("nit_to", "") or filtros.get("nit", ""),
+            order=filtros.get("order", "cuenta"),
+            include_third=filtros.get("include_thirds", True),
+            include_opening=filtros.get("include_opening", True),
+            date_from=filtros.get("date_from", ""), date_to=filtros.get("date_to", ""),
+            selected_accounts=filtros.get("selected_accounts", ""),
+            selected_centers=filtros.get("selected_centers", ""),
+            account_prefix=filtros.get("account_prefix", ""),
+        )
+
+    if report_id in {"tercero-general", "tercero-cuenta-tercero"}:
+        from .informes_terceros_repository import build_third_party_report
+        return build_third_party_report(
+            report_id, cia, year, month_from, month_to,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            nit_from=filtros.get("nit_from", "") or filtros.get("nit", ""),
+            nit_to=filtros.get("nit_to", "") or filtros.get("nit", ""),
+            order=filtros.get("order", "cuenta"),
+            movement_order=filtros.get("movement_order", "documento"),
+            detailed=filtros.get("detail_mode", "detallado") == "detallado",
+        )
+
+    if report_id in {"ret-relacion", "ret-totales-cuenta", "ret-soportes"}:
+        from .retenciones_reportes_repository import build_retention_report
+        return build_retention_report(
+            report_id, cia, year, month_from, month_to,
+            account_from=filtros.get("account_from", ""),
+            account_to=filtros.get("account_to", ""),
+            nit_from=filtros.get("nit_from", ""),
+            nit_to=filtros.get("nit_to", ""),
+            order=filtros.get("order", "cuenta"),
+            detailed=filtros.get("detail_mode", "resumido") == "detallado",
+            date_from=filtros.get("date_from", ""), date_to=filtros.get("date_to", ""),
+        )
 
     if report_id in {"aux-gral", "aux-doc-afectado"}:
         from .libro_auxiliar_repository import build_auxiliary_book

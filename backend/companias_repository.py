@@ -1,11 +1,8 @@
-"""Mantenimiento de compañías del modelo nuevo (bloque B3, pantalla Companias).
+"""Mantenimiento de compañías del modelo compartido (bloque B3).
 
-**Solo PostgreSQL.** En el legado una compañía es una *carpeta de tablas por
-empresa* que crea el instalador de VISION, no una fila: ``CONEMP`` se escribe
-durante la instalación y el alta desde la web no tiene destino. Por eso las tres
-operaciones de escritura devuelven, con el motor Advantage, la rama no
-implementada **declarada** (:class:`CompanyWriteNotImplemented`, 503) y no un
-error genérico.
+La creación Advantage inserta CONEMP y comparte las demás tablas por CIA; no
+crea carpetas. Modificación y eliminación Advantage aún están pendientes y
+devuelven una rama no implementada explícita.
 
 Este módulo concentra las reglas de contrato que comparten las dos ramas
 (``normalize_*``, ``company_item``) y la rama declarada de Advantage; la rama de
@@ -20,6 +17,13 @@ from __future__ import annotations
 
 import re
 from typing import Any
+
+from .accounting_lock import accounting_write_lock
+from .ads_repository import (
+    ADO_TYPE_BOOLEAN, ADO_TYPE_INTEGER, ADO_TYPE_VARCHAR,
+    _execute, _number, ads_odbc_connection,
+)
+from .lotes_repository import _one
 
 
 # ``CONEMP.EMPCOD`` son 3 posiciones; el modelo guarda el código sin ceros y
@@ -47,15 +51,13 @@ class CompanyValidationError(ValueError):
 
 
 class CompanyWriteNotImplemented(RuntimeError):
-    """La escritura de compañías solo está implementada en el modelo nuevo."""
+    """Modificación o baja pendiente en Advantage."""
 
 
 # Mensaje declarado de la rama no implementada: la ruta debe responder 503 con
 # esta causa y no con el error genérico de motor no disponible.
 LEGACY_BRANCH_MESSAGE = (
-    "El alta, la modificación y la baja de compañías solo están implementadas con "
-    "PostgreSQL. En Advantage una compañía es una carpeta de tablas por empresa que "
-    "crea el instalador del legado, no una fila de CONEMP."
+    "La modificación y la baja de compañías aún no están implementadas con Advantage."
 )
 
 
@@ -166,13 +168,64 @@ def validate_company_reason(reason: str) -> str:
     return text
 
 
+def create_company(payload: dict[str, Any], *, user: str = "WEB") -> dict[str, Any]:
+    """Da de alta CONEMP sin crear carpetas ni duplicar el CONCTR global.
+
+    Todas las tablas contables que pertenecen a una compañía se consultan con
+    ``CIA``. Su configuración de período sigue siendo compartida: los procesos
+    actuales hacen ``SELECT TOP 1 FROM CONCTR`` y por eso añadir otra fila aquí
+    haría ambiguo el año para *todas* las compañías.
+    """
+    data = normalize_company_create(payload)
+    clave = str(payload.get("clave", "") or "").strip()
+    if not 1 <= len(clave) <= 5:
+        raise CompanyValidationError("La clave debe contener entre 1 y 5 caracteres.")
+    if len(data["nit"]) > 12:
+        raise CompanyValidationError("El NIT admite máximo 12 caracteres en CONEMP.")
+    if data["soloConsolidacion"]:
+        raise CompanyValidationError("CONEMP no tiene un campo para marcar solo consolidación.")
+    code = company_display_code(data["codigo"])
+    habilitada = bool(payload.get("habilitada", False))
+    with accounting_write_lock, ads_odbc_connection() as connection:
+        if _one(connection, "SELECT TOP 1 EMPCOD FROM CONEMP WHERE EMPCOD = ?", [(ADO_TYPE_VARCHAR, 3, code)]) is not None:
+            raise CompanyAlreadyExists(f"Ya existe la compañía {code}.")
+        control = _one(connection, "SELECT COUNT(*) AS TOTAL, MAX(CTANO) AS ANIO FROM CONCTR", [])
+        if control is None or int(_number(control.get("TOTAL"))) != 1:
+            raise CompanyConflict("Los parámetros de operación deben contener un único registro antes de crear compañías.")
+        if data["anio"] != int(_number(control.get("ANIO"))):
+            raise CompanyValidationError(
+                f"El año debe ser {int(_number(control.get('ANIO')))}, que es el año operativo compartido."
+            )
+        connection.BeginTrans()
+        try:
+            _execute(
+                connection,
+                "INSERT INTO CONEMP (EMPCOD, EMPNOM, EMPNIT, EMPCLAV, REASIGNA, HABILITA) VALUES (?, ?, ?, ?, ?, ?)",
+                [
+                    (ADO_TYPE_VARCHAR, 3, code),
+                    (ADO_TYPE_VARCHAR, 40, data["nombre"]),
+                    (ADO_TYPE_VARCHAR, 12, data["nit"]),
+                    (ADO_TYPE_VARCHAR, 5, clave),
+                    (ADO_TYPE_VARCHAR, 1, ""),
+                    (ADO_TYPE_BOOLEAN, 0, habilitada),
+                ],
+            )
+            connection.CommitTrans()
+        except Exception:
+            try:
+                connection.RollbackTrans()
+            except Exception:
+                pass
+            raise
+    return {"codigo": code, "nombre": data["nombre"], "nit": data["nit"],
+            "habilitada": habilitada, "soloConsolidacion": False, "anios": [data["anio"]]}
+
+
 def _legacy_branch(*_args: Any, **_kwargs: Any) -> Any:
-    """Rama declarada de Advantage: la operación no tiene destino en el legado."""
+    """Rama declarada de Advantage para modificación y baja pendientes."""
     raise CompanyWriteNotImplemented(LEGACY_BRANCH_MESSAGE)
 
 
-# Alias explícitos para el despacho de ``store``: dejan escrito que la rama
-# Advantage no se limita a faltar, sino que se declara como no implementada.
-create_company = _legacy_branch
+# La creación usa CONEMP; estas dos acciones permanecen pendientes.
 update_company = _legacy_branch
 delete_company = _legacy_branch
