@@ -100,3 +100,23 @@ portable `start-fortuner.ps1` de Fortuner27 y no crea un servicio Windows ni
 una tarea independiente. `dev.js` continúa siendo exclusivamente una herramienta
 de desarrollo. Las pruebas de empaquetado e instalación aislada están en
 `deployment/tests`; no inician el servicio ni escriben tablas Advantage.
+
+## Despliegue en contenedor único (Docker + Caddy)
+
+La aplicación también puede desplegarse como **un solo contenedor** (React +
+backend FastAPI + ia-service + Caddy) y convivir con `ecommerce` y `crm` en el
+servidor sin compartir puertos, redes internas ni volúmenes.
+
+- Guía completa: [`docker/README.md`](docker/README.md).
+- App: `contabdsi_app`, puertos loopback `30380/30381`.
+- BD opcional: `contabdsi_postgres` (perfil `db`, sin puertos publicados).
+- Edge compartido: bloque [`docker/edge/Caddyfile.contabilidad`](docker/edge/Caddyfile.contabilidad).
+- En el contenedor el motor de datos es **PostgreSQL**
+  (`CONTABDSI_STORE=postgres`); Advantage/OLEDB solo existe en Windows.
+
+```bash
+cd docker
+cp .env.example .env      # dominio, TLS, DATABASE_URL, Fortuner, DeepSeek
+docker compose --profile db build
+docker compose --profile db up -d
+```

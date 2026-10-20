@@ -1,0 +1,41 @@
+# Contexto de build = raíz del repo (lo comparten la app y la base de datos).
+# Mantener el contexto pequeño: el repo incluye datos del legado de varios GB.
+
+# Git y metadatos
+.git
+.gitignore
+.gitattributes
+
+# Dependencias y artefactos de build (se reconstruyen dentro de la imagen)
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/*.log
+
+# Salidas locales
+logs/
+output/
+tmp/
+
+# Secretos y entornos locales (el .env de Docker vive en docker/.env)
+.env
+.env.*
+**/.env
+**/.env.*
+!docker/.env.example
+
+# Datos pesados del legado / respaldos: no se necesitan dentro de la imagen
+ADD_CONTAB/
+db_new/
+db_copy/
+db/backups/
+db/postgresql/.pgdata/
+db/postgresql/.pglog
+
+# Datos de demostración/presentación que no se sirven en producción
+db/presentacion-web/dist/
+db/presentacion-web/node_modules/
+*.zip

@@ -1,0 +1,3 @@
+# Secretos y archivos generados del despliegue
+.env
+Caddyfile.generated

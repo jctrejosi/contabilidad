@@ -1,0 +1,149 @@
+# Contenedor ÚNICO de CONTABDSI (frontend + backend + ia-service + Caddy)
+# + PostgreSQL opcional en el mismo compose.
+#
+# Aislamiento respecto de ecommerce y CRM:
+#   - contenedor:      contabdsi_app       (ecommerce: mercaldas_app)
+#   - BD:              contabdsi_postgres  (ecommerce: ecommerce_postgres)
+#   - red propia:      contabdsi_edge / contabdsi_internal
+#   - red compartida:  shared_edge         (la usa el edge_caddy existente)
+#   - puertos host:    127.0.0.1:30380/30381 (ecommerce: 30180/30181)
+#   - volúmenes:       contabdsi_caddy_* / contabdsi_pgdata
+#
+# Uso:
+#   cp docker/.env.example docker/.env   # edita dominio, TLS y secretos
+#   docker compose -f docker/docker-compose.yml build
+#   docker compose -f docker/docker-compose.yml up -d
+#
+# Con la BD incluida (perfil "db"; sin puertos publicados):
+#   docker compose -f docker/docker-compose.yml --profile db up -d
+#
+# Guía completa: docker/README.md
+name: contabdsi
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        # URL pública de Fortuner que muestra AccessGate. Se hornea en el
+        # bundle: cambiarla exige rebuild.
+        VITE_FORTUNER_URL: ${VITE_FORTUNER_URL:-}
+    image: contabdsi/app:latest
+    container_name: contabdsi_app
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Puertos internos (no se publican tal cual).
+      BACKEND_PORT: "8001"
+      IA_SERVICE_PORT: "8003"
+      # Caddy escucha en puertos altos (no root); el host publica 30380/30381.
+      HTTP_PORT: "8080"
+      HTTPS_PORT: "8443"
+      # En Linux/container el único motor soportado es PostgreSQL.
+      CONTABDSI_STORE: ${CONTABDSI_STORE:-postgres}
+      # El ia-service consulta al backend por loopback.
+      BACKEND_API_URL: "http://127.0.0.1:8001"
+      # Fortuner27 (AccessGate). En Docker Desktop Windows el host responde en
+      # host.docker.internal; si Fortuner es contenedor, usa su nombre.
+      FORTUNER_API_URL: ${FORTUNER_API_URL:-http://host.docker.internal:8004}
+      # Certificados/estado de Caddy → volúmenes (no se re-emiten en cada up).
+      XDG_DATA_HOME: /data
+      XDG_CONFIG_HOME: /config
+      CADDYFILE_OUT: /config/Caddyfile.generated
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
+    # ── Puertos publicados en el host ──────────────────────────────────────
+    # Solo en loopback y en puertos propios: el edge_caddy existente publica
+    # 80/443 y alcanza este contenedor por la red shared_edge.
+    ports:
+      - "${PUBLIC_HTTP_PORT:-127.0.0.1:30380}:8080"
+      - "${PUBLIC_HTTPS_PORT:-127.0.0.1:30381}:8443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge        # salida a internet (DeepSeek, ACME…) y puertos publicados
+      - internal    # red interna (PostgreSQL) — no publicada
+      - shared_edge # la usa edge_caddy para alcanzar contabdsi_app:8080
+    # Endurecimiento: sin capacidades extra y sin escalada de privilegios.
+    # Al correr como usuario sin privilegios en puertos altos no hace falta
+    # NET_BIND_SERVICE.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Permite que FORTUNER_API_URL=host.docker.internal funcione también en
+    # Docker Engine sobre Linux, no solo en Docker Desktop.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    # Evita que los logs llenen el disco.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    restart: unless-stopped
+
+  # ── PostgreSQL opcional (perfil "db") ────────────────────────────────────
+  # Se construye desde db/postgresql (esquema + funciones). El seed de
+  # demostración NO se incluye por defecto: se activa con WITH_SEED=true.
+  # No publica puertos: solo es alcanzable por la red contabdsi_internal.
+  db:
+    profiles: ["db"]
+    build:
+      context: ..
+      dockerfile: docker/db/Dockerfile
+      args:
+        WITH_SEED: ${WITH_SEED:-false}
+    image: contabdsi/db:latest
+    container_name: contabdsi_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-contabdsi}
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en docker/.env}"
+      POSTGRES_DB: ${POSTGRES_DB:-contabdsi}
+    volumes:
+      # PostgreSQL 18+ guarda los datos en /var/lib/postgresql/<major>/docker;
+      # por eso el volumen se monta en el directorio padre.
+      - pgdata:/var/lib/postgresql
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-contabdsi} -d ${POSTGRES_DB:-contabdsi}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    restart: unless-stopped
+
+networks:
+  edge:
+    name: contabdsi_edge
+  internal:
+    name: contabdsi_internal
+    internal: true
+  # La crean ecommerce/CRM al arrancar. En el servidor ya existe.
+  shared_edge:
+    external: true
+    name: shared_edge
+
+volumes:
+  caddy_data:
+    name: contabdsi_caddy_data
+  caddy_config:
+    name: contabdsi_caddy_config
+  pgdata:
+    name: contabdsi_pgdata

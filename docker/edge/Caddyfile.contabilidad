@@ -1,0 +1,35 @@
+# ── Contabilidad (contenedor `contabdsi_app`, Caddy interno en :8080 sin TLS) ──
+#
+# Añadir este bloque al Caddyfile del EDGE COMPARTIDO que ya corre en 80/443
+# (el de ecommerce: docker/edge/Caddyfile). El edge conserva el Host y reenvía
+# a la red `shared_edge`, donde el contenedor de contabilidad escucha en 8080.
+#
+# Requisitos:
+#   1. DNS: contabilidad.jcti.xyz → IP pública del servidor (registro A).
+#   2. En docker/.env: HOST_APP=contabilidad.jcti.xyz (mismo host).
+#   3. `contabdsi_app` debe estar arriba y unido a `shared_edge`.
+#
+# Recarga del edge (sin cortar ecommerce/CRM):
+#   docker exec edge_caddy caddy reload --config /etc/caddy/Caddyfile
+#
+# `edge_headers` está definido en el Caddyfile compartido; si pegas este bloque
+# en otro archivo, incluye también ese snippet.
+
+contabilidad.jcti.xyz {
+	import edge_headers
+
+	log {
+		output stdout
+		format json
+	}
+
+	# Emisor explícito: evita que Caddy reintente contra el CA de staging.
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			test_dir https://acme-v02.api.letsencrypt.org/directory
+		}
+	}
+
+	reverse_proxy contabdsi_app:8080
+}
