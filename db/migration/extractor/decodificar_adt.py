@@ -35,7 +35,7 @@ import struct
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ADD_CONTAB = HERE.parents[2] / "ADD_CONTAB"
+ADD_CONTAB = HERE.parents[1] / "ADD_CONTAB"
 CATALOGO = HERE / "catalogo_publidata.json"
 
 ADT_SIGNATURE = b"Advantage Table"

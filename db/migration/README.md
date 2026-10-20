@@ -45,10 +45,11 @@ anteriores, impuestos, seguridad, activos, exógena, reembolsos, presupuesto…
 | [`11_lotes_y_importaciones.md`](11_lotes_y_importaciones.md) | Lectura de lotes e importaciones y el mapeo `CONMOVI`/`CONLOTES` (etapa C6) |
 | [`12_escrituras.md`](12_escrituras.md) | **Escrituras contra PostgreSQL** y sus decisiones (etapa D) |
 | [`13_informe_final.md`](13_informe_final.md) | **Informe final de la migración**: estado por etapa, cifras, decisiones, verificación y pendientes |
+| [`14_fuente_unica.md`](14_fuente_unica.md) | **Fuente única del legado** (`db/ADD_CONTAB`): comparación de contenido entre copias, por qué no se fusionan y qué cambia en el diccionario |
 | [`cargador/`](cargador/README.md) | **Cargador del staging a PostgreSQL**: orden de entidades, decisiones de carga y estado de la corrida |
 | [`extractor/`](extractor/README.md) | Formato `.adt` entendido, catálogo real del `.add`, y el contrato del extractor |
 | [`extractor/leer_diccionario.py`](extractor/leer_diccionario.py) | **Parser de `PUBLIDATA.add`**: los campos reales de la copia, verificados contra los `.adt` |
-| [`extractor/catalogo_publidata.json`](extractor/catalogo_publidata.json) | Catálogo real de las 20 tablas (888 campos), en orden físico — **sustituye al inventario de `old_db/`** |
+| [`extractor/catalogo_publidata.json`](extractor/catalogo_publidata.json) | Catálogo real de las 45 tablas (1.599 campos), en orden físico — **sustituye al inventario de `old_db/`** |
 | [`extractor/decodificar_adt.py`](extractor/decodificar_adt.py) | **Lee las tablas sin Advantage** y decodifica sus filas |
 | [`extractor/exportar_csv.py`](extractor/exportar_csv.py) | **Extrae a CSV + manifiesto** con el contrato del plan (idempotente y reanudable) |
 | `extractor/staging/` | Salida: 15 CSV (1,7 GB) + `manifiesto.json`. Fuera de Git |

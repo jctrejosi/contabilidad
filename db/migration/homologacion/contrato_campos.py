@@ -43,7 +43,7 @@ import reglas  # necesita el path insertado arriba
 
 CATALOGO = MIGRATION_DIR / "extractor" / "catalogo_publidata.json"
 INVENTARIO_DOC = OLD_DB / "DICCIONARIO_DEPURADO_CONTABDSI.md"
-TABLAS_ADT = MIGRATION_DIR.parents[1] / "ADD_CONTAB"
+TABLAS_ADT = MIGRATION_DIR.parent / "ADD_CONTAB"
 
 # | 1 | CTCODCIA | SHORTINT | 2 | 0 |
 FIELD_ROW = re.compile(r"^\|\s*(\d+)\s*\|\s*(\w+)\s*\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|")

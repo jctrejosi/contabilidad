@@ -64,7 +64,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ADD_CONTAB = HERE.parents[2] / "ADD_CONTAB"
+ADD_CONTAB = HERE.parents[1] / "ADD_CONTAB"
 DICCIONARIO = "PUBLIDATA.add"
 
 MAGIC = b"\x04\x00\x00\x00\x00"

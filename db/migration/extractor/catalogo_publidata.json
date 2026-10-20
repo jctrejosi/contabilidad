@@ -1118,6 +1118,54 @@
       "suma_bytes": 66
     },
     {
+      "tabla": "CONINF1",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "NIVEL",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "CUENTA",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "NOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "TIPO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "PPTO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "VLRBASE",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 56
+    },
+    {
       "tabla": "CONLOTES",
       "campos": [
         {
@@ -1912,6 +1960,123 @@
       "suma_bytes": 53
     },
     {
+      "tabla": "CONREITE",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "RILOTE",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "RIFECHA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "RIDETALLE",
+          "tipo": "CHARACTER",
+          "longitud": 100,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "RICCOSTO",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "RITERCE",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "RIVALOR",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "RICCOSCRU",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 157
+    },
+    {
+      "tabla": "CONREMAE",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "RMLOTE",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "RMCONCEP",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "RMFECHA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "RMVLRTOT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "RMCODCON",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "RMTDOCUM",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "RMTCOMPR",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "RMACTU",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 85
+    },
+    {
       "tabla": "CONTERCE",
       "campos": [
         {
@@ -2181,6 +2346,634 @@
         }
       ],
       "suma_bytes": 70
+    },
+    {
+      "tabla": "COTDIA",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "FACIA",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "FAPLACA",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "FACODIGO",
+          "tipo": "CHARACTER",
+          "longitud": 13,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "FANOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 45,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "FADIREC",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "FACIUDAD",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "FATELEF",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "FANIT",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "FATIPPER",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "FAFACTURA",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "FAPEDIDO",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "FAFCHFAC",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "FAFCHVEN",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "FACANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 15,
+          "campo": "FACANT2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 16,
+          "campo": "FAVLRBRU",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 17,
+          "campo": "FAVLRRETV",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 18,
+          "campo": "FAVLRRETI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 19,
+          "campo": "FAVARIOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 20,
+          "campo": "FAVLRDES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 21,
+          "campo": "FAVLRFLE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 22,
+          "campo": "FAVLRIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 23,
+          "campo": "FAVLRIMC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 24,
+          "campo": "FAVLROIP",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 25,
+          "campo": "FAVLRNET",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 26,
+          "campo": "FAVLR01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 27,
+          "campo": "FAPAG01",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 28,
+          "campo": "FAVLR02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 29,
+          "campo": "FAPAG02",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 30,
+          "campo": "FAVLR03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 31,
+          "campo": "FAPAG03",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 32,
+          "campo": "FAVLDESFI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 33,
+          "campo": "FAPEDINT",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 34,
+          "campo": "FAVENDED",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 35,
+          "campo": "FAOBSER",
+          "tipo": "CHARACTER",
+          "longitud": 120,
+          "decimales": 0
+        },
+        {
+          "orden": 36,
+          "campo": "FATIME",
+          "tipo": "CHARACTER",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 37,
+          "campo": "FADOCPAGO",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 38,
+          "campo": "FANOMCOMP",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 39,
+          "campo": "FAOBSERVEN",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 40,
+          "campo": "FACOND",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 41,
+          "campo": "FAINVE",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 42,
+          "campo": "FAESTADO",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 43,
+          "campo": "FAEVENTO",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 44,
+          "campo": "FATIPO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 557
+    },
+    {
+      "tabla": "COTITE",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "IFCLIENTE",
+          "tipo": "CHARACTER",
+          "longitud": 13,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "IFMESA",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "IFPLACA",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "IFPEDIDO",
+          "tipo": "CHARACTER",
+          "longitud": 9,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "IFFCHPED",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "IFBODEGA",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "IFFACT",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "IFARTIC",
+          "tipo": "CHARACTER",
+          "longitud": 19,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "IFPARTE",
+          "tipo": "CHARACTER",
+          "longitud": 16,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "IFNUMERO",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "IFNOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 60,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "IFUNIMED",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "IFCANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 14,
+          "campo": "IFCANT2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 15,
+          "campo": "IFCOSTO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 16,
+          "campo": "IFVLRUNI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 17,
+          "campo": "IFVARIOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 18,
+          "campo": "IFVLRBRU",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 19,
+          "campo": "IFVLRRETV",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 20,
+          "campo": "IFVLRRETI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 21,
+          "campo": "IFPORDES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 22,
+          "campo": "IFVLRDES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 23,
+          "campo": "IFVLDESFI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 24,
+          "campo": "IFTIMP",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 25,
+          "campo": "IFPORIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 26,
+          "campo": "IFVLRIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 27,
+          "campo": "IFVLRIMC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 28,
+          "campo": "IFVLROIP",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 29,
+          "campo": "IFVLRNET",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 30,
+          "campo": "IFPEND",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 31,
+          "campo": "IFFECHA",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 32,
+          "campo": "IFVENDED",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 33,
+          "campo": "IFESTADO",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 34,
+          "campo": "IFEVENTO",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 35,
+          "campo": "IFOBSER1",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 36,
+          "campo": "IFOBSER2",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 37,
+          "campo": "IFOBSER3",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 38,
+          "campo": "IFOBSER4",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 39,
+          "campo": "IFOBSER5",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 40,
+          "campo": "IFOBSER6",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 41,
+          "campo": "IFOBSER7",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 42,
+          "campo": "IFTIPINV",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 43,
+          "campo": "IFCCOSTO",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 44,
+          "campo": "IFEAN",
+          "tipo": "CHARACTER",
+          "longitud": 14,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 547
     },
     {
       "tabla": "FADCLI",
@@ -2924,6 +3717,422 @@
       "suma_bytes": 1333
     },
     {
+      "tabla": "FADEVIDE",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "ID",
+          "tipo": "CHARACTER",
+          "longitud": 40,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "VIS_ID",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "FECHA",
+          "tipo": "CHARACTER",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "HORA",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "OBS",
+          "tipo": "CHARACTER",
+          "longitud": 60,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "TIPO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "ESTADO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "LAT",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "LON",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "APP",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 196
+    },
+    {
+      "tabla": "FADFREEN",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "FRECOD",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "FREDES",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 32
+    },
+    {
+      "tabla": "FADISPO",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "DCODDISP",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "DSERIAL",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "DVENDED",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "DCODEMPRE",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "DNOMEMPRE",
+          "tipo": "CHARACTER",
+          "longitud": 60,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "DCODSUCUR",
+          "tipo": "CHARACTER",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "DNOMSUCUR",
+          "tipo": "CHARACTER",
+          "longitud": 60,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "DAUTORIZADO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "DRUTERO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "DPEDIDOS",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "DRECAUDO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 188
+    },
+    {
+      "tabla": "FADVISIT",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "vis_id",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "vis_consecutivo",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 15
+        },
+        {
+          "orden": 3,
+          "campo": "vis_rutai_key",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "vis_usu_codigo",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "vis_fecha",
+          "tipo": "CHARACTER",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "vis_hora",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "vis_fecha_fin",
+          "tipo": "CHARACTER",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "vis_hora_fin",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "vis_duracion",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "vis_vehiculo",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "vis_fadcli_codigo",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "vis_fadcli_nombre",
+          "tipo": "CHARACTER",
+          "longitud": 60,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "vis_cliente_gps_lat",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "vis_cliente_gps_lon",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 15,
+          "campo": "vis_gps_sn",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 16,
+          "campo": "vis_gps_lat",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 17,
+          "campo": "vis_gps_lon",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 18,
+          "campo": "vis_gps_fin_sn",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 19,
+          "campo": "vis_gps_fin_lat",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 20,
+          "campo": "vis_gps_fin_lon",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 21,
+          "campo": "vis_visita_sn",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 22,
+          "campo": "vis_obs",
+          "tipo": "CHARACTER",
+          "longitud": 120,
+          "decimales": 0
+        },
+        {
+          "orden": 23,
+          "campo": "vis_presencial_sn",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 24,
+          "campo": "vis_recaudo_sn",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 25,
+          "campo": "vis_recaudo_doc",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 26,
+          "campo": "vis_recaudo_valor",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 15
+        },
+        {
+          "orden": 27,
+          "campo": "vis_novisita_motivo",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 28,
+          "campo": "vis_novisita_obs",
+          "tipo": "CHARACTER",
+          "longitud": 120,
+          "decimales": 0
+        },
+        {
+          "orden": 29,
+          "campo": "vis_pedido_sn",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 30,
+          "campo": "vis_pedido_doc",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 31,
+          "campo": "vis_pedido_valor",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 15
+        },
+        {
+          "orden": 32,
+          "campo": "vis_estado",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 33,
+          "campo": "vis_enviado_sn",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 680
+    },
+    {
       "tabla": "MOV00",
       "campos": [
         {
@@ -3370,6 +4579,1986 @@
       "suma_bytes": 286
     },
     {
+      "tabla": "PEDDIA",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "FACIA",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "FAPLACA",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "FACODIGO",
+          "tipo": "CHARACTER",
+          "longitud": 13,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "FANOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 45,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "FADIREC",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "FACIUDAD",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "FATELEF",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "FANIT",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "FATIPPER",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "FAFACTURA",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "FAPEDIDO",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "FAFCHFAC",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "FAFCHVEN",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "FACANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 15,
+          "campo": "FACANT2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 16,
+          "campo": "FAVLRBRU",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 17,
+          "campo": "FAVLRRETV",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 18,
+          "campo": "FAVLRRETI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 19,
+          "campo": "FAVARIOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 20,
+          "campo": "FAVLRDES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 21,
+          "campo": "FAVLRFLE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 22,
+          "campo": "FAVLRIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 23,
+          "campo": "FAVLRIMC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 24,
+          "campo": "FAVLROIP",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 25,
+          "campo": "FAVLRNET",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 26,
+          "campo": "FAVLR01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 27,
+          "campo": "FAPAG01",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 28,
+          "campo": "FAVLR02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 29,
+          "campo": "FAPAG02",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 30,
+          "campo": "FAVLR03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 31,
+          "campo": "FAPAG03",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 32,
+          "campo": "FAVLDESFI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 33,
+          "campo": "FAPEDINT",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 34,
+          "campo": "FAVENDED",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 35,
+          "campo": "FAOBSER",
+          "tipo": "CHARACTER",
+          "longitud": 120,
+          "decimales": 0
+        },
+        {
+          "orden": 36,
+          "campo": "FATIME",
+          "tipo": "CHARACTER",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 37,
+          "campo": "FADOCPAGO",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 38,
+          "campo": "FANOMCOMP",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 39,
+          "campo": "FAOBSERVEN",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 40,
+          "campo": "FACOND",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 41,
+          "campo": "FAINVE",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 42,
+          "campo": "FAESTADO",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 43,
+          "campo": "FAEVENTO",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 44,
+          "campo": "FATIPO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 45,
+          "campo": "FAMOTDEV",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 46,
+          "campo": "FARESPON",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 47,
+          "campo": "FACIERRE",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 48,
+          "campo": "FAEMPACA",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 568
+    },
+    {
+      "tabla": "PEDITE",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "IFCLIENTE",
+          "tipo": "CHARACTER",
+          "longitud": 13,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "IFMESA",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "IFPLACA",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "IFPEDIDO",
+          "tipo": "CHARACTER",
+          "longitud": 9,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "IFFCHPED",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "IFBODEGA",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "IFFACT",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "IFARTIC",
+          "tipo": "CHARACTER",
+          "longitud": 19,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "IFPARTE",
+          "tipo": "CHARACTER",
+          "longitud": 16,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "IFNUMERO",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "IFNOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 60,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "IFUNIMED",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "IFCANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 14,
+          "campo": "IFCANT2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 15,
+          "campo": "IFCOSTO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 16,
+          "campo": "IFVLRUNI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 17,
+          "campo": "IFVARIOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 18,
+          "campo": "IFVLRBRU",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 19,
+          "campo": "IFVLRRETV",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 20,
+          "campo": "IFVLRRETI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 21,
+          "campo": "IFPORDES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 22,
+          "campo": "IFVLRDES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 23,
+          "campo": "IFVLDESFI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 24,
+          "campo": "IFTIMP",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 25,
+          "campo": "IFPORIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 26,
+          "campo": "IFVLRIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 27,
+          "campo": "IFVLRIMC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 28,
+          "campo": "IFVLROIP",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 29,
+          "campo": "IFVLRNET",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 30,
+          "campo": "IFPEND",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 31,
+          "campo": "IFFECHA",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 32,
+          "campo": "IFVENDED",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 33,
+          "campo": "IFESTADO",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 34,
+          "campo": "IFEVENTO",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 35,
+          "campo": "IFOBSER1",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 36,
+          "campo": "IFOBSER2",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 37,
+          "campo": "IFOBSER3",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 38,
+          "campo": "IFOBSER4",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 39,
+          "campo": "IFOBSER5",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 40,
+          "campo": "IFOBSER6",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 41,
+          "campo": "IFOBSER7",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 42,
+          "campo": "IFUBIC",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 43,
+          "campo": "IFCAJA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 44,
+          "campo": "IFCANTR",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 45,
+          "campo": "IFPROVEE",
+          "tipo": "CHARACTER",
+          "longitud": 13,
+          "decimales": 0
+        },
+        {
+          "orden": 46,
+          "campo": "IFTCAJAS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 47,
+          "campo": "IFTIPINV",
+          "tipo": "CHARACTER",
+          "longitud": 3,
+          "decimales": 0
+        },
+        {
+          "orden": 48,
+          "campo": "IFLOTE",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 49,
+          "campo": "IFLISTA",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 50,
+          "campo": "IFCCOSTO",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 51,
+          "campo": "IFEAN",
+          "tipo": "CHARACTER",
+          "longitud": 14,
+          "decimales": 0
+        },
+        {
+          "orden": 52,
+          "campo": "IFCANTC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 53,
+          "campo": "IFCANTF",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 614
+    },
+    {
+      "tabla": "PEDITERE",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "C1",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "C2",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "C3",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "C4",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "C5",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "C6",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "C7",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "N1",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "N2",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "A1",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "A2",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "DIR",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "TEL",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "EMAIL",
+          "tipo": "CHARACTER",
+          "longitud": 80,
+          "decimales": 0
+        },
+        {
+          "orden": 15,
+          "campo": "PARENTESCO",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 16,
+          "campo": "RELACION",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 17,
+          "campo": "VALOR",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 18,
+          "campo": "TIME",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 19,
+          "campo": "TIME2",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 20,
+          "campo": "TIME3",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 550
+    },
+    {
+      "tabla": "PEDRESER",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "GENERAL",
+          "tipo": "CHARACTER",
+          "longitud": 150,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 150
+    },
+    {
+      "tabla": "RUTAENC",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "RUTAEID",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "RUTAENOM",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "RUTAEOBS",
+          "tipo": "CHARACTER",
+          "longitud": 150,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 206
+    },
+    {
+      "tabla": "RUTAITEM",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "RUTAIID",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "RUTAISECU",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "RUTAIDIA",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "RUTAICLI",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "RUTAIOBS",
+          "tipo": "CHARACTER",
+          "longitud": 150,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "RUTAIESTADO",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 199
+    },
+    {
+      "tabla": "TIDBODE",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "CODIGO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "NOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "CARPETA",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "CARPETAPD",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "CARPETAIP",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "CARPETAR",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "BODEGA",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "SALDOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 9,
+          "campo": "COSTOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 10,
+          "campo": "VENTAS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 11,
+          "campo": "PROMEDIO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 12,
+          "campo": "CCOSTO",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "TIPDOC",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "VTA01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 15,
+          "campo": "VTA02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 16,
+          "campo": "VTA03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 17,
+          "campo": "VTA04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 18,
+          "campo": "VTA05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 19,
+          "campo": "VTA06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 20,
+          "campo": "VTA07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 21,
+          "campo": "VTA08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 22,
+          "campo": "VTA09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 23,
+          "campo": "VTA10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 24,
+          "campo": "VTA11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 25,
+          "campo": "VTA12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 26,
+          "campo": "ENT01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 27,
+          "campo": "ENT02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 28,
+          "campo": "ENT03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 29,
+          "campo": "ENT04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 30,
+          "campo": "ENT05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 31,
+          "campo": "ENT06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 32,
+          "campo": "ENT07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 33,
+          "campo": "ENT08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 34,
+          "campo": "ENT09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 35,
+          "campo": "ENT10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 36,
+          "campo": "ENT11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 37,
+          "campo": "ENT12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 38,
+          "campo": "SAL01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 39,
+          "campo": "SAL02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 40,
+          "campo": "SAL03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 41,
+          "campo": "SAL04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 42,
+          "campo": "SAL05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 43,
+          "campo": "SAL06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 44,
+          "campo": "SAL07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 45,
+          "campo": "SAL08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 46,
+          "campo": "SAL09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 47,
+          "campo": "SAL10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 48,
+          "campo": "SAL11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 49,
+          "campo": "SAL12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 50,
+          "campo": "VERSAL",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 51,
+          "campo": "ESTADO",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 52,
+          "campo": "ACUMULA",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 53,
+          "campo": "HABILITA",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 54,
+          "campo": "BOD1",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 55,
+          "campo": "BOD2",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 56,
+          "campo": "ULTIMAF",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 57,
+          "campo": "ULTIMAC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 58,
+          "campo": "PEDIDO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 59,
+          "campo": "COMPRA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 60,
+          "campo": "SALDOULT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 61,
+          "campo": "ULTVTA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 62,
+          "campo": "SALDOBO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 63,
+          "campo": "ULTCOM1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 64,
+          "campo": "CANCOM1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 65,
+          "campo": "VALCOM1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 66,
+          "campo": "VALCOM3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 67,
+          "campo": "ROTACION",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 68,
+          "campo": "INACTIVO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 69,
+          "campo": "CXLS",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 70,
+          "campo": "TIPMARGEN",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 71,
+          "campo": "CODCIU",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 72,
+          "campo": "CTNPED",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 73,
+          "campo": "GTSOL",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 74,
+          "campo": "ABC",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 75,
+          "campo": "SUGEPEDI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 76,
+          "campo": "EMBALAJE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 77,
+          "campo": "REDONDEO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 78,
+          "campo": "ICANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 79,
+          "campo": "PROYESEMA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 80,
+          "campo": "VTASEANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 81,
+          "campo": "ISALDO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 82,
+          "campo": "DIASINV",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 83,
+          "campo": "INVEMAX",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 84,
+          "campo": "ULTIMORECI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 85,
+          "campo": "ITRANSITO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 86,
+          "campo": "FORCSEMA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 87,
+          "campo": "CANTPRDIA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 88,
+          "campo": "PLAENTRED",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 89,
+          "campo": "STOCKSEG",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 90,
+          "campo": "PTOREORD",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 91,
+          "campo": "CANPTORE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 92,
+          "campo": "FREPEDI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 93,
+          "campo": "CICLOPEDI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 94,
+          "campo": "IPORIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 95,
+          "campo": "IPRELIST",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 96,
+          "campo": "OCEDI",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 97,
+          "campo": "CODCEN",
+          "tipo": "CHARACTER",
+          "longitud": 50,
+          "decimales": 0
+        },
+        {
+          "orden": 98,
+          "campo": "INIMP3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 99,
+          "campo": "LOGY1",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 100,
+          "campo": "CODCEN2",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 101,
+          "campo": "EOS",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 102,
+          "campo": "AESTADO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 103,
+          "campo": "GENBI",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 930
+    },
+    {
+      "tabla": "TIDDIA",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "MSUC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "MBODEGA",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "MANO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "MMES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "MDOCUM",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "MDOCUMI",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "MPROVEE",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "MENTRY",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "MTIPO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "MFECHA",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "MVALOR",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 12,
+          "campo": "MDCTOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 13,
+          "campo": "MIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 14,
+          "campo": "MIMC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 15,
+          "campo": "MFLETES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 16,
+          "campo": "MIVAFLE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 17,
+          "campo": "MPROFLE",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 18,
+          "campo": "MDESTI",
+          "tipo": "CHARACTER",
+          "longitud": 3,
+          "decimales": 0
+        },
+        {
+          "orden": 19,
+          "campo": "RET01",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 20,
+          "campo": "MBASE1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 21,
+          "campo": "MVRET1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 22,
+          "campo": "RET02",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 23,
+          "campo": "MBASE2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 24,
+          "campo": "MVRET2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 25,
+          "campo": "RET03",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 26,
+          "campo": "MBASE3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 27,
+          "campo": "MVRET3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 28,
+          "campo": "RET04",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 29,
+          "campo": "MBASE4",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 30,
+          "campo": "MVRET4",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 31,
+          "campo": "RET05",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 32,
+          "campo": "MBASE5",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 33,
+          "campo": "MVRET5",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 34,
+          "campo": "MVENCE",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 35,
+          "campo": "MOBSER",
+          "tipo": "CHARACTER",
+          "longitud": 100,
+          "decimales": 0
+        },
+        {
+          "orden": 36,
+          "campo": "MOPE",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 37,
+          "campo": "MBODE2",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 38,
+          "campo": "MTDOC2",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 39,
+          "campo": "MMOVSUC",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 40,
+          "campo": "MCHEOK",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 41,
+          "campo": "MGRABA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 42,
+          "campo": "MARCAP",
+          "tipo": "CHARACTER",
+          "longitud": 3,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 373
+    },
+    {
       "tabla": "TIDEAN",
       "campos": [
         {
@@ -3418,2550 +6607,4488 @@
       "suma_bytes": 79
     },
     {
+      "tabla": "TIDMES",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "IMSUC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "IMBODEGA",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "IMANO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "IMMES",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "IMARTIC",
+          "tipo": "CHARACTER",
+          "longitud": 19,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "IMCCOSTO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "IMENTRY",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "IMTIPO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "IMFECHA",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "IMVENCE",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "IMVENCEIT",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "IMDOCUM",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "IMDOCUMI",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "IMORDEN",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 15,
+          "campo": "IMPROVEE",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 16,
+          "campo": "IMDPTO",
+          "tipo": "CHARACTER",
+          "longitud": 5,
+          "decimales": 0
+        },
+        {
+          "orden": 17,
+          "campo": "IMTIPIMP",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 18,
+          "campo": "IMCANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 19,
+          "campo": "IMCANT2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 20,
+          "campo": "IMDESC1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 21,
+          "campo": "IMDCTOFI1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 22,
+          "campo": "IMVLRUNI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 23,
+          "campo": "IMVALOR",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 24,
+          "campo": "IMVALORH",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 25,
+          "campo": "IMVLRHIS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 26,
+          "campo": "IMIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 27,
+          "campo": "IMIMP1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 28,
+          "campo": "IMIMP2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 29,
+          "campo": "IMCRUCE",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 30,
+          "campo": "IMNOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 40,
+          "decimales": 0
+        },
+        {
+          "orden": 31,
+          "campo": "IMUNIDAD",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 32,
+          "campo": "IMUBIC",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 33,
+          "campo": "IMINCON",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 34,
+          "campo": "IMSEC",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 35,
+          "campo": "IMCOSTOI",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 36,
+          "campo": "IMCOSTOF",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 37,
+          "campo": "IMTIPOC",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 38,
+          "campo": "SALE",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 39,
+          "campo": "IMPESO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 40,
+          "campo": "IMVENTA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 41,
+          "campo": "IMFLETE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 42,
+          "campo": "IMSALDO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 3
+        },
+        {
+          "orden": 43,
+          "campo": "IMIVAFLE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 44,
+          "campo": "IMOPER",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 45,
+          "campo": "IMDATE",
+          "tipo": "DATE",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 46,
+          "campo": "IMIMP3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 47,
+          "campo": "IMIMP4",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 346
+    },
+    {
       "tabla": "TIDSAL",
       "campos": [
         {
           "orden": 1,
+          "campo": "INSUC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "INBODEGA",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
           "campo": "INARTIC",
           "tipo": "CHARACTER",
           "longitud": 19,
           "decimales": 0
         },
         {
-          "orden": 2,
+          "orden": 4,
           "campo": "NUMERO",
           "tipo": "INTEGER",
           "longitud": 4,
           "decimales": 0
         },
         {
-          "orden": 3,
+          "orden": 5,
           "campo": "INEAN",
           "tipo": "CHARACTER",
           "longitud": 13,
           "decimales": 0
         },
         {
-          "orden": 4,
+          "orden": 6,
           "campo": "INEANC",
           "tipo": "CHARACTER",
           "longitud": 13,
           "decimales": 0
         },
         {
-          "orden": 5,
+          "orden": 7,
           "campo": "INPARTE",
           "tipo": "CHARACTER",
           "longitud": 16,
           "decimales": 0
         },
         {
-          "orden": 6,
+          "orden": 8,
           "campo": "INNOMBRE",
           "tipo": "CHARACTER",
           "longitud": 60,
           "decimales": 0
         },
         {
-          "orden": 7,
+          "orden": 9,
           "campo": "INNOMBRE3",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 8,
+          "orden": 10,
           "campo": "INUNIDAD",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
-          "orden": 9,
+          "orden": 11,
           "campo": "INPROVEE",
           "tipo": "CHARACTER",
           "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 10,
+          "orden": 12,
           "campo": "INTIPO",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 11,
+          "orden": 13,
           "campo": "INEMBALAJE",
           "tipo": "INTEGER",
           "longitud": 4,
           "decimales": 0
         },
         {
-          "orden": 12,
+          "orden": 14,
           "campo": "INVRVENTA1",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 13,
+          "orden": 15,
           "campo": "INVRVENTA2",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 14,
+          "orden": 16,
           "campo": "INVRVENTA3",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 15,
+          "orden": 17,
           "campo": "INVRVENTA4",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 16,
+          "orden": 18,
           "campo": "INVRVENTA5",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 17,
+          "orden": 19,
           "campo": "INVRVENTA6",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 18,
+          "orden": 20,
           "campo": "INVRVENTA7",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 19,
+          "orden": 21,
           "campo": "INVRVENTA8",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 20,
+          "orden": 22,
           "campo": "INVRVENTA9",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 21,
+          "orden": 23,
           "campo": "INVRVENTA0",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 22,
+          "orden": 24,
           "campo": "INTIMP",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
-          "orden": 23,
+          "orden": 25,
           "campo": "INIMPC",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 24,
+          "orden": 26,
           "campo": "INIMP3",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 25,
+          "orden": 27,
           "campo": "INTIPINV",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
-          "orden": 26,
+          "orden": 28,
           "campo": "INMINIMO",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 27,
+          "orden": 29,
           "campo": "INMAXIMO",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 28,
+          "orden": 30,
           "campo": "INVRULTC",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 29,
+          "orden": 31,
           "campo": "INFCHULTC",
           "tipo": "INTEGER",
           "longitud": 4,
           "decimales": 0
         },
         {
-          "orden": 30,
+          "orden": 32,
           "campo": "INFCUSAL1",
           "tipo": "INTEGER",
           "longitud": 4,
           "decimales": 0
         },
         {
-          "orden": 31,
+          "orden": 33,
           "campo": "INUBIC",
           "tipo": "CHARACTER",
           "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 32,
+          "orden": 34,
           "campo": "INCOMPRO",
           "tipo": "INTEGER",
           "longitud": 4,
           "decimales": 0
         },
         {
-          "orden": 33,
+          "orden": 35,
           "campo": "INGANAN",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 34,
+          "orden": 36,
           "campo": "INGANAN2",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 35,
+          "orden": 37,
           "campo": "INGANAN3",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 36,
+          "orden": 38,
           "campo": "INCONVER",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 5
         },
         {
-          "orden": 37,
+          "orden": 39,
           "campo": "INTREPOS",
           "tipo": "SHORTINT",
           "longitud": 2,
           "decimales": 0
         },
         {
-          "orden": 38,
+          "orden": 40,
           "campo": "INPESO",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 39,
+          "orden": 41,
           "campo": "INFPRECIO",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 40,
+          "orden": 42,
           "campo": "INFORMULA",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
-          "orden": 41,
+          "orden": 43,
           "campo": "INOUT",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 42,
+          "orden": 44,
           "campo": "INCOSTO00",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 43,
+          "orden": 45,
           "campo": "INSALDO00",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 44,
+          "orden": 46,
           "campo": "INSALDO002",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 45,
+          "orden": 47,
           "campo": "IEU01",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 46,
+          "orden": 48,
           "campo": "IEV01",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 47,
+          "orden": 49,
           "campo": "ISV01",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 48,
+          "orden": 50,
           "campo": "ISU01",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 49,
+          "orden": 51,
           "campo": "IEU02",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 50,
+          "orden": 52,
           "campo": "IEV02",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 51,
+          "orden": 53,
           "campo": "ISU02",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 52,
+          "orden": 54,
           "campo": "ISV02",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 53,
+          "orden": 55,
           "campo": "IEU03",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 54,
+          "orden": 56,
           "campo": "IEV03",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 55,
+          "orden": 57,
           "campo": "ISU03",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 56,
+          "orden": 58,
           "campo": "ISV03",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 57,
+          "orden": 59,
           "campo": "IEU04",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 58,
+          "orden": 60,
           "campo": "IEV04",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 59,
+          "orden": 61,
           "campo": "ISU04",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 60,
+          "orden": 62,
           "campo": "ISV04",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 61,
+          "orden": 63,
           "campo": "IEU05",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 62,
+          "orden": 64,
           "campo": "IEV05",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 63,
+          "orden": 65,
           "campo": "ISU05",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 64,
+          "orden": 66,
           "campo": "ISV05",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 65,
+          "orden": 67,
           "campo": "IEU06",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 66,
+          "orden": 68,
           "campo": "IEV06",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 67,
+          "orden": 69,
           "campo": "ISU06",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 68,
+          "orden": 70,
           "campo": "ISV06",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 69,
+          "orden": 71,
           "campo": "IEU07",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 70,
+          "orden": 72,
           "campo": "IEV07",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 71,
+          "orden": 73,
           "campo": "ISU07",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 72,
+          "orden": 74,
           "campo": "ISV07",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 73,
+          "orden": 75,
           "campo": "IEU08",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 74,
+          "orden": 76,
           "campo": "IEV08",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 75,
+          "orden": 77,
           "campo": "ISU08",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 76,
+          "orden": 78,
           "campo": "ISV08",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 77,
+          "orden": 79,
           "campo": "IEU09",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 78,
+          "orden": 80,
           "campo": "IEV09",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 79,
+          "orden": 81,
           "campo": "ISU09",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 80,
+          "orden": 82,
           "campo": "ISV09",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 81,
+          "orden": 83,
           "campo": "IEU10",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 82,
+          "orden": 84,
           "campo": "IEV10",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 83,
+          "orden": 85,
           "campo": "ISU10",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 84,
+          "orden": 86,
           "campo": "ISV10",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 85,
+          "orden": 87,
           "campo": "IEU11",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 86,
+          "orden": 88,
           "campo": "IEV11",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 87,
+          "orden": 89,
           "campo": "ISU11",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 88,
+          "orden": 90,
           "campo": "ISV11",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 89,
+          "orden": 91,
           "campo": "IEU12",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 90,
+          "orden": 92,
           "campo": "IEV12",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 91,
+          "orden": 93,
           "campo": "ISU12",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 92,
+          "orden": 94,
           "campo": "ISV12",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 93,
+          "orden": 95,
           "campo": "IEU13",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 94,
+          "orden": 96,
           "campo": "IEV13",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 95,
+          "orden": 97,
           "campo": "ISU13",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 96,
+          "orden": 98,
           "campo": "ISV13",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 97,
+          "orden": 99,
           "campo": "INRETEN",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
-          "orden": 98,
+          "orden": 100,
           "campo": "INARTICES",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 99,
+          "orden": 101,
           "campo": "INFINANCIA",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 100,
+          "orden": 102,
           "campo": "INASALDO",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 101,
+          "orden": 103,
           "campo": "INTRANSF",
           "tipo": "CHARACTER",
           "longitud": 19,
           "decimales": 0
         },
         {
-          "orden": 102,
+          "orden": 104,
           "campo": "INCPESO",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 103,
+          "orden": 105,
           "campo": "INMARCA",
           "tipo": "CHARACTER",
           "longitud": 16,
           "decimales": 0
         },
         {
-          "orden": 104,
+          "orden": 106,
           "campo": "INFRACC",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 5
         },
         {
-          "orden": 105,
+          "orden": 107,
           "campo": "INVLFRA",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 106,
+          "orden": 108,
           "campo": "INPRESEN",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 107,
+          "orden": 109,
           "campo": "INBLOQUEO",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 108,
+          "orden": 110,
           "campo": "INVTACOS",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 109,
+          "orden": 111,
           "campo": "VTA01",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 110,
+          "orden": 112,
           "campo": "VTA02",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 111,
+          "orden": 113,
           "campo": "VTA03",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 112,
+          "orden": 114,
           "campo": "VTA04",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 113,
+          "orden": 115,
           "campo": "VTA05",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 114,
+          "orden": 116,
           "campo": "VTA06",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 115,
+          "orden": 117,
           "campo": "VTA07",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 116,
+          "orden": 118,
           "campo": "VTA08",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 117,
+          "orden": 119,
           "campo": "VTA09",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 118,
+          "orden": 120,
           "campo": "VTA10",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 119,
+          "orden": 121,
           "campo": "VTA11",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 120,
+          "orden": 122,
           "campo": "VTA12",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 121,
+          "orden": 123,
           "campo": "VTA13",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 122,
+          "orden": 124,
           "campo": "INACTIVO",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 123,
+          "orden": 125,
           "campo": "INFECHA",
           "tipo": "INTEGER",
           "longitud": 4,
           "decimales": 0
         },
         {
-          "orden": 124,
+          "orden": 126,
           "campo": "INBLOCOM",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 125,
+          "orden": 127,
           "campo": "INAPLIDCTO",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 126,
+          "orden": 128,
           "campo": "INPTOPOS",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 127,
+          "orden": 129,
           "campo": "INEAN14",
           "tipo": "CHARACTER",
           "longitud": 14,
           "decimales": 0
         },
         {
-          "orden": 128,
+          "orden": 130,
           "campo": "INTIPOFRA",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 129,
+          "orden": 131,
           "campo": "INPROTOR",
           "tipo": "CHARACTER",
           "longitud": 40,
           "decimales": 0
         },
         {
-          "orden": 130,
+          "orden": 132,
           "campo": "INCUM",
           "tipo": "CHARACTER",
           "longitud": 18,
           "decimales": 0
         },
         {
-          "orden": 131,
+          "orden": 133,
           "campo": "ININVIMA",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 132,
+          "orden": 134,
           "campo": "INMARCAP",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 133,
+          "orden": 135,
           "campo": "INNOMBRE4",
           "tipo": "CHARACTER",
           "longitud": 100,
           "decimales": 0
         },
         {
-          "orden": 134,
+          "orden": 136,
           "campo": "INWEB",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 135,
+          "orden": 137,
           "campo": "INFCHREG",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 136,
+          "orden": 138,
           "campo": "INGARANTIA",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 137,
+          "orden": 139,
           "campo": "INARTOFER",
           "tipo": "CHARACTER",
           "longitud": 19,
           "decimales": 0
         },
         {
-          "orden": 138,
+          "orden": 140,
           "campo": "INSUBEPRE",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 139,
+          "orden": 141,
           "campo": "INREGIMPC",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 140,
+          "orden": 142,
           "campo": "INSALDOWEB",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 141,
+          "orden": 143,
           "campo": "INGSALWEB",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 142,
+          "orden": 144,
           "campo": "INBOTONG",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 143,
+          "orden": 145,
           "campo": "INDCTO3X2",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 144,
+          "orden": 146,
           "campo": "INIMPCOSTO",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 145,
+          "orden": 147,
           "campo": "INTIENDAB",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 146,
+          "orden": 148,
           "campo": "INCCOSTO",
           "tipo": "CHARACTER",
           "longitud": 7,
           "decimales": 0
         },
         {
-          "orden": 147,
+          "orden": 149,
           "campo": "INCOSIVA",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 148,
-          "campo": "INCOSNIIF",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 149,
-          "campo": "INSALNIIF",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
           "orden": 150,
-          "campo": "INVALNIIF",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 151,
-          "campo": "INROTNIIF",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 152,
-          "campo": "INCANNIIF",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 153,
-          "campo": "NIFCOSTO00",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 154,
-          "campo": "NIFEV01",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 155,
-          "campo": "NIFSV01",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 156,
-          "campo": "NIFEV02",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 157,
-          "campo": "NIFSV02",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 158,
-          "campo": "NIFEV03",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 159,
-          "campo": "NIFSV03",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 160,
-          "campo": "NIFEV04",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 161,
-          "campo": "NIFSV04",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 162,
-          "campo": "NIFEV05",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 163,
-          "campo": "NIFSV05",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 164,
-          "campo": "NIFEV06",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 165,
-          "campo": "NIFSV06",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 166,
-          "campo": "NIFEV07",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 167,
-          "campo": "NIFSV07",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 168,
-          "campo": "NIFEV08",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 169,
-          "campo": "NIFSV08",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 170,
-          "campo": "NIFEV09",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 171,
-          "campo": "NIFSV09",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 172,
-          "campo": "NIFEV10",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 173,
-          "campo": "NIFSV10",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 174,
-          "campo": "NIFEV11",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 175,
-          "campo": "NIFSV11",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 176,
-          "campo": "NIFEV12",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 177,
-          "campo": "NIFSV12",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 178,
-          "campo": "NIFEV13",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 179,
-          "campo": "NIFSV13",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 0
-        },
-        {
-          "orden": 180,
           "campo": "MODI1",
           "tipo": "CHARACTER",
           "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 181,
+          "orden": 151,
           "campo": "MODI2",
           "tipo": "CHARACTER",
           "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 182,
+          "orden": 152,
           "campo": "MODI3",
           "tipo": "CHARACTER",
           "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 183,
+          "orden": 153,
           "campo": "MODI4",
           "tipo": "CHARACTER",
           "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 184,
+          "orden": 154,
           "campo": "MODI5",
           "tipo": "CHARACTER",
           "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 185,
+          "orden": 155,
           "campo": "INEMBALAJE2",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 186,
+          "orden": 156,
           "campo": "INPORIMC",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 187,
+          "orden": 157,
           "campo": "INFAMIS",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 188,
+          "orden": 158,
           "campo": "INGANAN4",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 189,
+          "orden": 159,
           "campo": "INGANAN5",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 190,
+          "orden": 160,
           "campo": "INGANAN6",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 191,
+          "orden": 161,
           "campo": "INGANAN7",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 192,
+          "orden": 162,
           "campo": "INGANAN8",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 193,
+          "orden": 163,
           "campo": "INGANAN9",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 3
         },
         {
-          "orden": 194,
+          "orden": 164,
           "campo": "DESMAR1",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 195,
+          "orden": 165,
           "campo": "DESMAR2",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 196,
+          "orden": 166,
           "campo": "DESMAR3",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 197,
+          "orden": 167,
           "campo": "DESMAR4",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 198,
+          "orden": 168,
           "campo": "DESMAR5",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 199,
+          "orden": 169,
           "campo": "DESMAR6",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 200,
+          "orden": 170,
           "campo": "DESMAR7",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 201,
+          "orden": 171,
           "campo": "DESMAR8",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 202,
+          "orden": 172,
           "campo": "DESMAR9",
           "tipo": "CHARACTER",
           "longitud": 30,
           "decimales": 0
         },
         {
-          "orden": 203,
+          "orden": 173,
           "campo": "SACATWEB",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 204,
+          "orden": 174,
           "campo": "INALTO",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 205,
+          "orden": 175,
           "campo": "INANCHO",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 206,
+          "orden": 176,
           "campo": "INLARGO",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 207,
+          "orden": 177,
           "campo": "INACTI1",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 208,
+          "orden": 178,
           "campo": "INACTI2",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 209,
+          "orden": 179,
           "campo": "INACTI3",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 210,
+          "orden": 180,
           "campo": "INACTI4",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 211,
+          "orden": 181,
           "campo": "INACTI5",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 212,
+          "orden": 182,
           "campo": "INAPP",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 213,
+          "orden": 183,
           "campo": "INESCA",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
-          "orden": 214,
+          "orden": 184,
           "campo": "INACTI6",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 215,
+          "orden": 185,
           "campo": "INACTI7",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 216,
+          "orden": 186,
           "campo": "INACTI8",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 217,
+          "orden": 187,
           "campo": "INACTI9",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 218,
+          "orden": 188,
           "campo": "INACTI10",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 219,
+          "orden": 189,
           "campo": "INOPLOG",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 220,
+          "orden": 190,
           "campo": "INVTACAF",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 221,
+          "orden": 191,
           "campo": "INFINVIMA",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 222,
+          "orden": 192,
           "campo": "INWEBSER",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 223,
+          "orden": 193,
           "campo": "INR1",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 224,
+          "orden": 194,
           "campo": "INR2",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 225,
+          "orden": 195,
           "campo": "INR3",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 226,
+          "orden": 196,
           "campo": "INR4",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 227,
+          "orden": 197,
           "campo": "INR5",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 228,
+          "orden": 198,
           "campo": "INDOMICOM",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 229,
+          "orden": 199,
           "campo": "INDOMIURL",
           "tipo": "CHARACTER",
           "longitud": 100,
           "decimales": 0
         },
         {
-          "orden": 230,
+          "orden": 200,
           "campo": "INIUM1",
           "tipo": "CHARACTER",
           "longitud": 15,
           "decimales": 0
         },
         {
-          "orden": 231,
+          "orden": 201,
           "campo": "INIUM2",
           "tipo": "CHARACTER",
           "longitud": 15,
           "decimales": 0
         },
         {
-          "orden": 232,
+          "orden": 202,
           "campo": "INIUM3",
           "tipo": "CHARACTER",
           "longitud": 15,
           "decimales": 0
         },
         {
-          "orden": 233,
+          "orden": 203,
           "campo": "INDOMIRAP",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 234,
+          "orden": 204,
           "campo": "ARTICDSI",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 235,
+          "orden": 205,
           "campo": "INCATE",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 236,
+          "orden": 206,
           "campo": "ETIDIG",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 237,
+          "orden": 207,
           "campo": "ETI_IDP",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 238,
+          "orden": 208,
           "campo": "ETI_PUM",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 239,
+          "orden": 209,
           "campo": "ETI_TEMPL1",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 240,
+          "orden": 210,
           "campo": "ETI_TEMPL2",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 241,
+          "orden": 211,
           "campo": "ETI_IDT",
           "tipo": "CHARACTER",
           "longitud": 20,
           "decimales": 0
         },
         {
-          "orden": 242,
+          "orden": 212,
           "campo": "ININACVER",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 243,
+          "orden": 213,
           "campo": "INETISEC",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 244,
+          "orden": 214,
           "campo": "INACTI11",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 245,
+          "orden": 215,
           "campo": "INACTI12",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 246,
+          "orden": 216,
           "campo": "INACTI13",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 247,
+          "orden": 217,
           "campo": "INACTI14",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 248,
+          "orden": 218,
           "campo": "INACTI15",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 249,
+          "orden": 219,
           "campo": "INACTI16",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 250,
+          "orden": 220,
           "campo": "INACTI17",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 251,
+          "orden": 221,
           "campo": "INACTI18",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 252,
+          "orden": 222,
           "campo": "INACTI19",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 253,
+          "orden": 223,
           "campo": "INACTI20",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 254,
+          "orden": 224,
           "campo": "INULTRAP",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 255,
+          "orden": 225,
           "campo": "INIMP4",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 256,
+          "orden": 226,
           "campo": "INMETCOMP",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 257,
+          "orden": 227,
           "campo": "INFCHVIGMC",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 258,
+          "orden": 228,
           "campo": "INCLACOMP",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 259,
+          "orden": 229,
           "campo": "INUMINIDES",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 260,
+          "orden": 230,
           "campo": "INABC",
           "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 261,
+          "orden": 231,
           "campo": "INRESERV",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 262,
+          "orden": 232,
           "campo": "INSEMANA",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
-          "orden": 263,
+          "orden": 233,
           "campo": "INPRONOSTI",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 264,
+          "orden": 234,
           "campo": "INSTOCKPR",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 265,
+          "orden": 235,
           "campo": "INLARGO14",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 266,
+          "orden": 236,
           "campo": "INANCHO14",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 267,
+          "orden": 237,
           "campo": "INALTO14",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 268,
+          "orden": 238,
           "campo": "INPESO14",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 0
         },
         {
-          "orden": 269,
+          "orden": 239,
           "campo": "INESTADO",
           "tipo": "CHARACTER",
           "longitud": 50,
           "decimales": 0
         },
         {
-          "orden": 270,
-          "campo": "ID",
-          "tipo": "?15",
-          "longitud": 4,
+          "orden": 240,
+          "campo": "INCATECO",
+          "tipo": "CHARACTER",
+          "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 271,
+          "orden": 241,
           "campo": "INANALI",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 272,
+          "orden": 242,
           "campo": "INCATCOM",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 273,
+          "orden": 243,
           "campo": "INCASACOM",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
+        },
+        {
+          "orden": 244,
+          "campo": "S01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 245,
+          "campo": "S02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 246,
+          "campo": "S03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 247,
+          "campo": "S04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 248,
+          "campo": "S05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 249,
+          "campo": "S06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 250,
+          "campo": "S07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 251,
+          "campo": "S08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 252,
+          "campo": "S09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 253,
+          "campo": "S10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 254,
+          "campo": "S11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 255,
+          "campo": "S12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 256,
+          "campo": "S13",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 257,
+          "campo": "S14",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 258,
+          "campo": "S15",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 259,
+          "campo": "S16",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 260,
+          "campo": "S17",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 261,
+          "campo": "S18",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 262,
+          "campo": "S19",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 263,
+          "campo": "S20",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 264,
+          "campo": "S21",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 265,
+          "campo": "S22",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 266,
+          "campo": "S23",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 267,
+          "campo": "S24",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 268,
+          "campo": "S25",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 269,
+          "campo": "S26",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 270,
+          "campo": "S27",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 271,
+          "campo": "S28",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 272,
+          "campo": "S29",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 273,
+          "campo": "S30",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 274,
+          "campo": "S31",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 275,
+          "campo": "S32",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 276,
+          "campo": "S33",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 277,
+          "campo": "S34",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 278,
+          "campo": "S35",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 279,
+          "campo": "S36",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 280,
+          "campo": "S37",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 281,
+          "campo": "S38",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 282,
+          "campo": "S39",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 283,
+          "campo": "S40",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 284,
+          "campo": "S41",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 285,
+          "campo": "S42",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 286,
+          "campo": "S43",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 287,
+          "campo": "S44",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 288,
+          "campo": "S45",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 289,
+          "campo": "S46",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 290,
+          "campo": "S47",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 291,
+          "campo": "S48",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 292,
+          "campo": "S49",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 293,
+          "campo": "S50",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 294,
+          "campo": "S51",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 295,
+          "campo": "S52",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 296,
+          "campo": "S53",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
         }
       ],
-      "suma_bytes": 2430
+      "suma_bytes": 2614
     },
     {
-      "tabla": "VISDOCUM",
+      "tabla": "TIDSUCUR",
       "campos": [
         {
           "orden": 1,
-          "campo": "CODIGO",
+          "campo": "SUCURSAL",
           "tipo": "CHARACTER",
-          "longitud": 2,
+          "longitud": 3,
           "decimales": 0
         },
         {
           "orden": 2,
-          "campo": "NOMBRE",
+          "campo": "CTNOMBRE",
           "tipo": "CHARACTER",
-          "longitud": 25,
+          "longitud": 20,
           "decimales": 0
         },
         {
           "orden": 3,
-          "campo": "MODULO",
-          "tipo": "SHORTINT",
-          "longitud": 2,
+          "campo": "CTDIREC",
+          "tipo": "CHARACTER",
+          "longitud": 30,
           "decimales": 0
         },
         {
           "orden": 4,
-          "campo": "TIPO",
+          "campo": "CTANOANT",
           "tipo": "CHARACTER",
-          "longitud": 10,
+          "longitud": 2,
           "decimales": 0
         },
         {
           "orden": 5,
-          "campo": "CONSE",
-          "tipo": "INTEGER",
-          "longitud": 4,
+          "campo": "MARCA",
+          "tipo": "CHARACTER",
+          "longitud": 1,
           "decimales": 0
         },
         {
           "orden": 6,
-          "campo": "MODICONSE",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "CANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 7,
-          "campo": "GMORA",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "CANT2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 8,
-          "campo": "FPAGO",
-          "tipo": "LOGICAL",
+          "campo": "CARGA",
+          "tipo": "CHARACTER",
           "longitud": 1,
           "decimales": 0
         },
         {
           "orden": 9,
-          "campo": "DOCOFI",
-          "tipo": "LOGICAL",
-          "longitud": 1,
+          "campo": "CARPETA",
+          "tipo": "CHARACTER",
+          "longitud": 40,
           "decimales": 0
         },
         {
           "orden": 10,
-          "campo": "MODICOS",
-          "tipo": "LOGICAL",
-          "longitud": 1,
+          "campo": "CTNPED",
+          "tipo": "INTEGER",
+          "longitud": 4,
           "decimales": 0
         },
         {
           "orden": 11,
-          "campo": "CONVER",
-          "tipo": "LOGICAL",
-          "longitud": 1,
+          "campo": "SUCUR2",
+          "tipo": "CHARACTER",
+          "longitud": 3,
           "decimales": 0
         },
         {
           "orden": 12,
-          "campo": "DOCCONVER",
+          "campo": "CLACOMP",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 121
+    },
+    {
+      "tabla": "TIDTAB",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "CTABCOD",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "CTABDES",
+          "tipo": "CHARACTER",
+          "longitud": 45,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "LINEA",
+          "tipo": "CHARACTER",
+          "longitud": 3,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "CTABCOD1",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "NUMERO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "MAXDCTO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 7,
+          "campo": "RETENCION",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
+          "orden": 8,
+          "campo": "VENTAS01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 9,
+          "campo": "VENTAS02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 10,
+          "campo": "VENTAS03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 11,
+          "campo": "VENTAS04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 12,
+          "campo": "VENTAS05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
           "orden": 13,
-          "campo": "VALORA",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "VENTAS06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 14,
-          "campo": "VLRCOS",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "VENTAS07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 15,
-          "campo": "TRASLADO",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "VENTAS08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 16,
-          "campo": "ICXP",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "VENTAS09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 17,
-          "campo": "ICONTAB",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "VENTAS10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 18,
-          "campo": "SUGECOS",
-          "tipo": "SHORTINT",
-          "longitud": 2,
-          "decimales": 0
+          "campo": "VENTAS11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 19,
-          "campo": "GRABASAL",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "VENTAS12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 20,
-          "campo": "REPETI",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
+          "campo": "VENTAS13",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 21,
-          "campo": "VLRVTA",
+          "campo": "ESCALAS",
           "tipo": "SHORTINT",
           "longitud": 2,
           "decimales": 0
         },
         {
           "orden": 22,
-          "campo": "NIMP1",
+          "campo": "CODIGO",
           "tipo": "CHARACTER",
-          "longitud": 25,
+          "longitud": 12,
           "decimales": 0
         },
         {
           "orden": 23,
-          "campo": "IMP1",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 2
+          "campo": "DIAS",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
         },
         {
           "orden": 24,
-          "campo": "RET1",
-          "tipo": "DOUBLE",
-          "longitud": 8,
-          "decimales": 2
+          "campo": "DIAS2",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
         },
         {
           "orden": 25,
-          "campo": "NRET1",
-          "tipo": "CHARACTER",
-          "longitud": 25,
+          "campo": "DIAS3",
+          "tipo": "SHORTINT",
+          "longitud": 2,
           "decimales": 0
         },
         {
           "orden": 26,
-          "campo": "RET2",
+          "campo": "DIAS4",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 27,
+          "campo": "PRE01C",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 27,
-          "campo": "NRET2",
-          "tipo": "CHARACTER",
-          "longitud": 25,
-          "decimales": 0
-        },
-        {
           "orden": 28,
-          "campo": "RET3",
+          "campo": "PRE01V",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
           "orden": 29,
-          "campo": "NRET3",
-          "tipo": "CHARACTER",
-          "longitud": 25,
-          "decimales": 0
+          "campo": "PRE02C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 30,
-          "campo": "RET4",
+          "campo": "PRE02V",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
           "orden": 31,
-          "campo": "NRET4",
-          "tipo": "CHARACTER",
-          "longitud": 25,
-          "decimales": 0
+          "campo": "PRE03C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 32,
-          "campo": "NOM01",
-          "tipo": "CHARACTER",
-          "longitud": 20,
-          "decimales": 0
+          "campo": "PRE03V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 33,
-          "campo": "DEB01",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE04C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 34,
-          "campo": "CRE01",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE04V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 35,
-          "campo": "NOM02",
-          "tipo": "CHARACTER",
-          "longitud": 20,
-          "decimales": 0
+          "campo": "PRE05C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 36,
-          "campo": "DEB02",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE05V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 37,
-          "campo": "CRE02",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE06C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 38,
-          "campo": "NOM03",
-          "tipo": "CHARACTER",
-          "longitud": 20,
-          "decimales": 0
+          "campo": "PRE06V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 39,
-          "campo": "DEB03",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE07C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 40,
-          "campo": "CRE03",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE07V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 41,
-          "campo": "NOM04",
-          "tipo": "CHARACTER",
-          "longitud": 20,
-          "decimales": 0
+          "campo": "PRE08C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 42,
-          "campo": "DEB04",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE08V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 43,
-          "campo": "CRE04",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE09C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 44,
-          "campo": "NOM05",
-          "tipo": "CHARACTER",
-          "longitud": 20,
-          "decimales": 0
+          "campo": "PRE09V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 45,
-          "campo": "DEB05",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE10C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 46,
-          "campo": "CRE05",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE10V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 47,
-          "campo": "NOM06",
-          "tipo": "CHARACTER",
-          "longitud": 20,
-          "decimales": 0
+          "campo": "PRE11C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 48,
-          "campo": "DEB06",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE11V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 49,
-          "campo": "CRE06",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
+          "campo": "PRE12C",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 50,
-          "campo": "NOM07",
-          "tipo": "CHARACTER",
-          "longitud": 20,
-          "decimales": 0
+          "campo": "PRE12V",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
         },
         {
           "orden": 51,
-          "campo": "DEB07",
+          "campo": "INVE",
           "tipo": "CHARACTER",
-          "longitud": 12,
+          "longitud": 1,
           "decimales": 0
         },
         {
           "orden": 52,
-          "campo": "CRE07",
+          "campo": "CCOSTO",
           "tipo": "CHARACTER",
-          "longitud": 12,
+          "longitud": 7,
           "decimales": 0
         },
         {
           "orden": 53,
-          "campo": "NOM08",
-          "tipo": "CHARACTER",
-          "longitud": 20,
-          "decimales": 0
-        },
-        {
-          "orden": 54,
-          "campo": "DEB08",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
-        },
-        {
-          "orden": 55,
-          "campo": "CRE08",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
-        },
-        {
-          "orden": 56,
-          "campo": "DEB09",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
-        },
-        {
-          "orden": 57,
-          "campo": "CRE09",
-          "tipo": "CHARACTER",
-          "longitud": 12,
-          "decimales": 0
-        },
-        {
-          "orden": 58,
-          "campo": "COMPRO",
+          "campo": "CTIPDOC",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
+          "orden": 54,
+          "campo": "CTSERIAL",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 55,
+          "campo": "CTAGRUP",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 56,
+          "campo": "CTWEB",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 57,
+          "campo": "BORRAR",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 58,
+          "campo": "CPARTE",
+          "tipo": "CHARACTER",
+          "longitud": 13,
+          "decimales": 0
+        },
+        {
           "orden": 59,
-          "campo": "BANCOS",
+          "campo": "CTSUBSI",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
           "orden": 60,
+          "campo": "CESTAETI",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 61,
+          "campo": "CCODNPUM",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 62,
+          "campo": "CACUVLR",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 63,
+          "campo": "CACUIVA",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 64,
+          "campo": "CACUCANT",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 65,
+          "campo": "DIASINVEM",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 66,
+          "campo": "BONI1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 67,
+          "campo": "BONI2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 68,
+          "campo": "BONI3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 69,
+          "campo": "PORCEN1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 70,
+          "campo": "PORCEN2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 71,
+          "campo": "PORCEN3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 72,
+          "campo": "BONFCHI",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 73,
+          "campo": "BONFCHF",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 544
+    },
+    {
+      "tabla": "VEDCOM",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "CVVENDEDOR",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "CVTIPO",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "CVFACTURA",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "CVRECIBO",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "CVCLIENTE",
+          "tipo": "CHARACTER",
+          "longitud": 13,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "CVFCHFAC",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "CVBRUFAC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 8,
+          "campo": "CVVLRBASE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 9,
+          "campo": "CVPORCOM",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 10,
+          "campo": "CVVLRCOM",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 11,
+          "campo": "CVVLRBASE2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 84
+    },
+    {
+      "tabla": "VEDCUOTA",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "CODIGO",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "CARTIC",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "CNOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "CCUOTA01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 5,
+          "campo": "CVTA01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 6,
+          "campo": "CCUOTA02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 7,
+          "campo": "CVTA02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 8,
+          "campo": "CCUOTA03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 9,
+          "campo": "CVTA03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 10,
+          "campo": "CCUOTA04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 11,
+          "campo": "CVTA04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 12,
+          "campo": "CCUOTA05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 13,
+          "campo": "CVTA05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 14,
+          "campo": "CCUOTA06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 15,
+          "campo": "CVTA06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 16,
+          "campo": "CCUOTA07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 17,
+          "campo": "CVTA07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 18,
+          "campo": "CCUOTA08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 19,
+          "campo": "CVTA08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 20,
+          "campo": "CCUOTA09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 21,
+          "campo": "CVTA09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 22,
+          "campo": "CCUOTA10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 23,
+          "campo": "CVTA10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 24,
+          "campo": "CCUOTA11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 25,
+          "campo": "CVTA11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 26,
+          "campo": "CCUOTA12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 27,
+          "campo": "CVTA12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 28,
+          "campo": "CCUOTA13",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 29,
+          "campo": "CVTA13",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        }
+      ],
+      "suma_bytes": 251
+    },
+    {
+      "tabla": "VEDTAB",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "VCODIGO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "VGRUPO",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "VPORCENV",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 4,
+          "campo": "VDIAS1",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "VPOREDAD1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 6,
+          "campo": "VDIAS2",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "VPOREDAD2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 8,
+          "campo": "VDIAS3",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "VPOREDAD3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 10,
+          "campo": "VDIAS4",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "VPOREDAD4",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "VMAXDCTO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "VCOMPARTE",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "SEGUNDOV",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 81
+    },
+    {
+      "tabla": "VEDVEN",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "VCODIGO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "VCEDULA",
+          "tipo": "CHARACTER",
+          "longitud": 15,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "VNOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "VDIRECCION",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "VCIUDAD",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "VTELEF",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "VFCHING",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "VFCHRET",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "VCAUSALRET",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "VPORCOMVEN",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 11,
+          "campo": "VPORCOMREC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 12,
+          "campo": "VALOR",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 13,
+          "campo": "DIAS1",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "DIAS2",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 15,
+          "campo": "DIAS3",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 16,
+          "campo": "DIAS4",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 17,
+          "campo": "VCLAVE",
+          "tipo": "CHARACTER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 18,
+          "campo": "VDCTOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 19,
+          "campo": "ANALISTA",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 20,
+          "campo": "VRUTA01",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 21,
+          "campo": "VRUTA02",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 22,
+          "campo": "VRUTA03",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 23,
+          "campo": "VRUTA04",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 24,
+          "campo": "VRUTA05",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 25,
+          "campo": "VRUTA06",
+          "tipo": "CHARACTER",
+          "longitud": 6,
+          "decimales": 0
+        },
+        {
+          "orden": 26,
+          "campo": "VRUTA07",
+          "tipo": "CHARACTER",
+          "longitud": 7,
+          "decimales": 0
+        },
+        {
+          "orden": 27,
+          "campo": "VPRE01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 28,
+          "campo": "VPRE02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 29,
+          "campo": "VPRE03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 30,
+          "campo": "VPRE04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 31,
+          "campo": "VPRE05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 32,
+          "campo": "VPRE06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 33,
+          "campo": "VPRE07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 34,
+          "campo": "VPRE08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 35,
+          "campo": "VPRE09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 36,
+          "campo": "VPRE10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 37,
+          "campo": "VPRE11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 38,
+          "campo": "VPRE12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 39,
+          "campo": "VEJE01",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 40,
+          "campo": "VEJE02",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 41,
+          "campo": "VEJE03",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 42,
+          "campo": "VEJE04",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 43,
+          "campo": "VEJE05",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 44,
+          "campo": "VEJE06",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 45,
+          "campo": "VEJE07",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 46,
+          "campo": "VEJE08",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 47,
+          "campo": "VEJE09",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 48,
+          "campo": "VEJE10",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 49,
+          "campo": "VEJE11",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 50,
+          "campo": "VEJE12",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 399
+    },
+    {
+      "tabla": "VISBODE",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "SUC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "CCOSTO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "CNOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 30,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "CNIVEL",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "CFLAG",
+          "tipo": "CHARACTER",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "SALDOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 7,
+          "campo": "COSTOS",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 8,
+          "campo": "PROMEDIO",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 9,
+          "campo": "BANO",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "FACTURA",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "INVE",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "ASALDO",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        }
+      ],
+      "suma_bytes": 71
+    },
+    {
+      "tabla": "VISDOCUM",
+      "campos": [
+        {
+          "orden": 1,
+          "campo": "SUC",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 0
+        },
+        {
+          "orden": 2,
+          "campo": "CODIGO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 3,
+          "campo": "NOMBRE",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 4,
+          "campo": "MODULO",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 5,
+          "campo": "TIPO",
+          "tipo": "CHARACTER",
+          "longitud": 10,
+          "decimales": 0
+        },
+        {
+          "orden": 6,
+          "campo": "CONSE",
+          "tipo": "INTEGER",
+          "longitud": 4,
+          "decimales": 0
+        },
+        {
+          "orden": 7,
+          "campo": "MODICONSE",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 8,
+          "campo": "GMORA",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 9,
+          "campo": "FPAGO",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 10,
+          "campo": "DOCOFI",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 11,
+          "campo": "MODICOS",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 12,
+          "campo": "CONVER",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 13,
+          "campo": "DOCCONVER",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 14,
+          "campo": "VALORA",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 15,
+          "campo": "VLRCOS",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 16,
+          "campo": "TRASLADO",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 17,
+          "campo": "ICXP",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 18,
+          "campo": "ICONTAB",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 19,
+          "campo": "SUGECOS",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 20,
+          "campo": "GRABASAL",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 21,
+          "campo": "REPETI",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 22,
+          "campo": "VLRVTA",
+          "tipo": "SHORTINT",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 23,
+          "campo": "NIMP1",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 24,
+          "campo": "IMP1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 25,
+          "campo": "RET1",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 26,
+          "campo": "NRET1",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 27,
+          "campo": "RET2",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 28,
+          "campo": "NRET2",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 29,
+          "campo": "RET3",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 30,
+          "campo": "NRET3",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 31,
+          "campo": "RET4",
+          "tipo": "DOUBLE",
+          "longitud": 8,
+          "decimales": 2
+        },
+        {
+          "orden": 32,
+          "campo": "NRET4",
+          "tipo": "CHARACTER",
+          "longitud": 25,
+          "decimales": 0
+        },
+        {
+          "orden": 33,
+          "campo": "NOM01",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 34,
+          "campo": "DEB01",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 35,
+          "campo": "CRE01",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 36,
+          "campo": "NOM02",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 37,
+          "campo": "DEB02",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 38,
+          "campo": "CRE02",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 39,
+          "campo": "NOM03",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 40,
+          "campo": "DEB03",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 41,
+          "campo": "CRE03",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 42,
+          "campo": "NOM04",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 43,
+          "campo": "DEB04",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 44,
+          "campo": "CRE04",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 45,
+          "campo": "NOM05",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 46,
+          "campo": "DEB05",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 47,
+          "campo": "CRE05",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 48,
+          "campo": "NOM06",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 49,
+          "campo": "DEB06",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 50,
+          "campo": "CRE06",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 51,
+          "campo": "NOM07",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 52,
+          "campo": "DEB07",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 53,
+          "campo": "CRE07",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 54,
+          "campo": "NOM08",
+          "tipo": "CHARACTER",
+          "longitud": 20,
+          "decimales": 0
+        },
+        {
+          "orden": 55,
+          "campo": "DEB08",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 56,
+          "campo": "CRE08",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 57,
+          "campo": "DEB09",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 58,
+          "campo": "CRE09",
+          "tipo": "CHARACTER",
+          "longitud": 12,
+          "decimales": 0
+        },
+        {
+          "orden": 59,
+          "campo": "COMPRO",
+          "tipo": "CHARACTER",
+          "longitud": 2,
+          "decimales": 0
+        },
+        {
+          "orden": 60,
+          "campo": "BANCOS",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
+          "orden": 61,
           "campo": "CCOSTO",
           "tipo": "CHARACTER",
           "longitud": 5,
           "decimales": 0
         },
         {
-          "orden": 61,
+          "orden": 62,
           "campo": "INTERES",
           "tipo": "DOUBLE",
           "longitud": 8,
           "decimales": 2
         },
         {
-          "orden": 62,
+          "orden": 63,
           "campo": "ARETEN",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 63,
+          "orden": 64,
           "campo": "AREPITE",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 64,
+          "orden": 65,
           "campo": "MODIIMP",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 65,
+          "orden": 66,
           "campo": "LEETRAS",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 66,
+          "orden": 67,
           "campo": "CXPCONCE",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 67,
+          "orden": 68,
           "campo": "CTRPROVE",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 68,
+          "orden": 69,
           "campo": "DISTRICC",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 69,
+          "orden": 70,
           "campo": "DCTO2",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 70,
+          "orden": 71,
           "campo": "DOCAFE",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 71,
+          "orden": 72,
           "campo": "BLOLOTE",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 72,
+          "orden": 73,
           "campo": "EXTRALO",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 73,
+          "orden": 74,
           "campo": "VERIIMP",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 74,
+          "orden": 75,
           "campo": "RECON",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 75,
+          "orden": 76,
           "campo": "PREFIJO",
           "tipo": "CHARACTER",
           "longitud": 3,
           "decimales": 0
         },
         {
-          "orden": 76,
+          "orden": 77,
           "campo": "AUTORIZA",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 77,
+          "orden": 78,
           "campo": "CEROSCV",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 78,
+          "orden": 79,
           "campo": "FECHADOC",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 79,
+          "orden": 80,
           "campo": "ANULROJO",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 80,
+          "orden": 81,
           "campo": "RUBRO",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 81,
+          "orden": 82,
           "campo": "CLAVE",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 82,
+          "orden": 83,
           "campo": "CLAVE2",
           "tipo": "CHARACTER",
           "longitud": 10,
           "decimales": 0
         },
         {
-          "orden": 83,
+          "orden": 84,
           "campo": "MOVBLOQ",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
-          "orden": 84,
-          "campo": "ASISAL",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
-        },
-        {
           "orden": 85,
-          "campo": "VALDIAN",
-          "tipo": "LOGICAL",
-          "longitud": 1,
-          "decimales": 0
-        },
-        {
-          "orden": 86,
           "campo": "BODEGA",
           "tipo": "CHARACTER",
           "longitud": 2,
           "decimales": 0
         },
         {
+          "orden": 86,
+          "campo": "ASISAL",
+          "tipo": "LOGICAL",
+          "longitud": 1,
+          "decimales": 0
+        },
+        {
           "orden": 87,
-          "campo": "SGASTOS",
+          "campo": "VALDIAN",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
         },
         {
           "orden": 88,
-          "campo": "NOIMP",
+          "campo": "SGASTOS",
           "tipo": "LOGICAL",
           "longitud": 1,
           "decimales": 0
-        },
-        {
-          "orden": 89,
-          "campo": "ID",
-          "tipo": "?15",
-          "longitud": 4,
-          "decimales": 0
         }
       ],
-      "suma_bytes": 662
+      "suma_bytes": 665
     },
     {
       "tabla": "__CATALOGO2",

@@ -1,4 +1,6 @@
 /ADD_CONTAB
+# Copia enriquecida del legado (~11 GB): fuente única, fuera de Git.
+/db/ADD_CONTAB/
 backend/.env
 backend/.venv/
 backend/.venv-respaldo-*/
