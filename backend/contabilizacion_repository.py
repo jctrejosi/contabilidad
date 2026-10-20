@@ -145,6 +145,9 @@ def _normalize_line(raw: dict[str, Any], number: int, concept: str) -> dict[str,
     third_party = str(raw.get("nit", "")).strip()
     cost_center = str(raw.get("centro", "")).strip()
     affected_document = str(raw.get("documentoAfectado", raw.get("docAfectado", ""))).strip()
+    line_concept = concept if raw.get('concepto') is None else str(raw['concepto']).strip()
+    if len(line_concept) > 105:
+        raise PostingValidationError(f'Línea {number}: el concepto supera 105 caracteres.')
     debit = _money(raw.get("debito"))
     credit = _money(raw.get("credito"))
     base = _money(raw.get("base"))
@@ -170,9 +173,9 @@ def _normalize_line(raw: dict[str, Any], number: int, concept: str) -> dict[str,
         "credito": credit,
         "base": base,
         "documentoAfectado": affected_document,
-        # Harbour graba el concepto de cada renglón. En Captura directa la
-        # cabecera se replica en todas las partidas para mantener coherencia.
-        "concepto": concept,
+        # Las partidas copiadas conservan su detalle; una captura sin concepto
+        # específico mantiene la herencia de cabecera por compatibilidad.
+        "concepto": line_concept,
     }
 
 

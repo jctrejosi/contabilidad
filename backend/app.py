@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Path, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import store
+from .captura_documento_origen_repository import buscar_documento_origen
 from .access_session import router as access_router
 from .medios_formatos_repository import (
     FormatoExiste, FormatoInvalido, FormatoNoExiste,
@@ -631,6 +632,9 @@ class DirectMovementLine(BaseModel):
     """Partida recibida desde Captura directa antes de escribir MOV01."""
 
     model_config = ConfigDict(extra="forbid")
+
+    # Opcional: las capturas anteriores siguen heredando el concepto general.
+    concepto: str | None = Field(None, max_length=105)
 
     cuenta: str = Field(pattern=r"^[0-9]{1,12}$")
     nit: str = Field("", max_length=15)
@@ -2326,6 +2330,22 @@ def documents(
     except Exception as exc:
         raise _service_error(exc) from exc
     return {**result, "source": "CONDOCUM", "sharedAcrossCompanies": False}
+
+
+@app.get('/api/captura/documento-origen', summary='Buscar documento para reutilizar sus partidas')
+def captura_documento_origen(
+    cia: str = Query(pattern=r'^[0-9]{1,3}$'),
+    anio: int = Query(ge=1900, le=9999),
+    mes: int = Query(ge=1, le=18),
+    documento: str = Query(min_length=1, max_length=12),
+    comprobante: str = Query(default='', max_length=6),
+    tipo_documento: str = Query(default='', alias='tipoDocumento', max_length=2),
+) -> dict[str, Any]:
+    try:
+        return {'items': buscar_documento_origen(cia, anio, mes, documento,
+                                                comprobante, tipo_documento)}
+    except Exception as exc:
+        raise _service_error(exc) from exc
 
 
 @app.get("/api/documentos/detalle", summary="Consultar las partidas de un documento")

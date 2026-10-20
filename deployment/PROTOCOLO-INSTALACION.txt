@@ -7,8 +7,9 @@ Windows, una tarea de arranque propia ni un acceso directo que la inicie.
 
 ANTES DE INSTALAR
 1. Servidor Windows de 64 bits. Preparar el paquete en Windows x64.
-2. Fortuner27 instalado con su iniciador portable start-fortuner.ps1,
-   Config/modules.json y Frontend. Node/npm ya debe funcionar para Fortuner.
+2. Fortuner27 instalado. Se admite tanto el modo portable de desarrollo con
+   start-fortuner.ps1 como la entrega compilada con backend/Fortuner27.exe,
+   INICIAR.ps1 y Config/modules.json. La entrega compilada no requiere Node.
 3. Advantage Data Server funcionando y conectores Advantage OLE DB y
    Advantage StreamlineSQL ODBC de 64 bits previamente instalados.
 4. Diccionario ADD, tablas, indices y catalogos reales disponibles.
@@ -35,8 +36,9 @@ El instalador realiza automaticamente:
 - Comprobacion de carga de la interfaz/API y lectura de tablas esenciales
   a traves de ADO/OLE DB y ADO/ODBC. Esta prueba no abre ningun puerto.
 - Registro del modulo contabilidad en la configuracion actual de Fortuner.
-- Incorporacion de un adaptador al iniciador portable de Fortuner.
-- Configuracion de la URL del modulo en el Frontend de Fortuner.
+- Incorporacion de un adaptador al iniciador portable o compilado de Fortuner.
+- Configuracion del puerto del modulo en Config/modules.json. El frontend
+  compilado obtiene esa URL dinamicamente y no requiere .env.local.
 - Regla de firewall del puerto web, solo en perfiles Privado/Dominio y
   para la subred local. No abre el puerto 8001 ni publica la base de datos.
 - Deshabilitacion de la tarea antigua de inicio autonomo de Contabilidad,
@@ -47,8 +49,9 @@ El instalador realiza automaticamente:
 Al finalizar debe mostrar: INSTALADO Y DETENIDO.
 
 INICIAR DESPUES DE INSTALAR
-Cuando corresponda, iniciar/reiniciar Fortuner con su entrada habitual
-Iniciar-Fortuner-Servidor.bat o su tarea que llama start-fortuner.ps1.
+Cuando corresponda, iniciar/reiniciar Fortuner con su entrada habitual:
+Iniciar-Fortuner-Servidor.bat en modo portable o ABRIR_APLICACION.cmd en la
+entrega compilada.
 Ese iniciador ejecutara el modulo instalado. La instalacion no lo ejecuta.
 No usar el antiguo Iniciar-servicios-DSI.bat como entrada del paquete:
 esa version de desarrollo contiene rutas fijas y arranques independientes.

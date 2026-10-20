@@ -7,7 +7,7 @@ if exist "%SystemRoot%\Sysnative\WindowsPowerShell\v1.0\powershell.exe" set "PS_
 set "INSTALL_RESULT=%ERRORLEVEL%"
 echo.
 if "%INSTALL_RESULT%"=="0" (
-    echo Instalacion terminada. Fortuner27 es quien inicia Contabilidad.
+    echo Instalacion terminada. Abra o reinicie Fortuner27 para iniciar Contabilidad.
 ) else (
     echo No se completo la instalacion. Revise el mensaje anterior.
 )

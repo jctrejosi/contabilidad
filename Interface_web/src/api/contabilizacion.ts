@@ -1,4 +1,5 @@
 export interface PartidaContabilizacion {
+  concepto?: string;
   cuenta: string;
   nit: string;
   centro: string;

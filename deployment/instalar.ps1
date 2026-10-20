@@ -58,6 +58,22 @@ exit 0
     return [regex]::Replace($Original, $pattern, $hook)
 }
 
+function Hook-CompiledText([string]$Original, [string]$ConfigurationPath) {
+    if ($Original.Contains('# BEGIN CONTABDSI27 COMPILED')) { return $Original }
+    $pattern = '(?m)^if \(-not \(Test-AppHealth\)\) \{\r?$'
+    if ([regex]::Matches($Original, $pattern).Count -ne 1) {
+        throw 'La version compilada de INICIAR.ps1 no es compatible con este instalador.'
+    }
+    $safeConfiguration = $ConfigurationPath.Replace("'", "''")
+    $hook = @"
+# BEGIN CONTABDSI27 COMPILED
+& (Join-Path `$root 'fortuner-contabilidad.ps1') -ConfigurationPath '$safeConfiguration'
+# END CONTABDSI27 COMPILED
+if (-not (Test-AppHealth)) {
+"@
+    return [regex]::Replace($Original, $pattern, $hook)
+}
+
 try {
     if (-not [Environment]::Is64BitOperatingSystem -or -not [Environment]::Is64BitProcess) {
         throw 'Ejecute el instalador con Windows PowerShell de 64 bits.'
@@ -121,26 +137,46 @@ try {
     }
     if (-not $FortunerRoot) {
         $candidates = @((Join-Path (Split-Path -Parent $PSScriptRoot) 'Fortuner27'), (Join-Path $env:ProgramData 'DSI\Fortuner27'), 'C:\DSI\Fortuner27')
-        $FortunerRoot = $candidates | Where-Object { Test-Path -LiteralPath (Join-Path $_ 'start-fortuner.ps1') } | Select-Object -First 1
+        $FortunerRoot = $candidates | Where-Object {
+            (Test-Path -LiteralPath (Join-Path $_ 'start-fortuner.ps1')) -or
+            (Test-Path -LiteralPath (Join-Path $_ 'backend\Fortuner27.exe'))
+        } | Select-Object -First 1
         if (-not $FortunerRoot) { $FortunerRoot = Read-Host 'Carpeta donde esta instalado Fortuner27' }
     }
     $FortunerRoot = [IO.Path]::GetFullPath($FortunerRoot)
     if ($InstallRoot -eq [IO.Path]::GetPathRoot($InstallRoot) -or $InstallRoot -eq $FortunerRoot -or $InstallRoot -eq $PSScriptRoot) { throw 'Seleccione una carpeta exclusiva para instalar Contabilidad.' }
-    $startPath = Join-Path $FortunerRoot 'start-fortuner.ps1'
-    if (-not (Test-Path -LiteralPath $startPath -PathType Leaf)) { throw 'No se encontro el iniciador portable de Fortuner27.' }
+    $portableStartPath = Join-Path $FortunerRoot 'start-fortuner.ps1'
+    $compiledStartPath = Join-Path $FortunerRoot 'INICIAR.ps1'
+    $compiledExecutable = Join-Path $FortunerRoot 'backend\Fortuner27.exe'
+    $portableFortuner = Test-Path -LiteralPath $portableStartPath -PathType Leaf
+    $compiledFortuner = (
+        (Test-Path -LiteralPath $compiledStartPath -PathType Leaf) -and
+        (Test-Path -LiteralPath $compiledExecutable -PathType Leaf)
+    )
+    if (-not $portableFortuner -and -not $compiledFortuner) {
+        throw 'La carpeta no contiene una instalacion compatible de Fortuner27.'
+    }
+    $startPath = if ($portableFortuner) { $portableStartPath } else { $compiledStartPath }
     $startText = [IO.File]::ReadAllText($startPath)
-    $newStartText = Hook-Text $startText
     if (-not $ModulesConfiguration) {
         $ModulesConfiguration = if ($env:FORTUNER_MODULES_CONFIG) { $env:FORTUNER_MODULES_CONFIG } else { Join-Path $FortunerRoot 'Config\modules.json' }
     }
     $ModulesConfiguration = [IO.Path]::GetFullPath($ModulesConfiguration)
-    $overrideLine = '$env:FORTUNER_MODULES_CONFIG = ' + "'" + $ModulesConfiguration.Replace("'", "''") + "' # CONTABDSI27 CONFIG PATH"
-    if ($newStartText.Contains('# CONTABDSI27 CONFIG PATH')) {
-        $newStartText = [regex]::Replace($newStartText, '(?m)^.*# CONTABDSI27 CONFIG PATH\s*$', [Text.RegularExpressions.MatchEvaluator]{ param($match) $overrideLine })
+    if (-not (Test-Path -LiteralPath $ModulesConfiguration -PathType Leaf)) {
+        throw "No se encontro la configuracion de modulos de Fortuner: $ModulesConfiguration"
+    }
+    if ($portableFortuner) {
+        $newStartText = Hook-Text $startText
+        $overrideLine = '$env:FORTUNER_MODULES_CONFIG = ' + "'" + $ModulesConfiguration.Replace("'", "''") + "' # CONTABDSI27 CONFIG PATH"
+        if ($newStartText.Contains('# CONTABDSI27 CONFIG PATH')) {
+            $newStartText = [regex]::Replace($newStartText, '(?m)^.*# CONTABDSI27 CONFIG PATH\s*$', [Text.RegularExpressions.MatchEvaluator]{ param($match) $overrideLine })
+        } else {
+            $configDeclaration = '(?m)^\$configurationPath = if \(\$env:FORTUNER_MODULES_CONFIG\) \{'
+            if ([regex]::Matches($newStartText, $configDeclaration).Count -ne 1) { throw 'El iniciador Fortuner no permite configurar el archivo de modulos automaticamente.' }
+            $newStartText = [regex]::Replace($newStartText, $configDeclaration, [Text.RegularExpressions.MatchEvaluator]{ param($match) $overrideLine + "`r`n" + $match.Value })
+        }
     } else {
-        $configDeclaration = '(?m)^\$configurationPath = if \(\$env:FORTUNER_MODULES_CONFIG\) \{'
-        if ([regex]::Matches($newStartText, $configDeclaration).Count -ne 1) { throw 'El iniciador Fortuner no permite configurar el archivo de modulos automaticamente.' }
-        $newStartText = [regex]::Replace($newStartText, $configDeclaration, [Text.RegularExpressions.MatchEvaluator]{ param($match) $overrideLine + "`r`n" + $match.Value })
+        $newStartText = Hook-CompiledText $startText $ModulesConfiguration
     }
     $modules = Get-Content -LiteralPath $ModulesConfiguration -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($modules.schemaVersion -ne 1) { throw 'La configuracion de Fortuner tiene una version incompatible.' }
@@ -152,9 +188,12 @@ try {
     }
     if (@($others | Where-Object { $_ -and [int]$_.port -eq $Port }).Count) { throw "Otro modulo de Fortuner tiene asignado el puerto $Port." }
     if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) { throw "El puerto $Port esta activo. Detenga Contabilidad desde su administrador antes de instalar o actualizar." }
-    Get-Command npm.cmd -ErrorAction Stop | Out-Null
-    $frontendEnv = Join-Path $FortunerRoot 'Frontend\.env.local'
-    if (-not (Test-Path -LiteralPath (Split-Path -Parent $frontendEnv) -PathType Container)) { throw 'Esta version del instalador requiere la carpeta Frontend de Fortuner27.' }
+    $frontendEnv = $null
+    if ($portableFortuner) {
+        Get-Command npm.cmd -ErrorAction Stop | Out-Null
+        $frontendEnv = Join-Path $FortunerRoot 'Frontend\.env.local'
+        if (-not (Test-Path -LiteralPath (Split-Path -Parent $frontendEnv) -PathType Container)) { throw 'Esta version del instalador requiere la carpeta Frontend de Fortuner27.' }
+    }
     if (-not $FortunerAccount) { $FortunerAccount = [Security.Principal.WindowsIdentity]::GetCurrent().Name }
     $accountIdentity = New-Object Security.Principal.NTAccount($FortunerAccount)
     $accountIdentity.Translate([Security.Principal.SecurityIdentifier]) | Out-Null
@@ -199,13 +238,15 @@ try {
     $changes = @(
         @{ Path=$startPath; Backup=(Join-Path $backup 'start-fortuner.ps1') },
         @{ Path=$ModulesConfiguration; Backup=(Join-Path $backup 'modules.json') },
-        @{ Path=$frontendEnv; Backup=(Join-Path $backup 'frontend.env.local') },
         @{ Path=(Join-Path $FortunerRoot 'fortuner-contabilidad.ps1'); Backup=(Join-Path $backup 'fortuner-contabilidad.ps1') },
         @{ Path=$configPath; Backup=(Join-Path $backup 'service.json') },
         @{ Path=$secretPath; Backup=(Join-Path $backup 'credentials.dpapi') },
         @{ Path=(Join-Path $InstallRoot 'package.json'); Backup=(Join-Path $backup 'package.json') },
         @{ Path=(Join-Path $InstallRoot 'installation.json'); Backup=(Join-Path $backup 'installation.json') }
     )
+    if ($frontendEnv) {
+        $changes += @{ Path=$frontendEnv; Backup=(Join-Path $backup 'frontend.env.local') }
+    }
     foreach ($change in $changes) {
         $change.Existed = Test-Path -LiteralPath $change.Path
         if ($change.Existed) { Copy-Item -LiteralPath $change.Path -Destination $change.Backup }
@@ -258,9 +299,11 @@ try {
         Write-Utf8 $startPath $newStartText
         $publicHost = if ($BindHost -in @('0.0.0.0','::')) { [Environment]::MachineName } else { $BindHost }
         $publicUrl = "http://${publicHost}:$Port/"
-        $envText = if (Test-Path -LiteralPath $frontendEnv) { [IO.File]::ReadAllText($frontendEnv) } else { '' }
-        $envText = [regex]::Replace($envText, '(?m)^VITE_CONTABILIDAD_URL=.*(?:\r?\n|$)', '')
-        Write-Utf8 $frontendEnv ($envText.TrimEnd() + "`r`nVITE_CONTABILIDAD_URL=$publicUrl`r`n")
+        if ($frontendEnv) {
+            $envText = if (Test-Path -LiteralPath $frontendEnv) { [IO.File]::ReadAllText($frontendEnv) } else { '' }
+            $envText = [regex]::Replace($envText, '(?m)^VITE_CONTABILIDAD_URL=.*(?:\r?\n|$)', '')
+            Write-Utf8 $frontendEnv ($envText.TrimEnd() + "`r`nVITE_CONTABILIDAD_URL=$publicUrl`r`n")
+        }
         if (-not $NoFirewall -and $BindHost -notin @('127.0.0.1','localhost','::1')) {
             $ruleName = "DSI-CONTABDSI27-$Port"
             if (-not (Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue)) {
@@ -278,7 +321,8 @@ try {
             $oldTaskEnabled = [bool]$oldTask.Settings.Enabled
             Disable-ScheduledTask -InputObject $oldTask | Out-Null
         }
-        Write-Utf8 (Join-Path $InstallRoot 'INSTALACION.txt') "Contabilidad instalada y detenida.`r`nVersion: $($manifest.version)`r`nInicio: Fortuner27 / Iniciar-Fortuner-Servidor.bat`r`nURL: $publicUrl`r`nRespaldo: $backup`r`n"
+        $fortunerEntry = if ($portableFortuner) { 'Iniciar-Fortuner-Servidor.bat' } else { 'ABRIR_APLICACION.cmd' }
+        Write-Utf8 (Join-Path $InstallRoot 'INSTALACION.txt') "Contabilidad instalada y detenida.`r`nVersion: $($manifest.version)`r`nInicio: Fortuner27 / $fortunerEntry`r`nURL: $publicUrl`r`nRespaldo: $backup`r`n"
         Write-Host "Instalado en: $InstallRoot" -ForegroundColor Green
         Write-Host "URL al iniciar desde Fortuner: $publicUrl"
         Write-Host 'ESTADO: INSTALADO Y DETENIDO. No se inicio ningun servicio.' -ForegroundColor Green
