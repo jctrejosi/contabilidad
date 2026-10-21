@@ -6,7 +6,8 @@ param(
     [ValidateRange(1,65535)][int]$Port = 8443,
     [string]$BindHost = '0.0.0.0',
     [switch]$NoFirewall,
-    [switch]$Plan
+    [switch]$Plan,
+    [switch]$ReconfigureConnection
 )
 # Un BAT ejecutado desde PowerShell 7 puede heredar su ruta de modulos.
 # Priorizar los modulos nativos evita cargar versiones incompatibles en 5.1.
@@ -75,6 +76,7 @@ if (-not (Test-AppHealth)) {
 }
 
 try {
+    if ($Plan -and $ReconfigureConnection) { throw 'No combine -Plan y -ReconfigureConnection. Use -Plan en configurar-conexion.ps1.' }
     if (-not [Environment]::Is64BitOperatingSystem -or -not [Environment]::Is64BitProcess) {
         throw 'Ejecute el instalador con Windows PowerShell de 64 bits.'
     }
@@ -88,7 +90,7 @@ try {
         if (-not $ModulesConfiguration) { $ModulesConfiguration = [string]$previousInstallation.modulesConfiguration }
         if (-not $FortunerAccount) { $FortunerAccount = [string]$previousInstallation.account }
         $previousSettingsPath = [string]$previousInstallation.configuration
-        if (Test-Path -LiteralPath $previousSettingsPath) {
+        if (-not $ReconfigureConnection -and (Test-Path -LiteralPath $previousSettingsPath)) {
             $previousSettings = Get-Content -Raw -LiteralPath $previousSettingsPath -Encoding UTF8 | ConvertFrom-Json
             if (-not $PSBoundParameters.ContainsKey('Port')) { $Port = [int]$previousSettings.port }
             if (-not $PSBoundParameters.ContainsKey('BindHost')) { $BindHost = [string]$previousSettings.bindHost }
@@ -113,6 +115,12 @@ try {
         if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ne $entry.sha256) {
             throw "El paquete esta incompleto o fue modificado: $($entry.path)"
         }
+    }
+    # Recuperacion desde el paquete: delegar en la MISMA utilidad sin ejecutar
+    # actualizacion, cambiar version, puerto, firewall ni configuracion Fortuner.
+    if ($ReconfigureConnection -and (Test-Path -LiteralPath $previousInstallationPath -PathType Leaf)) {
+        & (Join-Path $PSScriptRoot 'configurar-conexion.ps1') -InstallRoot $InstallRoot
+        exit $LASTEXITCODE
     }
     if ($Plan) {
         [ordered]@{ product='CONTABDSI27'; version=$manifest.version; destination=$InstallRoot;
@@ -207,7 +215,19 @@ try {
     $secretDirectory = Join-Path $InstallRoot 'config'
     $configPath = Join-Path $secretDirectory 'service.json'
     $secretPath = Join-Path $secretDirectory 'credentials.dpapi'
+    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+        $existingSettings = Get-Content -Raw -LiteralPath $configPath -Encoding UTF8 | ConvertFrom-Json
+        $relativeSecret = [string]$existingSettings.credentialsFile
+        if (-not $relativeSecret -or [IO.Path]::IsPathRooted($relativeSecret) -or $relativeSecret -match '(^|[\\/])\.\.([\\/]|$)') {
+            throw 'La ruta de credenciales de la instalacion no es valida.'
+        }
+        $secretPath = [IO.Path]::GetFullPath((Join-Path $secretDirectory $relativeSecret))
+        if (-not $secretPath.StartsWith($secretDirectory + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Las credenciales deben permanecer dentro de config.' }
+    }
     $hasConfiguration = (Test-Path -LiteralPath $configPath) -and (Test-Path -LiteralPath $secretPath)
+    if ((Test-Path -LiteralPath $previousInstallationPath -PathType Leaf) -and -not $hasConfiguration) {
+        throw 'La instalacion existente tiene una configuracion incompleta. Restaure su respaldo antes de actualizar.'
+    }
     $newSecrets = $null
     if (-not $hasConfiguration) {
         $source = Read-Host 'Ruta completa del diccionario Advantage (.add)'
@@ -244,6 +264,9 @@ try {
         @{ Path=(Join-Path $InstallRoot 'package.json'); Backup=(Join-Path $backup 'package.json') },
         @{ Path=(Join-Path $InstallRoot 'installation.json'); Backup=(Join-Path $backup 'installation.json') }
     )
+    foreach ($utility in @('Configurar-Conexion-Contabilidad27.bat','configurar-conexion.ps1','INSTALACION.txt')) {
+        $changes += @{ Path=(Join-Path $InstallRoot $utility); Backup=(Join-Path $backup $utility) }
+    }
     if ($frontendEnv) {
         $changes += @{ Path=$frontendEnv; Backup=(Join-Path $backup 'frontend.env.local') }
     }
@@ -257,6 +280,9 @@ try {
     $oldTaskEnabled = $false
     $oldTask = $null
     try {
+        foreach ($utility in @('Configurar-Conexion-Contabilidad27.bat','configurar-conexion.ps1')) {
+            Copy-Item -LiteralPath (Join-Path $PSScriptRoot $utility) -Destination (Join-Path $InstallRoot $utility) -Force
+        }
         $payloadRoot = Join-Path $PSScriptRoot 'payload\Contabilidad27'
         foreach ($file in Get-ChildItem -LiteralPath $payloadRoot -Recurse -File -Force) {
             $relative = $file.FullName.Substring($payloadRoot.Length + 1)
@@ -277,7 +303,16 @@ try {
             [Array]::Clear($bytes, 0, $bytes.Length)
             $plain = $null; $newSecrets = $null
         }
-        $settings = [ordered]@{ schemaVersion=1; bindHost=$BindHost; port=$Port; credentialsFile='credentials.dpapi'; logDirectory=(Join-Path $InstallRoot 'logs') }
+        if ($hasConfiguration) {
+            # Conservar tambien opciones de sesion/Fortuner que versiones mas
+            # nuevas hayan añadido; no reducir el JSON a las claves antiguas.
+            $settings = Get-Content -Raw -LiteralPath $configPath -Encoding UTF8 | ConvertFrom-Json
+            Set-Property $settings 'bindHost' $BindHost
+            Set-Property $settings 'port' $Port
+            if (-not $settings.logDirectory) { Set-Property $settings 'logDirectory' (Join-Path $InstallRoot 'logs') }
+        } else {
+            $settings = [ordered]@{ schemaVersion=1; bindHost=$BindHost; port=$Port; credentialsFile='credentials.dpapi'; logDirectory=(Join-Path $InstallRoot 'logs') }
+        }
         Write-Utf8 $configPath ($settings | ConvertTo-Json)
         $exe = Join-Path $release 'Contabilidad27.exe'
         & $exe check --config $configPath
@@ -322,7 +357,7 @@ try {
             Disable-ScheduledTask -InputObject $oldTask | Out-Null
         }
         $fortunerEntry = if ($portableFortuner) { 'Iniciar-Fortuner-Servidor.bat' } else { 'ABRIR_APLICACION.cmd' }
-        Write-Utf8 (Join-Path $InstallRoot 'INSTALACION.txt') "Contabilidad instalada y detenida.`r`nVersion: $($manifest.version)`r`nInicio: Fortuner27 / $fortunerEntry`r`nURL: $publicUrl`r`nRespaldo: $backup`r`n"
+        Write-Utf8 (Join-Path $InstallRoot 'INSTALACION.txt') "Contabilidad instalada y detenida.`r`nVersion: $($manifest.version)`r`nInicio: Fortuner27 / $fortunerEntry`r`nURL: $publicUrl`r`nRespaldo: $backup`r`nCambiar conexion: Configurar-Conexion-Contabilidad27.bat (con el modulo detenido).`r`nDiagnostico: powershell.exe -NoProfile -ExecutionPolicy Bypass -File configurar-conexion.ps1 -Plan`r`nNo copie credentials.dpapi a otro servidor.`r`n"
         Write-Host "Instalado en: $InstallRoot" -ForegroundColor Green
         Write-Host "URL al iniciar desde Fortuner: $publicUrl"
         Write-Host 'ESTADO: INSTALADO Y DETENIDO. No se inicio ningun servicio.' -ForegroundColor Green

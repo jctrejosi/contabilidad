@@ -14,6 +14,8 @@ export interface ResultadoReprocesoMensual {
   puedeEjecutar: boolean;
   estado: string;
   duracionSegundos: number;
+  idOperacion?: string;
+  tiemposEtapas?: { etapa: string; segundos: number }[];
   auditoria: string;
   advertenciaAuditoria: string;
   fuente: "MOV01";
@@ -27,6 +29,22 @@ export interface SolicitudReprocesoMensual {
   mesHasta: number;
   usuario: string;
   motivo: string;
+  seguimientoId?: string;
+}
+
+export interface ProgresoReproceso {
+  estado: "activo" | "finalizado" | "error";
+  etapa: string;
+  procesados: number;
+  total: number | null;
+  segundos: number;
+}
+
+export async function consultarProgresoReproceso(id: string, cia: string, signal: AbortSignal): Promise<ProgresoReproceso | null> {
+  const response = await fetch(`/api/reprocesos/mensual/progreso/${id}?cia=${encodeURIComponent(cia)}`, { signal, cache: "no-store" });
+  if (!response.ok) return null;
+  const body = await response.json() as { item: ProgresoReproceso };
+  return body.item;
 }
 
 async function enviar(

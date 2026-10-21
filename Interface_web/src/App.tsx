@@ -28,6 +28,8 @@ import MediosMagneticos from './pages/MediosMagneticos';
 import MediosConceptos from './pages/MediosConceptos';
 import MediosAsignacion from './pages/MediosAsignacion';
 import MediosGeneracion from './pages/MediosGeneracion';
+import MediosRevision from './pages/MediosRevision';
+import MediosDetalleTercero from './pages/MediosDetalleTercero';
 import MediosCopiaCompania from './pages/MediosCopiaCompania';
 import Reprocesos from './pages/Reprocesos';
 import Cierres from './pages/Cierres';
@@ -176,7 +178,9 @@ export default function App() {
       case 'medios/generar':
         return <MediosGeneracion cia={companiaActiva.codigo} />;
       case 'medios/revision':
+        return <MediosRevision key={companiaActiva.codigo} cia={companiaActiva.codigo} />;
       case 'medios/detalle-tercero':
+        return <MediosDetalleTercero key={companiaActiva.codigo} cia={companiaActiva.codigo} />;
       case 'medios/totales-tercero':
       case 'medios/formato-tercero':
       case 'medios/documento':

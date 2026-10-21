@@ -94,15 +94,43 @@ def check_database() -> None:
                 recordset.Close()
 
 
+def check_com_date_support() -> None:
+    """Detecta en el paquete la dependencia usada por ADO al devolver fechas.
+
+    SELECT TOP 0 no convierte valores: puede pasar aunque GetRows falle con
+    fechas reales. Esta prueba local no consulta ni modifica ninguna tabla.
+    """
+    if os.name != "nt":
+        return
+    from datetime import datetime
+    import pywintypes
+    import win32timezone
+
+    sample = pywintypes.Time(datetime(2026, 1, 15, 12, tzinfo=win32timezone.TimeZoneInfo.utc()))
+    if sample.year != 2026 or sample.utcoffset() is None:
+        raise ValueError("El paquete no permite convertir fechas COM correctamente.")
+
+
 def main(arguments: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Servicio de Contabilidad 27 DSI, administrado por Fortuner27.")
-    parser.add_argument("command", choices=("serve", "check", "inspect"))
+    parser.add_argument("command", choices=("serve", "check", "inspect", "benchmark-reproceso"))
     parser.add_argument("--config", type=Path)
     parser.add_argument("--host")
     parser.add_argument("--port", type=int)
+    parser.add_argument("--company")
+    parser.add_argument("--month", type=int)
+    parser.add_argument("--sample", type=int, default=250)
+    parser.add_argument("--extended", action="store_true")
+    parser.add_argument("--staging", action="store_true")
+    parser.add_argument("--realistic", action="store_true")
+    parser.add_argument("--plan-sample", action="store_true")
+    parser.add_argument("--reverse-load", action="store_true")
+    parser.add_argument("--cursor-test", action="store_true")
+    parser.add_argument("--confirm-test-writes", action="store_true")
     args = parser.parse_args(arguments)
     try:
         if args.command == "inspect":
+            check_com_date_support()
             app = create_application()
             print(json.dumps({"status": "ok", "routes": len(app.routes), "web": True,
                               "architecture": "x64", "listening": False}))
@@ -110,8 +138,24 @@ def main(arguments: list[str] | None = None) -> int:
         if args.config is None:
             raise ValueError("Debe indicar --config con la configuración creada por el instalador.")
         configuration = load_configuration(args.config.resolve())
+        if args.command == "benchmark-reproceso":
+            if not args.company or args.month is None or not args.confirm_test_writes:
+                raise ValueError("Indique --company, --month y --confirm-test-writes. Solo copia de pruebas sin usuarios.")
+            import socket
+            with socket.socket() as probe:
+                probe.settimeout(1)
+                if probe.connect_ex(("127.0.0.1", configuration["port"])) == 0:
+                    raise ValueError("Detenga Contabilidad desde Fortuner antes de la prueba.")
+            from backend.reproceso_benchmark import benchmark
+            emit = lambda value: print(json.dumps(value, ensure_ascii=True), flush=True)
+            emit(benchmark(args.company, args.month, args.sample,
+                           confirmed=True, emit=emit, extended=args.extended, staging=args.staging,
+                           realistic=args.realistic, plan_sample=args.plan_sample,
+                           reverse_load=args.reverse_load, cursor_test=args.cursor_test))
+            return 0
         app = create_application()
         if args.command == "check":
+            check_com_date_support()
             check_database()
             print("OK: interfaz, API y conexiones ADO/OLE DB y ADO/ODBC. Servicio detenido.")
             return 0

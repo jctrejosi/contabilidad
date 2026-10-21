@@ -5,6 +5,7 @@ Sus valores se cifran en un directorio temporal y nunca se copian al paquete.
 """
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -18,6 +19,15 @@ def main():
     parser.add_argument("--ads-env", type=Path)
     args = parser.parse_args()
     package = args.package.resolve()
+    manifest = json.loads((package / 'manifest.json').read_text(encoding='utf-8-sig'))
+    listed = {entry['path'].replace('\\', '/') for entry in manifest['files']}
+    assert {'Configurar-Conexion-Contabilidad27.bat', 'configurar-conexion.ps1'} <= listed
+    for entry in manifest['files']:
+        path = (package / entry['path']).resolve()
+        assert path.is_relative_to(package)
+        assert hashlib.sha256(path.read_bytes()).hexdigest().upper() == entry['sha256'].upper()
+    assert not any('tests/' in name or name.startswith('test_') for name in listed)
+    print('PASS: manifiesto SHA256 incluye la utilidad instalada, sin archivos de prueba.')
     executable = package / "payload" / "Contabilidad27" / "Contabilidad27.exe"
     result = subprocess.run([str(executable), "inspect"], check=True, capture_output=True, text=True)
     state = json.loads(result.stdout)

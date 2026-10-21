@@ -111,3 +111,24 @@ Ejecutar deployment\Preparar-Instalador.bat. Compila React, empaqueta Python,
 verifica el ejecutable sin iniciarlo, excluye fuentes y genera un ZIP en
 release\. Se entrega al cliente solo ese ZIP, no el repositorio del proyecto.
 Documentacion del empaquetador: https://pyinstaller.org/en/stable/usage.html
+
+CAMBIAR LA CONEXION EN UNA INSTALACION EXISTENTE
+Cierre Fortuner27 y detenga el modulo. En la carpeta instalada ejecute
+Configurar-Conexion-Contabilidad27.bat. Solicita elevacion, ruta ADD, carpetas
+de referencia/VISAUDI y datos de acceso ocultos. Enter conserva cada valor.
+Prueba la conexion con el ejecutable instalado (OLE DB y ODBC), sin iniciar
+el servicio, antes de sustituir credentials.dpapi. Crea un respaldo protegido
+y restaura la configuracion anterior ante errores de activacion.
+No cambia puerto, host, firewall, modules.json ni la version del ejecutable.
+No copie credentials.dpapi a otro servidor: DPAPI esta ligado al equipo.
+
+Diagnostico sin cambios (desde la carpeta instalada):
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File configurar-conexion.ps1 -Plan
+
+Recuperacion desde el paquete:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File instalar.ps1 -InstallRoot "C:\ProgramData\DSI\CONTABDSI27" -ReconfigureConnection
+En instalaciones existentes ejecuta solo la utilidad compartida. En una
+instalacion nueva se mantiene el asistente normal. No combinar con -Plan.
+Las instalaciones anteriores necesitan una actualizacion del paquete para
+incorporar ambos archivos. Despues no hace falta conservar el ZIP para cambiar
+la conexion. Probar primero en servidor de ensayo con respaldo verificable.

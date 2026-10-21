@@ -13,10 +13,105 @@ fuente y reemplaza los acumulados dentro de una única transacción ADO.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from contextvars import ContextVar
+from functools import wraps
+from uuid import uuid4
+from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_UP
 from time import perf_counter
 from typing import Any, Iterable
+from .reproceso_progress import stage as progress_stage, advance as progress_advance
+
+
+logger = logging.getLogger(__name__)
+_measurement: ContextVar[Any] = ContextVar("monthly_reprocess_measurement", default=None)
+
+
+def _stage(label: str):
+    """Mide etapas sin cambiar consultas, importes ni límites transaccionales.
+
+    El contexto separa solicitudes concurrentes. Los eventos inicio/fin permiten
+    localizar una etapa pendiente incluso si el cliente todavía espera respuesta.
+    """
+    def decorate(function):
+        @wraps(function)
+        def measured(*args, **kwargs):
+            context = _measurement.get()
+            if context is None:
+                return function(*args, **kwargs)
+            operation_id, timings = context
+            display = {
+                "Validar compañía y leer cuentas": "Validando compañía y cuentas",
+                "Leer y agrupar movimiento del período": "Leyendo y agrupando movimientos",
+                "Calcular cuentas mayores y terceros": "Calculando acumulados",
+                "Leer acumulados y auxiliares de terceros": "Comparando auxiliares actuales",
+                "Comparar acumulados": "Detectando diferencias",
+                "Reemplazar acumulados dentro de la transacción": "Preparando actualización",
+                "Actualizar auxiliares existentes antes de insertar nuevos": "Actualizando auxiliares existentes",
+                "Crear auxiliares nuevos con acumulados incluidos": "Creando auxiliares nuevos",
+            }
+            progress_stage(display.get(label, "Procesando acumulados"))
+            started = perf_counter()
+            logger.info("Reproceso %s: inicio %s", operation_id, label)
+            try:
+                return function(*args, **kwargs)
+            finally:
+                seconds = round(perf_counter() - started, 3)
+                timings.append({"etapa": label, "segundos": seconds})
+                logger.info("Reproceso %s: fin %s (%.3f s)", operation_id, label, seconds)
+        return measured
+    return decorate
+
+
+def _measure_operation(function):
+    """Adjunta diagnóstico a la respuesta y deja trazabilidad aun si hay error."""
+    @wraps(function)
+    def measured(*args, **kwargs):
+        operation_id = uuid4().hex[:12]
+        timings: list[dict[str, Any]] = []
+        token = _measurement.set((operation_id, timings))
+        started = perf_counter()
+        logger.info("Reproceso %s: inicio %s", operation_id, function.__name__)
+        try:
+            result = function(*args, **kwargs)
+            result["idOperacion"] = operation_id
+            result["tiemposEtapas"] = timings
+            logger.info("Reproceso %s: resultado=%s registros=%s", operation_id,
+                        result.get("estado"), result.get("registrosMovimiento"))
+            return result
+        except Exception:
+            logger.exception("Reproceso %s: fallo", operation_id)
+            raise
+        finally:
+            logger.info("Reproceso %s: tiempo total %.3f s", operation_id, perf_counter() - started)
+            _measurement.reset(token)
+    return measured
+
+
+def _write_step(label: str, action, *args, **kwargs):
+    """Diagnóstico temporal de cada llamada de escritura/consulta asociada.
+
+    No registra SQL ni identificaciones personales. Inicio sin fin señala una
+    llamada pendiente; fin no equivale a COMMIT. No agrega consultas al motor.
+    """
+    context = _measurement.get()
+    operation_id = context[0] if context else "-"
+    started = perf_counter()
+    logger.info("Reproceso %s: SQL inicio %s", operation_id, label)
+    if label == "Confirmar transacción":
+        progress_stage("Confirmando cambios; espere hasta finalizar")
+    elif label.startswith("Revertir"):
+        progress_stage("Revirtiendo cambios; espere hasta finalizar")
+    try:
+        result = action(*args, **kwargs)
+    except Exception:
+        logger.exception("Reproceso %s: SQL fallo %s (%.3f s)",
+                         operation_id, label, perf_counter() - started)
+        raise
+    logger.info("Reproceso %s: SQL fin %s (%.3f s; pendiente de confirmar)",
+                operation_id, label, perf_counter() - started)
+    return result
 
 from ._win32com import win32com
 from .accounting_lock import accounting_write_lock
@@ -45,7 +140,9 @@ from .auditoria_repository import register_monthly_reprocess
 MONEY = Decimal("0.01")
 ACCOUNT_LEVELS = (1, 2, 4, 6, 9, 12)
 CONTERCE_ID_CHUNK = 500
-CONTERCE_UPDATE_CHUNK = 250
+# Benchmark del servidor de pruebas (21/10/2026): 3000 filas en tres zonas,
+# CASE 1000 ~1,5 s frente a CASE 250 ~4,2 s. No implica igual ganancia mensual.
+CONTERCE_UPDATE_CHUNK = 1000
 LOOKUP_CHUNK = 500
 
 
@@ -92,6 +189,7 @@ class ReprocessPlan:
     differences_conterce: int
     warnings: list[str]
     errors: list[str]
+    third_row_updates: dict[int, list[tuple[int, Decimal, Decimal]]] = field(default_factory=dict)
 
 
 def _money(value: Any) -> Decimal:
@@ -102,6 +200,36 @@ def _money(value: Any) -> Decimal:
 def _sql_money_literal(value: Decimal) -> str:
     """Representa un valor calculado como literal SQL decimal seguro."""
     return format(value.quantize(MONEY, rounding=ROUND_HALF_UP), "f")
+
+
+def _compact_balance_expression(field_name: str, values: list[tuple[int, Decimal]]) -> tuple[str, str, int]:
+    """Expresión equivalente más corta para una columna de un UPDATE por IDs.
+
+    Solo recibe IDs internos e importes calculados. La constante es válida
+    únicamente con el WHERE CIA/ID IN del llamador; no usar en UPDATE general.
+    Agrupar por literal ya redondeado conserva exactamente la conversión previa.
+    Si agrupar no acorta el SQL, permanece el CASE ID original.
+    """
+    if not values or len({identity for identity, _ in values}) != len(values):
+        raise ValueError("Bloque vacío o con IDs repetidos; no generar actualización.")
+    groups: dict[str, list[int]] = {}
+    clauses = []
+    for identity, amount in values:
+        literal = _sql_money_literal(amount)
+        groups.setdefault(literal, []).append(identity)
+        clauses.append(f"WHEN {identity} THEN {literal}")
+    original = "CASE ID " + " ".join(clauses) + f" ELSE {field_name} END"
+    if len(groups) == 1:
+        expression = next(iter(groups))
+        return expression, "constante", len(original) - len(expression)
+    # Priorizar valores repetidos reduce también ramas evaluadas al encontrarlos.
+    grouped = "CASE " + " ".join(
+        f"WHEN ID IN ({','.join(map(str, identities))}) THEN {amount}"
+        for amount, identities in sorted(groups.items(), key=lambda group: -len(group[1]))
+    ) + f" ELSE {field_name} END"
+    if len(grouped) < len(original):
+        return grouped, "agrupado", len(original) - len(grouped)
+    return original, "individual", 0
 
 
 def _parameters(command: Any, values: Iterable[tuple[int, int, Any]]) -> None:
@@ -149,6 +277,7 @@ def _validate_range(year: int, month_from: int, month_to: int) -> None:
         )
 
 
+@_stage("Validar compañía y leer cuentas")
 def _load_context(
     connection: Any, company: int, year: int, month_from: int, month_to: int,
 ) -> tuple[str, dict[str, AccountMaster]]:
@@ -201,6 +330,7 @@ def _load_context(
     return _text(company_row.get("EMPNOM")).strip(), accounts
 
 
+@_stage("Leer y agrupar movimiento del período")
 def _load_aggregates(
     connection: Any, company: int, year: int, month_from: int, month_to: int,
 ) -> list[MovementAggregate]:
@@ -243,6 +373,7 @@ def _load_aggregates(
     ]
 
 
+@_stage("Calcular cuentas mayores y terceros")
 def _build_expected_values(
     accounts: dict[str, AccountMaster], aggregates: list[MovementAggregate],
 ) -> tuple[
@@ -299,6 +430,7 @@ def _build_expected_values(
     return account_values, third_values, sorted(warnings), sorted(errors)
 
 
+@_stage("Leer acumulados y auxiliares de terceros")
 def _load_third_context(
     connection: Any,
     company: int,
@@ -311,6 +443,7 @@ def _load_third_context(
     list[str],
     dict[int, list[int]],
     dict[tuple[str, str], int],
+    dict[int, list[tuple[int, Decimal, Decimal]]],
 ]:
     fields = ", ".join(
         field
@@ -412,9 +545,28 @@ def _load_third_context(
             f"CONTERCE tiene {len(duplicate_counts)} claves cuenta–NIT repetidas con saldo; "
             "el reproceso dejará el acumulado en una sola fila y pondrá las demás en cero."
         )
-    return current, third_names, warnings, nonzero_ids, existing_ids
+    # Comparar cada fila física, no solo la suma por clave. Una suma correcta
+    # puede ocultar duplicados: el ID menor recibe el total y los otros cero.
+    row_updates = _third_row_differences(rows, existing_ids, third_values, month_from, month_to)
+    return current, third_names, warnings, nonzero_ids, existing_ids, row_updates
 
 
+def _third_row_differences(rows, existing_ids, third_values, month_from, month_to):
+    """Solo cambios efectivos; incluye saldos obsoletos y duplicados a limpiar."""
+    changes: dict[int, list[tuple[int, Decimal, Decimal]]] = {}
+    for row in rows:
+        code, nit = _text(row.get("CODIGO")).strip(), _text(row.get("NIT")).strip()
+        row_id = int(_number(row.get("ID")))
+        for month in range(month_from, month_to + 1):
+            expected = (third_values.get((month, code, nit), (Decimal("0"), Decimal("0")))
+                        if existing_ids.get((code, nit)) == row_id else (Decimal("0"), Decimal("0")))
+            current = (_money(row.get(f"MACMDEB{month:02d}")), _money(row.get(f"MACMCRE{month:02d}")))
+            if current != tuple(expected):
+                changes.setdefault(month, []).append((row_id, expected[0], expected[1]))
+    return changes
+
+
+@_stage("Comparar acumulados")
 def _difference_counts(
     plan_accounts: dict[str, AccountMaster],
     account_values: dict[tuple[int, str], list[Decimal]],
@@ -453,7 +605,7 @@ def _build_plan(
     )
     aggregates = _load_aggregates(connection, company, year, month_from, month_to)
     account_values, third_values, warnings, errors = _build_expected_values(accounts, aggregates)
-    current_thirds, third_names, third_warnings, third_nonzero_ids, third_existing_ids = _load_third_context(
+    current_thirds, third_names, third_warnings, third_nonzero_ids, third_existing_ids, third_row_updates = _load_third_context(
         connection, company, month_from, month_to, third_values
     )
     warnings.extend(third_warnings)
@@ -468,6 +620,19 @@ def _build_plan(
     diff_account, diff_third = _difference_counts(
         accounts, account_values, current_thirds, third_values, month_from, month_to
     )
+    legacy_nonzero = " OR ".join(
+        f"COALESCE({field}{month:02d}, 0) <> 0"
+        for month in range(month_from, month_to + 1)
+        for field in ("MACMDEB", "MACMCRE")
+    )
+    if _one(connection, "SELECT TOP 1 CODIGO FROM CONMAE WHERE CIA = ? AND NOT "
+            + CATALOG_ACCOUNT_FILTER + " AND (" + legacy_nonzero + ")",
+            [(ADO_TYPE_INTEGER, 0, company)]) is not None:
+        diff_account = max(diff_account, 1)
+    # Evitar "Sin cambios" cuando la suma coincide pero hay filas duplicadas
+    # por consolidar, o falta un auxiliar con movimiento neto cero.
+    missing = {(code, nit) for _, code, nit in third_values} - set(third_existing_ids)
+    diff_third = max(diff_third, sum(map(len, third_row_updates.values())) + len(missing))
     return ReprocessPlan(
         company=company,
         company_name=company_name,
@@ -487,6 +652,7 @@ def _build_plan(
         differences_conterce=diff_third,
         warnings=warnings,
         errors=sorted(set(errors)),
+        third_row_updates=third_row_updates,
     )
 
 
@@ -531,6 +697,7 @@ def _result(
     }
 
 
+@_measure_operation
 def simulate_monthly_reprocess(
     company_code: str, year: int, month_from: int, month_to: int,
 ) -> dict[str, Any]:
@@ -547,31 +714,40 @@ def simulate_monthly_reprocess(
     )
 
 
+@_stage("Reemplazar acumulados dentro de la transacción")
 def _replace_balances(connection: Any, plan: ReprocessPlan) -> None:
     """Reemplaza, no suma, los campos mensuales calculados desde MOV01."""
+    context = _measurement.get()
+    logger.info("Reproceso %s: escritura CIA=%s meses=%s-%s cuentas-mes=%s auxiliares-mes=%s nuevos=%s",
+                context[0] if context else "-", plan.company, plan.month_from, plan.month_to,
+                len(plan.account_values), len(plan.third_values),
+                len({(code, nit) for _, code, nit in plan.third_values} - set(plan.third_existing_ids)))
     for month in range(plan.month_from, plan.month_to + 1):
         debit_field = f"MACMDEB{month:02d}"
         credit_field = f"MACMCRE{month:02d}"
-        # Se limpian también auxiliares heredados de CONMAE: en el modelo nuevo
-        # la única fuente de acumulados por tercero es CONTERCE.
-        _execute(
+        # Solo auxiliares heredados, no las cuentas del catálogo: sus valores
+        # se comparan abajo. Se evita borrar para volver a escribir lo mismo.
+        _write_step(
+            f"Limpiar auxiliares heredados CONMAE mes {month:02d}", _execute,
             connection,
-            f"UPDATE CONMAE SET {debit_field} = 0, {credit_field} = 0 WHERE CIA = ?",
+            f"UPDATE CONMAE SET {debit_field} = 0, {credit_field} = 0 WHERE CIA = ? "
+            f"AND NOT {CATALOG_ACCOUNT_FILTER} AND "
+            f"(COALESCE({debit_field}, 0) <> 0 OR COALESCE({credit_field}, 0) <> 0)",
             [(ADO_TYPE_INTEGER, 0, plan.company)],
         )
-        # Solo se limpian IDs que la simulación encontró con saldo. Agruparlos
-        # en listas pequeñas usa el índice primario y evita recorrer las
-        # 765.000+ filas históricas de CONTERCE en cada sentencia.
-        ids = sorted(set(plan.third_nonzero_ids.get(month, [])))
-        for offset in range(0, len(ids), CONTERCE_ID_CHUNK):
-            id_list = ",".join(str(row_id) for row_id in ids[offset:offset + CONTERCE_ID_CHUNK])
-            connection.Execute(
-                f"UPDATE CONTERCE SET {debit_field} = 0, {credit_field} = 0 "
-                f"WHERE CIA = {plan.company} AND ID IN ({id_list})"
-            )
-
-    for (month, code), (debit, credit) in sorted(plan.account_values.items()):
-        _execute(
+    account_changes = {}
+    for code, master in plan.accounts.items():
+        for month in range(plan.month_from, plan.month_to + 1):
+            expected = tuple(plan.account_values.get((month, code), (Decimal("0"), Decimal("0"))))
+            if tuple(master.current[month]) != expected:
+                account_changes[(month, code)] = expected
+    logger.info("Reproceso %s: escritura diferencial cuentas-mes=%s terceros-fila-mes=%s",
+                context[0] if context else "-", len(account_changes),
+                sum(map(len, plan.third_row_updates.values())))
+    progress_stage("Actualizando cuentas", len(account_changes))
+    for position, ((month, code), (debit, credit)) in enumerate(sorted(account_changes.items()), 1):
+        _write_step(
+            f"Actualizar CONMAE mes {month:02d} cuenta {position}/{len(account_changes)}", _execute,
             connection,
             f"UPDATE CONMAE SET MACMDEB{month:02d} = ?, MACMCRE{month:02d} = ? "
             "WHERE CIA = ? AND CODIGO = ? AND " + CATALOG_ACCOUNT_FILTER,
@@ -582,68 +758,115 @@ def _replace_balances(connection: Any, plan: ReprocessPlan) -> None:
                 (ADO_TYPE_VARCHAR, 12, code),
             ],
         )
+        progress_advance(1)
 
-    unique_thirds = sorted({(code, nit) for _, code, nit in plan.third_values})
-    third_ids = dict(plan.third_existing_ids)
-    for code, nit in unique_thirds:
-        if (code, nit) not in third_ids:
-            master = plan.accounts[code]
-            _execute(
-                connection,
-                "INSERT INTO CONTERCE (CIA, CODIGO, NIT, MNOMBRE, MCOSTOS) VALUES (?, ?, ?, ?, ?)",
-                [
-                    (ADO_TYPE_INTEGER, 0, plan.company),
-                    (ADO_TYPE_VARCHAR, 12, code),
-                    (ADO_TYPE_VARCHAR, 11, nit),
-                    (ADO_TYPE_VARCHAR, 40, plan.third_names.get(nit, "")[:40]),
-                    (ADO_TYPE_BOOLEAN, 0, master.requires_cost_center),
-                ],
-            )
-            existing = _one(
-                connection,
-                "SELECT TOP 1 ID FROM CONTERCE WHERE CIA = ? AND CODIGO = ? AND NIT = ? ORDER BY ID",
-                [
-                    (ADO_TYPE_INTEGER, 0, plan.company),
-                    (ADO_TYPE_VARCHAR, 12, code),
-                    (ADO_TYPE_VARCHAR, 11, nit),
-                ],
-            )
-            if existing is None:
-                raise RuntimeError(f"No fue posible localizar CONTERCE para {code} / {nit}.")
-            third_ids[(code, nit)] = int(_number(existing.get("ID")))
+    # Actualizar existentes antes de insertar para no anteponer miles de altas
+    # a los CASE. No existe dependencia de IDs nuevos: nacen con sus importes.
+    # Ambos pasos siguen dentro del BeginTrans/CommitTrans del llamador.
+    logger.info("Reproceso %s: orden escritura existentes -> nuevos; transaccion unica",
+                context[0] if context else "-")
+    _update_existing_thirds(connection, plan)
+    _insert_new_thirds(connection, plan)
 
+
+@_stage("Actualizar auxiliares existentes antes de insertar nuevos")
+def _update_existing_thirds(connection: Any, plan: ReprocessPlan) -> None:
+    started = perf_counter()
+    context = _measurement.get()
+    operation_id = context[0] if context else "-"
+    processed = 0
+    expected_rows = sum(map(len, plan.third_row_updates.values()))
+    progress_stage("Actualizando auxiliares existentes", expected_rows)
     # Un UPDATE individual por auxiliar producía cientos de miles de llamadas
     # ADO y sometía al cliente ACE a una carga que podía terminar en C0000005.
-    # CASE permite enviar 250 auxiliares por sentencia conservando el valor
+    # CASE permite enviar hasta 1000 auxiliares por sentencia conservando el valor
     # particular de cada ID. Los valores son Decimal calculados internamente y
     # los identificadores provienen de CONTERCE, por lo que no se concatena
     # ninguna entrada libre del usuario.
-    updates_by_month: dict[int, list[tuple[int, Decimal, Decimal]]] = {}
-    for (month, code, nit), (debit, credit) in sorted(plan.third_values.items()):
-        updates_by_month.setdefault(month, []).append(
-            (third_ids[(code, nit)], debit, credit)
-        )
+    # Incluye ceros de claves obsoletas y duplicados; no hace falta limpiarlos
+    # antes. Una sola escritura pone cada fila modificada en su valor final.
+    updates_by_month = plan.third_row_updates
     for month, updates in updates_by_month.items():
         debit_field = f"MACMDEB{month:02d}"
         credit_field = f"MACMCRE{month:02d}"
         for offset in range(0, len(updates), CONTERCE_UPDATE_CHUNK):
+            build_at = perf_counter()
             chunk = updates[offset:offset + CONTERCE_UPDATE_CHUNK]
             ids = ",".join(str(row_id) for row_id, _, _ in chunk)
-            debit_cases = " ".join(
-                f"WHEN {row_id} THEN {_sql_money_literal(debit)}"
-                for row_id, debit, _ in chunk
+            debit_expression, debit_mode, debit_saved = _compact_balance_expression(
+                debit_field, [(identity, debit) for identity, debit, _ in chunk])
+            credit_expression, credit_mode, credit_saved = _compact_balance_expression(
+                credit_field, [(identity, credit) for identity, _, credit in chunk])
+            sql = (f"UPDATE CONTERCE SET {debit_field} = {debit_expression}, "
+                   f"{credit_field} = {credit_expression} WHERE CIA = {plan.company} AND ID IN ({ids})")
+            built_at = perf_counter()
+            _write_step(
+                f"Actualizar CONTERCE mes {month:02d} registros {offset + 1}-{min(offset + CONTERCE_UPDATE_CHUNK, len(updates))}/{len(updates)}",
+                connection.Execute,
+                sql,
             )
-            credit_cases = " ".join(
-                f"WHEN {row_id} THEN {_sql_money_literal(credit)}"
-                for row_id, _, credit in chunk
-            )
-            connection.Execute(
-                f"UPDATE CONTERCE SET {debit_field} = CASE ID {debit_cases} "
-                f"ELSE {debit_field} END, {credit_field} = CASE ID {credit_cases} "
-                f"ELSE {credit_field} END WHERE CIA = {plan.company} AND ID IN ({ids})"
-            )
+            finished_at = perf_counter()
+            processed += len(chunk)
+            progress_advance(len(chunk))
+            logger.info("Reproceso %s: avance existentes %s/%s mes=%02d construir=%.4fs llamada_con_log=%.4fs acumulado=%.3fs",
+                        operation_id, processed, expected_rows, month,
+                        built_at - build_at, finished_at - built_at, finished_at - started)
+            logger.info("Reproceso %s: SQL compacto debito=%s credito=%s caracteres=%s ahorro=%s",
+                        operation_id, debit_mode, credit_mode, len(sql), debit_saved + credit_saved)
 
 
+@_stage("Crear auxiliares nuevos con acumulados incluidos")
+def _insert_new_thirds(connection: Any, plan: ReprocessPlan) -> None:
+    """Una inserción por auxiliar, sin SELECT de ID ni UPDATE posterior.
+
+    Los bloques son de diagnóstico: no hacen COMMIT parcial ni convierten la
+    inserción en una operación masiva del motor. Un error se propaga al dueño
+    de la transacción para revertir el conjunto completo.
+    """
+    new_keys = sorted({(code, nit) for _, code, nit in plan.third_values}
+                      - set(plan.third_existing_ids))
+    progress_stage("Creando auxiliares nuevos", len(new_keys))
+    # Cache por combinación de meses: los meses sin movimiento conservan el
+    # default de la tabla (incluido NULL si así está definido), como antes.
+    sql_by_months: dict[tuple[int, ...], str] = {}
+    operation_id = _measurement.get()[0] if _measurement.get() else "-"
+    for offset in range(0, len(new_keys), 500):
+        block = new_keys[offset:offset + 500]
+        label = f"Crear CONTERCE con saldos {offset + 1}-{offset + len(block)}/{len(new_keys)}"
+
+        def insert_block():
+            for position, (code, nit) in enumerate(block, offset + 1):
+                months = tuple(month for month in range(plan.month_from, plan.month_to + 1)
+                               if (month, code, nit) in plan.third_values)
+                if months not in sql_by_months:
+                    fields = ["CIA", "CODIGO", "NIT", "MNOMBRE", "MCOSTOS"]
+                    for month in months:
+                        fields.extend([f"MACMDEB{month:02d}", f"MACMCRE{month:02d}"])
+                    sql_by_months[months] = ("INSERT INTO CONTERCE (" + ", ".join(fields)
+                                            + ") VALUES (" + ", ".join("?" for _ in fields) + ")")
+                parameters = [
+                    (ADO_TYPE_INTEGER, 0, plan.company),
+                    (ADO_TYPE_VARCHAR, 12, code),
+                    (ADO_TYPE_VARCHAR, 11, nit),
+                    (ADO_TYPE_VARCHAR, 40, plan.third_names.get(nit, "")[:40]),
+                    (ADO_TYPE_BOOLEAN, 0, plan.accounts[code].requires_cost_center),
+                ]
+                for month in months:
+                    debit, credit = plan.third_values.get((month, code, nit), (Decimal("0"), Decimal("0")))
+                    parameters.extend([(ADO_TYPE_DOUBLE, 0, float(debit)),
+                                       (ADO_TYPE_DOUBLE, 0, float(credit))])
+                try:
+                    _execute(connection, sql_by_months[months], parameters)
+                except Exception:
+                    logger.exception("Reproceso %s: fallo creando auxiliar ordinal %s/%s",
+                                     operation_id, position, len(new_keys))
+                    raise
+
+        _write_step(label, insert_block)
+        progress_advance(len(block))
+
+
+@_measure_operation
 def execute_monthly_reprocess(
     company_code: str,
     year: int,
@@ -668,7 +891,15 @@ def execute_monthly_reprocess(
     # Advantage OLE DB 11.10.0.24 de 64 bits puede mostrar una excepción
     # C0000005 al procesar UPDATE extensos. ADO sobre el driver ODBC instalado
     # evita ese callback defectuoso sin cambiar las reglas ni la transacción.
+    context = _measurement.get()
+    waiting_at = perf_counter()
+    progress_stage("Esperando turno de escritura y conexión")
+    logger.info("Reproceso %s: esperando turno de escritura", context[0] if context else "-")
     with accounting_write_lock, ads_odbc_connection() as connection:
+        if context:
+            seconds = round(perf_counter() - waiting_at, 3)
+            context[1].append({"etapa": "Esperar turno y abrir conexión", "segundos": seconds})
+            logger.info("Reproceso %s: turno y conexión disponibles (%.3f s)", context[0], seconds)
         # Se reconstruye el plan al ejecutar; así no se aplican cifras antiguas
         # si MOV01 cambió después de la simulación mostrada al usuario.
         plan = _build_plan(connection, company, int(year), int(month_from), int(month_to))
@@ -682,18 +913,25 @@ def execute_monthly_reprocess(
                 status="Sin cambios",
                 duration_seconds=perf_counter() - started_at,
             )
-        connection.BeginTrans()
+        _write_step("Abrir transacción", connection.BeginTrans)
         try:
             _replace_balances(connection, plan)
+            commit_at = perf_counter()
+            logger.info("Reproceso %s: confirmando transacción", context[0] if context else "-")
             if dry_run:
-                connection.RollbackTrans()
+                _write_step("Revertir prueba", connection.RollbackTrans)
             else:
-                connection.CommitTrans()
+                _write_step("Confirmar transacción", connection.CommitTrans)
+            if context:
+                seconds = round(perf_counter() - commit_at, 3)
+                context[1].append({"etapa": "Finalizar transacción", "segundos": seconds})
+                logger.info("Reproceso %s: transacción finalizada (%.3f s)", context[0], seconds)
         except Exception:
             try:
-                connection.RollbackTrans()
+                _write_step("Revertir por error", connection.RollbackTrans)
             except Exception:
-                pass
+                logger.exception("Reproceso %s: no se pudo confirmar la reversión; requiere revisión del servidor",
+                                 context[0] if context else "-")
             raise
 
     audit_status = "No aplica en prueba"

@@ -67,7 +67,8 @@ function Get-ScheduledTask {{ param([string]$TaskName, [string]$ErrorAction) ret
         config.mkdir(parents=True)
         secret = win32crypt.CryptProtectData(json.dumps(credentials).encode(), "Sandbox", None, None, None, 4)
         (config / "credentials.dpapi").write_bytes(secret)
-        (config / "service.json").write_text(json.dumps({"schemaVersion": 1, "credentialsFile": "credentials.dpapi", "port": 18443}), encoding="utf-8")
+        (config / "service.json").write_text(json.dumps({"schemaVersion": 1, "credentialsFile": "credentials.dpapi", "port": 18443,
+            "fortunerApiUrl": "http://127.0.0.1:8004", "sessionTtlSeconds": 1200, "cookieSecure": True}), encoding="utf-8")
 
         def install(*extra):
             result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
@@ -80,6 +81,11 @@ function Get-ScheduledTask {{ param([string]$TaskName, [string]$ErrorAction) ret
         install("-FortunerRoot", str(fortuner), "-Port", "18443")
         installation = json.loads((installed / "installation.json").read_text(encoding="utf-8"))
         assert installation["state"] == "installed-stopped"
+        for name in ('Configurar-Conexion-Contabilidad27.bat', 'configurar-conexion.ps1'):
+            assert (installed / name).read_bytes() == (package / name).read_bytes()
+        settings = json.loads((config / 'service.json').read_text(encoding='utf-8'))
+        assert settings['cookieSecure'] is True and settings['sessionTtlSeconds'] == 1200
+        assert settings['fortunerApiUrl'] == 'http://127.0.0.1:8004'
         registered = json.loads(modules_file.read_text(encoding="utf-8"))["modules"][0]
         assert list(registered["services"]) == ["frontend"]
         assert registered["services"]["frontend"]["npmScript"] == "start:fortuner"
@@ -95,15 +101,19 @@ function Get-ScheduledTask {{ param([string]$TaskName, [string]$ErrorAction) ret
         # Forzar un fallo despues de modificar la integracion: se deben
         # recuperar exactamente los archivos anteriores, sin tocar el equipo.
         observed = [start, modules_file, config / "service.json", installed / "package.json",
-                    installed / "installation.json", fortuner / "Frontend" / ".env.local"]
+                    installed / "installation.json", fortuner / "Frontend" / ".env.local",
+                    installed / 'configurar-conexion.ps1', installed / 'Configurar-Conexion-Contabilidad27.bat',
+                    installed / 'INSTALACION.txt']
         before_failure = {path: path.read_bytes() for path in observed}
-        failing, count = re.subn(r"(?m)^        Write-Utf8 \$frontendEnv.*$",
+        failing, count = re.subn(r"(?m)^[ \t]+Write-Utf8 \$frontendEnv.*$",
                                 "        throw 'Fallo controlado de integracion'", installer)
         assert count == 1
         (package / "instalar.ps1").write_text(failing, encoding="utf-8")
+        with (package / 'configurar-conexion.ps1').open('a', encoding='utf-8') as modified_utility:
+            modified_utility.write('\n# Nueva version simulada para comprobar restauracion.\n')
         for entry in manifest["files"]:
-            if entry["path"] == "instalar.ps1":
-                entry["sha256"] = hashlib.sha256((package / "instalar.ps1").read_bytes()).hexdigest().upper()
+            if entry["path"] in {"instalar.ps1", 'configurar-conexion.ps1'}:
+                entry["sha256"] = hashlib.sha256((package / entry['path']).read_bytes()).hexdigest().upper()
         manifest_file.write_text(json.dumps(manifest), encoding="utf-8")
         failure = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
                                   str(package / "instalar.ps1"), "-InstallRoot", str(installed), "-NoFirewall", "-Port", "18444"],

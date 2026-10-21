@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { consultarPeriodoOperacion } from "../api/periodoOperacion";
 import {
   ejecutarReprocesoMensual,
+  consultarProgresoReproceso,
+  type ProgresoReproceso,
   simularReprocesoMensual,
   type ResultadoReprocesoMensual,
   type SolicitudReprocesoMensual,
@@ -67,8 +69,7 @@ function formatDuration(seconds: number): string {
 
 /**
  * Integra la revalorización mensual Harbour con el esquema consolidado.
- * La simulación siempre precede a la escritura para que el contador pueda
- * revisar alcance, diferencias y anomalías antes de confirmar.
+ * La revisión previa es opcional; ejecutar siempre valida el plan vigente.
  */
 export default function Reprocesos({ compania }: ReprocesosProps) {
   const [selected, setSelected] = useState<ProcessCard | null>(null);
@@ -82,6 +83,38 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
   const [resultado, setResultado] = useState<ResultadoReprocesoMensual | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cargandoPeriodo, setCargandoPeriodo] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ProgresoReproceso | null>(null);
+
+  useEffect(() => {
+    if (!trackingId || (step !== "simulating" && step !== "running")) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const item = await consultarProgresoReproceso(trackingId!, compania.codigo, controller.signal);
+        if (!controller.signal.aborted && item) setProgress(item);
+      } catch { /* Un fallo de seguimiento no cancela la operación contable. */ }
+      if (!controller.signal.aborted) timer = setTimeout(poll, 2500);
+    }
+    void poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [trackingId, step, compania.codigo]);
+
+  function newTrackingId(): string {
+    // getRandomValues funciona también en instalaciones HTTP de intranet.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  useEffect(() => {
+    if (step !== "simulating" && step !== "running") return;
+    const started = Date.now();
+    setElapsed(0);
+    const timer = window.setInterval(() => setElapsed((Date.now() - started) / 1000), 1000);
+    return () => window.clearInterval(timer);
+  }, [step]);
 
   useEffect(() => {
     if (selected?.id !== "rep-mensual") return;
@@ -111,11 +144,13 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
     setSelected(proc);
     setStep("idle");
     setResultado(null);
+    setProgress(null);
     setMotivo("");
     setError(null);
   }
 
   function changeRange(setter: (month: number) => void, value: string) {
+    if (step === "simulating" || step === "running") return;
     setter(Number(value));
     setResultado(null);
     setStep("idle");
@@ -138,7 +173,10 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
     setStep("simulating");
     setError(null);
     try {
-      const result = await simularReprocesoMensual(payload());
+      const id = newTrackingId();
+      setTrackingId(id);
+      setProgress(null);
+      const result = await simularReprocesoMensual({ ...payload(), seguimientoId: id });
       setResultado(result);
       setStep("sim");
     } catch (cause) {
@@ -148,16 +186,19 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
   }
 
   async function execute() {
-    if (!resultado?.puedeEjecutar || !motivo.trim()) return;
+    if (!motivo.trim() || cargandoPeriodo || anio === null || mesDesde > mesHasta) return;
     setStep("running");
     setError(null);
     try {
-      const result = await ejecutarReprocesoMensual(payload());
+      const id = newTrackingId();
+      setTrackingId(id);
+      setProgress(null);
+      const result = await ejecutarReprocesoMensual({ ...payload(), seguimientoId: id });
       setResultado(result);
       setStep("done");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No fue posible ejecutar el reproceso.");
-      setStep("sim");
+      setStep(resultado ? "sim" : "idle");
     }
   }
 
@@ -172,7 +213,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
       </div>
 
       <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-        ⚠ Los reprocesos modifican acumulados contables. La simulación es obligatoria y la ejecución se confirma en una transacción de Advantage.
+        ⚠ Los reprocesos modifican acumulados contables. La revisión previa es opcional; al ejecutar siempre se valida antes de guardar.
       </div>
 
       <div className="flex items-center gap-2">
@@ -230,7 +271,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
                 <h3 className="text-sm font-semibold text-gray-800">{selected.nombre}</h3>
                 <p className="mt-0.5 text-xs text-gray-500">MOV01 → CONMAE + CONTERCE</p>
               </div>
-              <button type="button" onClick={() => setSelected(null)} disabled={step === "running"} className="text-lg text-gray-400 hover:text-gray-600 disabled:opacity-40">×</button>
+              <button type="button" onClick={() => setSelected(null)} disabled={step === "running" || step === "simulating"} className="text-lg text-gray-400 hover:text-gray-600 disabled:opacity-40">×</button>
             </div>
 
             <div className="space-y-4 px-5 py-4">
@@ -266,8 +307,12 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
 
               {(step === "simulating" || step === "running") && (
                 <div className="space-y-2 py-2">
-                  <div className="text-xs text-gray-600">{step === "simulating" ? "Comparando acumulados sin escribir…" : "Reconstruyendo acumulados en Advantage…"}</div>
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#0073C0]" /></div>
+                  <div aria-live="polite" className="text-xs font-medium text-gray-700">{progress?.etapa ?? (step === "simulating" ? "Preparando revisión…" : "Preparando reproceso…")}</div>
+                  <div role="progressbar" aria-label="Avance de la etapa actual" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress?.total ? Math.min(100, Math.floor(progress.procesados * 100 / progress.total)) : undefined} className="h-3 overflow-hidden rounded-full bg-gray-100">
+                    <div className={`h-full rounded-full bg-[#0073C0] transition-[width] duration-300 ${progress?.total ? "" : "w-1/3 animate-pulse"}`} style={progress?.total ? { width: `${Math.min(100, progress.procesados * 100 / progress.total)}%` } : undefined} />
+                  </div>
+                  {progress?.total != null && progress.total > 0 && <div className="text-xs text-gray-600">Avance de esta etapa: {progress.procesados.toLocaleString("es-CO")} de {progress.total.toLocaleString("es-CO")} ({Math.min(100, Math.floor(progress.procesados * 100 / progress.total))} %). Pendiente de confirmación final.</div>}
+                  <div role="status" className="text-xs text-gray-500">Tiempo transcurrido: {formatDuration(elapsed)}. Esperando respuesta del servidor; no cierre ni repita la operación.</div>
                 </div>
               )}
 
@@ -286,25 +331,20 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
                     <div className="text-gray-600">Campos CONTERCE diferentes: <strong>{resultado.diferencias.conterce}</strong></div>
                   </div>
                   <div className="text-right text-xs font-medium text-gray-600">Tiempo de la operación: <strong>{formatDuration(resultado.duracionSegundos)}</strong></div>
+                  {resultado.tiemposEtapas && <details className="text-xs text-gray-600"><summary>Tiempos por etapa</summary><ul className="mt-2 space-y-1">{resultado.tiemposEtapas.map((item, index) => <li key={index}>{item.etapa}: {formatDuration(item.segundos)}</li>)}</ul><p>Referencia: {resultado.idOperacion}</p></details>}
                   {resultado.errores.length > 0 && <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700"><strong>Errores que impiden ejecutar:</strong><ul className="mt-1 list-disc pl-5">{resultado.errores.map(item => <li key={item}>{item}</li>)}</ul></div>}
                   {resultado.advertencias.length > 0 && <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><strong>Advertencias:</strong><ul className="mt-1 list-disc pl-5">{resultado.advertencias.map(item => <li key={item}>{item}</li>)}</ul></div>}
                   {step === "sim" && resultado.puedeEjecutar && <div className="rounded bg-green-50 p-2 text-xs font-medium text-green-700">✓ Simulación terminada. Puede confirmar el reproceso.</div>}
-                  {step === "sim" && (
-                    <div>
-                      <label htmlFor="motivo-reproceso" className="mb-1 block text-xs font-medium text-gray-600">Motivo contable (obligatorio)</label>
-                      <input id="motivo-reproceso" value={motivo} maxLength={180} onChange={event => setMotivo(event.target.value)} placeholder="Explique por qué se reconstruyen los acumulados…" className="w-full rounded border border-gray-200 px-2.5 py-2 text-xs outline-none focus:border-[#0073C0]" />
-                    </div>
-                  )}
                   {step === "done" && <div className="rounded border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-700">✓ Reproceso confirmado. Auditoría: {resultado.auditoria}. Tiempo total: {formatDuration(resultado.duracionSegundos)}.</div>}
                   {resultado.advertenciaAuditoria && <p className="rounded bg-amber-50 p-2 text-xs text-amber-800">{resultado.advertenciaAuditoria}</p>}
                 </div>
               )}
             </div>
 
+            {(step === "idle" || step === "sim" || step === "done") && <div className="px-5 pb-4"><label htmlFor="motivo-reproceso-directo" className="mb-1 block text-xs font-medium text-gray-600">Motivo del reproceso (obligatorio para ejecutar)</label><input id="motivo-reproceso-directo" value={motivo} maxLength={180} onChange={event => setMotivo(event.target.value)} className="w-full rounded border border-gray-200 px-2.5 py-2 text-xs" /><p className="mt-2 text-xs text-gray-500">Revisar compara sin guardar. Puede ejecutar directamente para evitar calcular dos veces. Confirme que dispone de respaldo y que no hay otras operaciones contables en curso.</p></div>}
             <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
               <button type="button" onClick={() => setSelected(null)} disabled={step === "running" || step === "simulating"} className="rounded border border-gray-200 px-4 py-2 text-xs text-gray-600 disabled:opacity-40">{step === "done" ? "Cerrar" : "Cancelar"}</button>
-              {(step === "idle" || step === "done") && <button type="button" onClick={() => void simulate()} disabled={cargandoPeriodo || anio === null || rangoInvalido} className="rounded bg-[#0073C0] px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">Simular proceso</button>}
-              {step === "sim" && <button type="button" onClick={() => void execute()} disabled={!resultado?.puedeEjecutar || !motivo.trim()} className="rounded bg-red-600 px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">Confirmar y ejecutar</button>}
+              {(step === "idle" || step === "sim" || step === "done") && <><button type="button" onClick={() => void simulate()} disabled={cargandoPeriodo || anio === null || rangoInvalido} className="rounded bg-[#0073C0] px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">Revisar sin guardar (opcional)</button><button type="button" onClick={() => void execute()} disabled={cargandoPeriodo || anio === null || rangoInvalido || !motivo.trim() || (step === "sim" && !resultado?.puedeEjecutar)} className="rounded bg-red-600 px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">Confirmar y ejecutar</button></>}
             </div>
           </div>
         </div>

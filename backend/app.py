@@ -18,6 +18,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from . import store
 from .captura_documento_origen_repository import buscar_documento_origen
 from .access_session import router as access_router
+from .medios_revision_api import router as medios_revision_router
+from .medios_detalle_tercero_api import router as medios_detalle_tercero_router
 from .medios_formatos_repository import (
     FormatoExiste, FormatoInvalido, FormatoNoExiste,
     delete_formato as delete_medio_formato,
@@ -248,6 +250,8 @@ app = FastAPI(
     version="1.0.0",
 )
 app.include_router(access_router)
+app.include_router(medios_revision_router)
+app.include_router(medios_detalle_tercero_router)
 
 
 class AccountWrite(BaseModel):
@@ -671,6 +675,7 @@ class MonthlyReprocessRequest(BaseModel):
     mesHasta: int = Field(ge=1, le=12)
     usuario: str = Field("WEB", min_length=1, max_length=4)
     motivo: str = Field("", max_length=180)
+    seguimientoId: str | None = Field(None, pattern=r"^[a-f0-9]{32}$")
 
 
 class DocumentMovementAuditRequest(BaseModel):
@@ -2618,9 +2623,11 @@ def audit_documents_movement_endpoint(request: DocumentMovementAuditRequest) -> 
 def simulate_monthly_reprocess_endpoint(request: MonthlyReprocessRequest) -> dict[str, object]:
     """Compara MOV01 contra CONMAE/CONTERCE sin efectuar escrituras."""
     try:
-        result = store.simulate_monthly_reprocess(
-            request.cia, request.anio, request.mesDesde, request.mesHasta
-        )
+        from .reproceso_progress import tracking
+        with tracking(request.seguimientoId, request.cia):
+            result = store.simulate_monthly_reprocess(
+                request.cia, request.anio, request.mesDesde, request.mesHasta
+            )
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result, "source": "MOV01", "dryRun": True}
@@ -2633,18 +2640,34 @@ def execute_monthly_reprocess_endpoint(
 ) -> dict[str, object]:
     """Reemplaza acumulados mensuales en CONMAE y CONTERCE atómicamente."""
     try:
-        result = store.execute_monthly_reprocess(
-            request.cia,
-            request.anio,
-            request.mesDesde,
-            request.mesHasta,
-            user=request.usuario,
-            reason=request.motivo,
-            dry_run=dry_run,
-        )
+        from .reproceso_progress import tracking
+        with tracking(request.seguimientoId, request.cia):
+            result = store.execute_monthly_reprocess(
+                request.cia,
+                request.anio,
+                request.mesDesde,
+                request.mesHasta,
+                user=request.usuario,
+                reason=request.motivo,
+                dry_run=dry_run,
+            )
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result, "source": "Advantage Data Server", "dryRun": dry_run}
+
+
+@app.get("/api/reprocesos/mensual/progreso/{seguimiento_id}")
+async def monthly_reprocess_progress(
+    seguimiento_id: str, cia: str = Query(pattern=r"^[0-9]{1,3}$"),
+) -> dict[str, object]:
+    """Lectura en memoria, sin ocupar hilos ni conexiones de Advantage."""
+    from .reproceso_progress import snapshot
+    if len(seguimiento_id) != 32 or any(char not in "0123456789abcdef" for char in seguimiento_id):
+        raise HTTPException(status_code=404, detail="Seguimiento no disponible.")
+    item = snapshot(seguimiento_id, cia)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Seguimiento no disponible.")
+    return {"item": item}
 
 
 @app.get("/api/informes/balance-comprobacion", summary="Generar balance de comprobación acumulado")
