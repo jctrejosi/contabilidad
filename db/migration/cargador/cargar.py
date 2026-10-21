@@ -57,6 +57,17 @@ DEFAULT_URL = os.environ.get("DATABASE_URL", "postgres://contabdsi:contabdsi@127
 # detectar si la base tiene el seed de demostración en vez de datos migrados.
 CODIGO_COMPANIA = "27"
 
+# Código de la compañía **destino** en PostgreSQL. El legado separa la misma razón
+# social en una fila de `CONEMP` por año (26 = 2026, 27 = 2025); el modelo del
+# destino tiene una sola `companias` (misma NIT) y los años en `compania_anios`.
+# Cuando se carga una contabilidad histórica sobre la compañía ya existente, este
+# código apunta a ella (ver `--codigo-destino`).
+CODIGO_DESTINO: str | None = None
+
+
+def codigo_destino() -> str:
+    return CODIGO_DESTINO or CODIGO_COMPANIA
+
 # Usuario con el que se firman los documentos históricos (el legado no lo guarda).
 EMAIL_MIGRACION = "migracion@contabdsi.local"
 
@@ -208,11 +219,11 @@ class Carga:
         recorrer antes las anteriores.
         """
         with self.cn.cursor() as cur:
-            cur.execute("SELECT id FROM companias WHERE codigo = %s", (CODIGO_COMPANIA,))
+            cur.execute("SELECT id FROM companias WHERE codigo = %s", (codigo_destino(),))
             fila = cur.fetchone()
             if fila is None:
                 raise SystemExit(
-                    f"La base no tiene la contabilidad {CODIGO_COMPANIA!r}. Carga primero "
+                    f"La base no tiene la contabilidad {codigo_destino()!r}. Carga primero "
                     "«companias» (o ejecuta sin --entidad).")
             self.compania_id = fila[0]
             cur.execute("SELECT max(anio) FROM compania_anios WHERE compania_id = %s",
@@ -397,6 +408,26 @@ def cargar_companias(carga: Carga) -> None:
     anio = entero(objetivo["EMPCLAV"])
     estado = "Activa" if booleano(objetivo["HABILITA"]) else "Inactiva"
 
+    if codigo != codigo_destino():
+        # Misma razón social en otro año: se cargan sus datos sobre la compañía
+        # que ya existe. No se toca su nombre ni su estado: `CONEMP` la rotula
+        # como «PRUEBAS»/2024, pero sus tablas traen movimientos de 2026.
+        with carga.cn.cursor() as cur:
+            cur.execute("SELECT id, nombre FROM companias WHERE codigo = %s", (codigo_destino(),))
+            existente = cur.fetchone()
+        if existente is None:
+            raise SystemExit(
+                f"La base no tiene la compañía {codigo_destino()!r}: cárgala primero sin "
+                "--codigo-destino.")
+        carga.compania_id = existente[0]
+        carga.usuario_migracion()
+        carga.contar("companias",
+                     f"Datos de la contabilidad {codigo} (año {anio}) sobre «{existente[1]}»")
+        carga.registrar("CONEMP", "Excluido", otras, "companias",
+                        "Contabilidad distinta de la pedida con --compania: se carga en su "
+                        "propia corrida, con su staging partido por compañía.")
+        return
+
     with carga.cn.cursor() as cur:
         cur.execute(
             """
@@ -440,10 +471,17 @@ def cargar_periodos(carga: Carga) -> None:
                 presentes.add((int(anio), f"{int(periodo):02d}"))
     if not presentes:
         raise SystemExit("El manifiesto no trae año ni períodos: vuelve a extraer con exportar_csv.py.")
-    # El año de la contabilidad es el de `CONEMP.EMPCLAV` (lo fija
-    # `cargar_companias`); no se reemplaza por el año de los movimientos, que
-    # puede ser el anterior (así la compañía 26 es 2024 aunque tenga períodos
-    # de cierre en 2024 y 2025).
+    # El año de los saldos es el de los movimientos, no el de `CONEMP.EMPCLAV`:
+    # la compañía 26 está declarada como 2024 en el catálogo pero sus tablas
+    # traen el cierre 2025·12 y los movimientos 2026·01..09 (verificado en
+    # `TFECHA`), y `CONMAE` acumula ese mismo año. Para la 27 ambos coinciden.
+    carga.anio = max(carga.anio, max(a for a, _ in presentes))
+    with carga.cn.cursor() as cur:
+        # La interfaz ofrece los años que tienen datos, además del declarado.
+        cur.executemany(
+            "INSERT INTO compania_anios (compania_id, anio) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+            [(carga.compania_id, anio) for anio in sorted({a for a, _ in presentes})],
+        )
     with carga.cn.cursor() as cur:
         cur.executemany(
             "INSERT INTO periodos_contables (compania_id, anio, periodo, nombre, estado) "
@@ -1507,11 +1545,16 @@ ENTIDADES = [
 
 
 def main(argv: list[str] | None = None) -> int:
-    global CODIGO_COMPANIA, STAGING
+    global CODIGO_COMPANIA, CODIGO_DESTINO, STAGING
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--compania", default=CODIGO_COMPANIA,
-                        help="código de la contabilidad a cargar (CONEMP.EMPCOD); por omisión 27")
+                        help="código de la contabilidad del legado a cargar (CONEMP.EMPCOD); "
+                             "por omisión 27")
+    parser.add_argument("--codigo-destino", default=None,
+                        help="código de la compañía destino en PostgreSQL cuando el legado "
+                             "parte la misma razón social en varios años (p. ej. --compania 26 "
+                             "--codigo-destino 27); por omisión, el mismo --compania")
     parser.add_argument("--staging", type=Path, default=None,
                         help="carpeta del staging de esa compañía; por omisión db/migration/staging")
     parser.add_argument("--entidad", help="carga sólo esta entidad")
@@ -1529,6 +1572,7 @@ def main(argv: list[str] | None = None) -> int:
     # fijan antes de tocar cualquier entidad (los usan `filas`, `manifiesto` y
     # `resolver_contexto`).
     CODIGO_COMPANIA = argumentos.compania.strip()
+    CODIGO_DESTINO = (argumentos.codigo_destino or "").strip() or None
     if argumentos.staging is not None:
         STAGING = argumentos.staging.resolve()
 
@@ -1560,7 +1604,7 @@ def main(argv: list[str] | None = None) -> int:
                 # es justo la propiedad que buscamos.
                 with conexion.cursor() as cur:
                     cur.execute("SELECT codigo FROM companias WHERE codigo <> %s AND nit LIKE '900.%%'",
-                                (CODIGO_COMPANIA,))
+                                (codigo_destino(),))
                     demo = [fila[0] for fila in cur.fetchall()]
                 if demo:
                     raise SystemExit(

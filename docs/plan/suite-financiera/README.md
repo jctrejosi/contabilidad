@@ -70,6 +70,7 @@ Una suite financiera para Colombia que cubra, en un solo sistema:
 | `08-calidad-y-operacion.md` | Pruebas, CI/CD, requisitos no funcionales, observabilidad y continuidad |
 | `09-migracion-legado.md` | Estrategia de migración desde Advantage, conciliación y cutover |
 | `10-adr.md` | Decisiones de arquitectura con contexto, decisión y consecuencias |
+| `11-figma-make.md` | Brief autónomo para Figma Make: módulos, funciones, 82 pantallas, flujos, datos mock y prompt |
 | `glosario.md` | Lenguaje común del dominio financiero y colombiano |
 
 ## 4. Flujo del dato en una frase
