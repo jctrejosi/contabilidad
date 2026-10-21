@@ -12,15 +12,16 @@ del límite de 100 MiB por archivo de GitHub. El `.dump` completo está en
 
 | Parte | Bytes | SHA256 del conjunto |
 |---|---|---|
-| `contabdsi_datos_20260921.dump.part00` | 63 481 282 | — |
-| `contabdsi_datos_20260921.dump.part01` | 63 481 280 | — |
-| **Total unido** | **126 962 562** | `a7a3912ee041d92d07f10743f8108885ee99475a2a833e87448c95eaa5716632` |
+| `contabdsi_datos_20261021.dump.part00` | 63 481 282 | — |
+| `contabdsi_datos_20261021.dump.part01` | 63 481 280 | — |
+| **Total unido** | **126 962 562** | `0c1fe26883f1b6c632aa690a574bd915fc8e5df428c71a4f379355f63de16aad` |
 | `respaldo.json` | — | Manifiesto que consume `dev.js`: partes, peso y SHA-256 |
 
-Origen: PostgreSQL 18.4, formato `pg_dump -Fc -Z6`. Dump tomado el 2026-09-21.
-El respaldo fue restaurado y verificado antes de publicarse: conteos idénticos en
-`documentos` (740 689), `documento_lineas` (5 043 942) y `terceros` (125 993), y
-las sumas de débito/crédito de `documento_lineas` coinciden al centavo.
+Origen: PostgreSQL 18.4, formato `pg_dump -Fc -Z6`. Dump tomado el 2026-10-21,
+**antes** de cargar la compañía 26, con el estado validado de la migración:
+`documentos` 740 689, `documento_lineas` 5 043 942 y `terceros` 125 993.
+La unión de las partes se verificó contra el SHA-256 del manifiesto y el volcado
+se comprobó con `pg_restore -l` (609 entradas, 65 tablas con datos).
 
 ## Montarlo en otro PC
 
@@ -48,15 +49,15 @@ A mano, si se prefiere:
 
 ```bash
 # 1. Unir las partes (el orden importa: part00, part01, ...)
-cat db/backups/partes/contabdsi_datos_20260921.dump.part* \
-  > /tmp/contabdsi_datos_20260921.dump
+cat db/backups/partes/contabdsi_datos_20261021.dump.part* \
+  > /tmp/contabdsi_datos_20261021.dump
 
 # 2. Verificar que la unión es idéntica al original (debe imprimir el SHA256 de arriba)
 sha256sum /tmp/contabdsi_datos_20260921.dump
 
 # 3. Restaurar en la base del contenedor (ver db/postgresql/docker-compose.yml)
 pg_restore -d "postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi_datos" \
-  --clean --if-exists --no-owner --no-privileges /tmp/contabdsi_datos_20260921.dump
+  --clean --if-exists --no-owner --no-privileges /tmp/contabdsi_datos_20261021.dump
 ```
 
 La base destino debe existir; `--clean --if-exists` sirve tanto si está recién
@@ -90,9 +91,9 @@ debajo del límite de 100 MiB de GitHub).
 
 ```bash
 pg_dump -Fc -Z6 -d "postgres://contabdsi:contabdsi@127.0.0.1:5433/contabdsi_datos" \
-  -f db/backups/contabdsi_datos_20260921.dump
-split -b 63481282 -d db/backups/contabdsi_datos_20260921.dump \
-  db/backups/partes/contabdsi_datos_20260921.dump.part
+  -f db/backups/contabdsi_datos_20261021.dump
+split -b 63481282 -d db/backups/contabdsi_datos_20261021.dump \
+  db/backups/partes/contabdsi_datos_20261021.dump.part
 ```
 
 `-Z9` se probó y solo baja de 121 a 119 MiB (el grueso es la columna `legado`

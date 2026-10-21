@@ -1,13 +1,13 @@
 {
-  "archivo": "contabdsi_datos_20260921.dump",
-  "creado": "2026-09-21",
+  "archivo": "contabdsi_datos_20261021.dump",
+  "creado": "2026-10-21",
   "base": "contabdsi_datos",
   "postgres": "18",
   "bytes": 126962562,
-  "sha256": "a7a3912ee041d92d07f10743f8108885ee99475a2a833e87448c95eaa5716632",
+  "sha256": "0c1fe26883f1b6c632aa690a574bd915fc8e5df428c71a4f379355f63de16aad",
   "partes": [
-    "contabdsi_datos_20260921.dump.part00",
-    "contabdsi_datos_20260921.dump.part01"
+    "contabdsi_datos_20261021.dump.part00",
+    "contabdsi_datos_20261021.dump.part01"
   ],
   "conteos": {
     "documentos": 740689,

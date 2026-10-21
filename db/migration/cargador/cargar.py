@@ -374,44 +374,52 @@ def transaccion(carga: Carga):
 # Entidades
 # ---------------------------------------------------------------------------
 def cargar_companias(carga: Carga) -> None:
-    """CONEMP → companias + compania_anios. Sólo la contabilidad con datos."""
-    activa, historicas = None, []
-    for fila in filas("CONEMP"):
-        if booleano(fila["HABILITA"]):
-            activa = fila
-        else:
-            historicas.append((fila["_loc"], fila))
-    if activa is None:
-        raise SystemExit("CONEMP no trae ninguna contabilidad habilitada.")
+    """CONEMP → companias + compania_anios, para la contabilidad de `--compania`.
 
-    codigo = (texto(activa["EMPCOD"]) or "").strip()
+    El legado lista 27 contabilidades del mismo NIT; cada una se carga en una
+    corrida propia (el staging viene partido por compañía, ver
+    `dividir_por_compania.py`). El estado se copia de `HABILITA`: la 27 está
+    habilitada y la 26 (año 2024, «PRUEBAS») no lo está en el legado.
+    """
+    objetivo, otras = None, []
+    for fila in filas("CONEMP"):
+        if (texto(fila["EMPCOD"]) or "").strip() == CODIGO_COMPANIA:
+            objetivo = fila
+        else:
+            otras.append((fila["_loc"], fila))
+    if objetivo is None:
+        raise SystemExit(f"CONEMP no trae la contabilidad {CODIGO_COMPANIA!r}.")
+
+    codigo = (texto(objetivo["EMPCOD"]) or "").strip()
     # El destino exige `digito NOT NULL`. La contabilidad activa trae el NIT sin
     # dígito separado (`900273686`), así que queda vacío en vez de inventarlo.
-    nit, _, digito = (texto(activa["EMPNIT"]) or "").partition("-")
-    anio = entero(activa["EMPCLAV"])
+    nit, _, digito = (texto(objetivo["EMPNIT"]) or "").partition("-")
+    anio = entero(objetivo["EMPCLAV"])
+    estado = "Activa" if booleano(objetivo["HABILITA"]) else "Inactiva"
 
     with carga.cn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO companias (codigo, nombre, nit, digito, estado, legado)
-            VALUES (%s, %s, %s, %s, 'Activa', %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (codigo) DO UPDATE SET nombre = EXCLUDED.nombre,
+                                               estado = EXCLUDED.estado,
                                                legado = EXCLUDED.legado RETURNING id
             """,
-            (codigo, texto(activa["EMPNOM"]), nit or None, digito or "",
-             legado_de("CONEMP", activa)),
+            (codigo, texto(objetivo["EMPNOM"]), nit or None, digito or "", estado,
+             legado_de("CONEMP", objetivo)),
         )
         carga.compania_id = cur.fetchone()[0]
         cur.execute("INSERT INTO compania_anios (compania_id, anio) VALUES (%s, %s) ON CONFLICT DO NOTHING",
                     (carga.compania_id, anio))
     carga.anio = anio or 0
     carga.usuario_migracion()
-    carga.contar("companias", "Cargada 1 contabilidad activa")
+    carga.contar("companias", f"Cargada {codigo} ({estado}, año {anio})")
     carga.contar("compania_anios", f"Cargado año {anio}")
-    carga.registrar("CONEMP", "Excluido", historicas, "compania_anios",
-                    "Contabilidad histórica del catálogo sin datos en esta copia: sus tablas de "
-                    "movimiento no están en ADD_CONTAB.")
-    carga.contar("companias", f"Excluidas {len(historicas)} históricas")
+    carga.registrar("CONEMP", "Excluido", otras, "companias",
+                    "Contabilidad distinta de la pedida con --compania: se carga en su propia "
+                    "corrida, con su staging partido por compañía.")
+    carga.contar("companias", f"Otras {len(otras)} contabilidades del catálogo (fuera de esta corrida)")
 
     otros = {texto(f["CIA"]) for f in filas("CONMAE") if texto(f["CIA"]) not in (None, codigo)}
     if otros:
@@ -419,10 +427,10 @@ def cargar_companias(carga: Carga) -> None:
 
 
 def cargar_periodos(carga: Carga) -> None:
-    """Los períodos con datos: 2024·12 y 2025·01..04.
+    """Los períodos con datos de la compañía, leídos del manifiesto del staging.
 
-    Se leen del manifiesto (el extractor ya contó año y períodos de cada tabla de
-    movimiento) para no recorrer 5 millones de filas sólo por dos columnas.
+    El extractor ya contó año y períodos de cada tabla de movimiento, así que no
+    hay que recorrer millones de filas sólo por dos columnas.
     """
     presentes: set[tuple[int, str]] = set()
     for entrada in manifiesto()["tablas"]:
@@ -432,7 +440,10 @@ def cargar_periodos(carga: Carga) -> None:
                 presentes.add((int(anio), f"{int(periodo):02d}"))
     if not presentes:
         raise SystemExit("El manifiesto no trae año ni períodos: vuelve a extraer con exportar_csv.py.")
-    carga.anio = max(carga.anio, max(a for a, _ in presentes))
+    # El año de la contabilidad es el de `CONEMP.EMPCLAV` (lo fija
+    # `cargar_companias`); no se reemplaza por el año de los movimientos, que
+    # puede ser el anterior (así la compañía 26 es 2024 aunque tenga períodos
+    # de cierre en 2024 y 2025).
     with carga.cn.cursor() as cur:
         cur.executemany(
             "INSERT INTO periodos_contables (compania_id, anio, periodo, nombre, estado) "
@@ -444,10 +455,17 @@ def cargar_periodos(carga: Carga) -> None:
 
 
 def cargar_parametros(carga: Carga) -> None:
-    """CONCTR → parametros_operacion + parametros_nomina (los campos que la interfaz lee)."""
+    """CONCTR → parametros_operacion + parametros_nomina (los campos que la interfaz lee).
+
+    `CONCTR` es el control **de la instalación**, no de cada compañía: la copia
+    trae una sola fila, la de la contabilidad activa. Para una compañía sin fila
+    de control no se cargan parámetros ni se inventan: queda constancia en el
+    resumen.
+    """
     fila = next(iter(filas("CONCTR")), None)
     if fila is None:
-        raise SystemExit("CONCTR está vacío.")
+        carga.contar("parametros_operacion", "Sin control en el legado para esta compañía: no se carga")
+        return
     habilitados = {f"{n:02d}": bool(booleano(fila[f"CT{n:02d}"])) for n in range(13)}
     with carga.cn.cursor() as cur:
         cur.execute(
@@ -1489,8 +1507,13 @@ ENTIDADES = [
 
 
 def main(argv: list[str] | None = None) -> int:
+    global CODIGO_COMPANIA, STAGING
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--url", default=DEFAULT_URL)
+    parser.add_argument("--compania", default=CODIGO_COMPANIA,
+                        help="código de la contabilidad a cargar (CONEMP.EMPCOD); por omisión 27")
+    parser.add_argument("--staging", type=Path, default=None,
+                        help="carpeta del staging de esa compañía; por omisión db/migration/staging")
     parser.add_argument("--entidad", help="carga sólo esta entidad")
     parser.add_argument("--hasta", help="carga hasta esta entidad inclusive")
     parser.add_argument("--listar", action="store_true", help="muestra el orden de carga y sale")
@@ -1501,6 +1524,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--permitir-base-sucia", action="store_true",
                         help="carga aunque la base ya tenga compañías (datos de demostración)")
     argumentos = parser.parse_args(argv)
+
+    # El cargador trabaja una compañía por corrida: el código y el staging se
+    # fijan antes de tocar cualquier entidad (los usan `filas`, `manifiesto` y
+    # `resolver_contexto`).
+    CODIGO_COMPANIA = argumentos.compania.strip()
+    if argumentos.staging is not None:
+        STAGING = argumentos.staging.resolve()
 
     if argumentos.listar:
         for indice, (nombre, descripcion, _) in enumerate(ENTIDADES, 1):

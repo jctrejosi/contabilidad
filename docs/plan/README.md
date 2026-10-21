@@ -1,8 +1,40 @@
 # Planes
 
-Aquí viven **dos planes separados**. Ordenan trabajos distintos, aunque compartan
-las mismas fuentes: el plan de backend dice *qué endpoints y qué tablas faltan*;
-el plan del bot dice *qué herramientas y qué fases necesita el asistente*.
+Aquí viven **tres planes separados**. Ordenan trabajos distintos, aunque
+compartan las mismas fuentes: el plan de la suite financiera define *el destino
+funcional y el flujo definitivo del dato*; el plan de backend dice *qué endpoints
+y qué tablas faltan* para cerrar la brecha actual; el plan del bot dice *qué
+herramientas y qué fases necesita el asistente*.
+
+Cuando el plan de backend y el de la suite difieran en modelo de datos,
+arquitectura o flujo del dato, prevalece el de la suite.
+
+---
+
+## `suite-financiera/` — plan estratégico de la suite
+
+Define la evolución de CONTABDSI desde libro contable hacia suite financiera
+completa (contabilidad, facturación, cartera, CxP, bancos, activos, presupuesto,
+impuestos, informes, cierres y consolidación), con la normativa colombiana como
+requisito y un catálogo de **159 funciones a implementar**, especificadas una por
+una.
+
+| Documento | Contenido |
+|---|---|
+| `suite-financiera/README.md` | Índice, principios, módulos y criterios de éxito |
+| `suite-financiera/00-alcance.md` | Objetivos, actores, alcance, supuestos y riesgos |
+| `suite-financiera/01-catalogo-funcional.md` | Catálogo de 159 funciones a implementar, con trazabilidad y reglas transversales |
+| `suite-financiera/funcionalidades/` | Especificación función por función, módulo por módulo (14 archivos) |
+| `suite-financiera/02-arquitectura.md` | Monolito modular, módulos, API, transacciones y despliegue |
+| `suite-financiera/03-modelo-datos.md` | Entidades, estados, invariantes y mapeo del esquema actual |
+| `suite-financiera/04-flujo-del-dato.md` | Flujo definitivo de factura, pago, banco, activo, impuesto, cierre y consolidación |
+| `suite-financiera/05-normativa-colombiana.md` | PUC, IVA, retenciones, ICA, exógena, medios, DIAN y NIIF |
+| `suite-financiera/06-modulos.md` | Especificación por módulo con comandos, reglas y aceptación |
+| `suite-financiera/07-roadmap.md` | Fases, dependencias, backlog y criterios de salida |
+| `suite-financiera/08-calidad-y-operacion.md` | Pruebas, CI/CD, requisitos no funcionales y operación |
+| `suite-financiera/09-migracion-legado.md` | Migración desde Advantage, conciliación y cutover |
+| `suite-financiera/10-adr.md` | Decisiones de arquitectura con contexto y consecuencias |
+| `suite-financiera/glosario.md` | Lenguaje común del dominio financiero |
 
 ---
 
@@ -38,8 +70,8 @@ funcionalidad).
 
 ## Fuentes compartidas (no son planes)
 
-Los dos planes descienden de los mismos documentos de origen, que se quedan en sus
-carpetas:
+Los tres planes descienden de los mismos documentos de origen, que se quedan en
+sus carpetas:
 
 - `docs/catalogo/MAPA_FUNCIONALIDAD.md`: mapa funcional control por control
   (conectado / local o simulado / inerte). Techo de lo que el bot puede afirmar y
@@ -63,3 +95,4 @@ a una ruta, así que esta tabla es la que resuelve la ubicación:
 | `MAPA_FUNCIONALIDAD.md` | `docs/catalogo/MAPA_FUNCIONALIDAD.md` |
 | `AUDITORIA_FUNCIONALIDAD.md` | `docs/auditorias/AUDITORIA_FUNCIONALIDAD.md` |
 | `VALIDACION_ASISTENTE.md` | `docs/auditorias/VALIDACION_ASISTENTE.md` |
+| `suite-financiera/*` | `docs/plan/suite-financiera/` |
