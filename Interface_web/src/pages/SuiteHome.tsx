@@ -150,11 +150,11 @@ export default function SuiteHome({ onNavigate, compania }: SuiteHomeProps) {
                   </span>
                   <span className="text-gray-300 group-hover:text-petroleum-500 transition-colors"><Icon name="arrow" /></span>
                 </div>
-                <h3 className="text-sm font-semibold text-gray-900 mt-4">{module.name}</h3>
+                <h3 className="text-sm font-semibold text-gray-900 mt-4 leading-snug">{module.name}</h3>
                 <p className="text-xs text-gray-500 mt-1.5 leading-5 min-h-10">{module.description}</p>
-                <div className="mt-4 pt-4 border-t border-gray-100 flex items-end justify-between">
-                  <div><div className="text-lg font-semibold tabular text-gray-900">{metric.value}</div><div className="text-xs text-gray-400">{metric.label}</div></div>
-                  {metric.alert && <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded-full">{metric.alert}</span>}
+                <div className="mt-4 pt-4 border-t border-gray-100 flex items-end justify-between gap-2">
+                  <div className="min-w-0"><div className="text-lg font-semibold tabular text-gray-900">{metric.value}</div><div className="text-xs text-gray-400 leading-tight">{metric.label}</div></div>
+                  {metric.alert && <span className="shrink-0 whitespace-nowrap text-xs font-medium text-amber-700 bg-amber-50 px-2 py-1 rounded-full">{metric.alert}</span>}
                 </div>
               </button>
             );
