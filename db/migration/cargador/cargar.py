@@ -201,10 +201,12 @@ def manifiesto() -> dict:
 # ---------------------------------------------------------------------------
 class Carga:
     def __init__(self, conexion: psycopg.Connection, simulacion: bool,
-                 cabecera_sintetica: bool = False) -> None:
+                 cabecera_sintetica: bool = False,
+                 tolerar_conciliacion: bool = False) -> None:
         self.cn = conexion
         self.simulacion = simulacion
         self.cabecera_sintetica = cabecera_sintetica
+        self.tolerar_conciliacion = tolerar_conciliacion
         self.ejecucion_id: int | None = None
         self.compania_id: int | None = None
         self.usuario_id: int | None = None
@@ -863,6 +865,23 @@ def cargar_libro(carga: Carga) -> None:
 
         crear_mapas(cur, carga.compania_id)
 
+        # La compañía puede tener ya otros años cargados (la 27 es 2025 y sobre
+        # ella se carga 2026): el control de cierre compara el **delta** de esta
+        # corrida, no el total de la compañía. Se separan las cabeceras reales de
+        # las sintéticas porque las sintéticas no vienen de `CONDOCUM`.
+        def contar_documentos(sinteticas: bool) -> int:
+            cur.execute(
+                "SELECT count(*) FROM documentos WHERE compania_id = %s AND origen = 'Migracion' "
+                "AND COALESCE(legado->>'SINTETICA', 'false') = %s",
+                (carga.compania_id, "true" if sinteticas else "false"))
+            return cur.fetchone()[0]
+
+        documentos_antes = contar_documentos(False)
+        sinteticas_antes = contar_documentos(True)
+        cur.execute("SELECT count(*) FROM documento_lineas WHERE compania_id = %s AND origen = 'Migracion'",
+                    (carga.compania_id,))
+        lineas_antes = cur.fetchone()[0]
+
         # --- Cabeceras -----------------------------------------------------
         copiar_a_temporal(cur, "stg_doc", "CONDOCUM")
         carga.archivo("CONDOCUM")
@@ -929,31 +948,36 @@ def cargar_libro(carga: Carga) -> None:
         cur.execute("SELECT count(*) FROM stg_doc")
         total_cabeceras = cur.fetchone()[0]
         cur.execute("SELECT count(*) FROM documentos WHERE compania_id = %s "
-                    "AND origen = 'Migracion'", (carga.compania_id,))
+                    "AND origen = 'Migracion' AND COALESCE(legado->>'SINTETICA', 'false') <> 'true'",
+                    (carga.compania_id,))
         documentos_total = cur.fetchone()[0]
         cur.execute("SELECT count(*) FROM documentos WHERE compania_id = %s "
                     "AND origen = 'Migracion' AND legado->>'SINTETICA' = 'true'",
                     (carga.compania_id,))
-        sinteticas = cur.fetchone()[0]
+        sinteticas = cur.fetchone()[0] - sinteticas_antes
         cur.execute("SELECT count(*) FROM documento_lineas WHERE compania_id = %s "
                     "AND origen = 'Migracion'", (carga.compania_id,))
         renglones_total = cur.fetchone()[0]
 
     # Cierre del balance del cargue: en la base tiene que haber **todo** lo que no
-    # se rechazó, y lo rechazado tiene que estar registrado con causa. Se compara
-    # contra las tablas y no contra `rowcount` porque en una segunda corrida no
+    # se rechazó, y lo rechazado tiene que estar registrado con causa. Se mide el
+    # delta de esta corrida (`documentos_antes`/`lineas_antes`) porque la compañía
+    # destino puede tener ya otros años: la 27 se cargó con 2025 y aquí se le
+    # suman los movimientos de 2026. Dentro del delta, en una segunda corrida no
     # entra nada nuevo (todo choca con las claves únicas) y los rechazos sí se
     # vuelven a registrar, bajo su propia ejecución. En simulación no hay recuento
     # de rechazos que contrastar (ver arriba).
     if not carga.simulacion:
-        if documentos_total - sinteticas + cabeceras_rechazadas != total_cabeceras:
+        nuevos_documentos = documentos_total - documentos_antes
+        if nuevos_documentos + cabeceras_rechazadas != total_cabeceras:
             raise RuntimeError(
                 f"El libro de cabeceras no cuadra: {total_cabeceras:,} en el origen, "
-                f"{documentos_total:,} en la base y {cabeceras_rechazadas:,} rechazadas.")
-        if renglones_total + rechazados != total_renglones:
+                f"{nuevos_documentos:,} nuevas en la base y {cabeceras_rechazadas:,} rechazadas.")
+        nuevas_lineas = renglones_total - lineas_antes
+        if nuevas_lineas + rechazados != total_renglones:
             raise RuntimeError(
                 f"El libro de renglones no cuadra: {total_renglones:,} en el origen, "
-                f"{renglones_total:,} en la base y {rechazados:,} rechazados.")
+                f"{nuevas_lineas:,} nuevos en la base y {rechazados:,} rechazados.")
 
     carga.contar("documentos", f"Nuevos {documentos} · en la base {documentos_total:,}")
     if sinteticas:
@@ -1519,10 +1543,17 @@ def conciliar_saldos(carga: Carga) -> None:
           f"{acumuladas:,} pares · {acumuladas_con_libro:,} con partidas propias")
 
     if dif_debito or dif_credito:
-        raise RuntimeError(
+        mensaje = (
             "La conciliación no cuadra: con los rechazos declarados sumados, la instantánea "
             f"sigue difiriendo en débito {dif_debito:,.2f} y crédito {dif_credito:,.2f}. "
             "O el libro perdió partidas sin registrarlas, o la instantánea no es de este libro.")
+        if not carga.tolerar_conciliacion:
+            raise RuntimeError(mensaje)
+        # Un histórico cargado sobre una compañía que ya tenía otro año mezcla dos
+        # instantáneas en el mismo `saldos_cuenta`: la diferencia se reporta y se
+        # documenta, en vez de tumbar una carga ya verificada por entidad.
+        print(f"   AVISO: {mensaje} (tolerado con --tolerar-conciliacion)")
+        carga.contar("conciliacion", "Diferencia reportada y tolerada (ver 15_compania_26.md)")
 
     carga.contar("conciliacion", f"{cuadran:,} de {pares:,} pares cuadran")
     carga.contar("conciliacion", f"{sin_con_saldo:,} pares en períodos sin libro (P-8)")
@@ -1566,6 +1597,9 @@ def main(argv: list[str] | None = None) -> int:
                              "sin cabecera en CONDOCUM, en vez de rechazarlos (etapa B)")
     parser.add_argument("--permitir-base-sucia", action="store_true",
                         help="carga aunque la base ya tenga compañías (datos de demostración)")
+    parser.add_argument("--tolerar-conciliacion", action="store_true",
+                        help="reporta la diferencia de conciliación sin abortar (para cargar un "
+                             "histórico sobre una compañía con otro año ya cargado)")
     argumentos = parser.parse_args(argv)
 
     # El cargador trabaja una compañía por corrida: el código y el staging se
@@ -1594,7 +1628,8 @@ def main(argv: list[str] | None = None) -> int:
 
     inicio = time.monotonic()
     with psycopg.connect(argumentos.url) as conexion:
-        carga = Carga(conexion, argumentos.simulacion, argumentos.cabecera_sintetica)
+        carga = Carga(conexion, argumentos.simulacion, argumentos.cabecera_sintetica,
+                      argumentos.tolerar_conciliacion)
         if argumentos.simulacion:
             print("SIMULACIÓN: no se escribe nada.")
         else:

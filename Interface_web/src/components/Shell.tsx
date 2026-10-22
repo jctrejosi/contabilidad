@@ -2,8 +2,12 @@ import { useState, type ReactNode } from 'react';
 import { PERIODO, USUARIO } from '../data/mock';
 import type { CompaniaSesion } from '../types';
 import BotChat from './BotChat';
+import Icon from './Icon';
+import { FINANCIAL_MODULES, MODULE_ORDER, getModuleFromPage, type FinancialModuleId } from '../data/finance';
+import { useFinance } from '../finance/store';
 
 export type NavPage =
+  | 'suite'
   | 'dashboard'
   | 'movimientos/captura'
   | 'movimientos/lotes'
@@ -60,7 +64,9 @@ export type NavPage =
   | 'admin/usuarios'
   | 'admin/bitacora'
   | 'admin/integraciones'
-  | 'admin/reorganizacion';
+  | 'admin/reorganizacion'
+  | FinancialModuleId
+  | `${FinancialModuleId}/${string}`;
 
 interface NavItem {
   id: NavPage;
@@ -192,6 +198,25 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showNotif, setShowNotif] = useState(false);
 
+  const financialModule = getModuleFromPage(currentPage);
+  const isSuite = currentPage === 'suite';
+  const financialSlug = currentPage.split('/')[1];
+  const { state } = useFinance();
+
+  const liveBadges: Record<string, number> = {
+    'facturacion/documentos': state.invoices.filter(item => item.kind === 'FV' && ['Pendiente', 'Enviada', 'Rechazada'].includes(item.dianStatus)).length,
+    'facturacion/dian': state.invoices.filter(item => ['Pendiente', 'Enviada', 'Rechazada'].includes(item.dianStatus)).length,
+    'cartera/partidas': state.receivables.filter(item => item.balance > 0).length,
+    'cartera/aplicacion': state.receipts.filter(item => item.status !== 'Aplicado').length,
+    'cuentas-pagar/obligaciones': state.payables.filter(item => item.balance > 0).length,
+    'cuentas-pagar/propuestas': state.proposals.filter(item => item.status === 'Pendiente aprobación').length,
+    'tesoreria/extractos': state.statements.filter(item => item.status === 'Abierto').length,
+    'tesoreria/conciliacion': state.statementLines.filter(item => item.status !== 'Conciliado').length,
+    'tesoreria/cheques': state.checks.filter(item => item.status === 'Emitido').length,
+    'presupuesto/aprobacion': state.budgets.filter(item => item.status === 'En revisión').length,
+    'presupuesto/alertas': state.budgetAlerts.filter(item => item.status === 'Abierta').length,
+  };
+
   function toggleGroup(id: string) {
     setExpandedGroups(prev => {
       const next = new Set(prev);
@@ -226,7 +251,7 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
             }`}
           >
             <img
-              src={`${import.meta.env.BASE_URL}dsi-logo.png`}
+              src={`${import.meta.env.BASE_URL}dsi-logo.svg`}
               alt="DSI S.A."
               width={176}
               height={51}
@@ -236,7 +261,7 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
           {!collapsed && (
             <div className="w-full min-w-0 text-center">
               <div className="text-white font-semibold text-sm leading-tight">CONTABDSI</div>
-              <div className="text-xs mt-1" style={{ color: '#7BDCFB' }}>Contabilidad General</div>
+              <div className="text-xs mt-1" style={{ color: '#7BDCFB' }}>Suite Financiera</div>
             </div>
           )}
         </div>
@@ -249,8 +274,84 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
           </div>
         )}
 
+        <div className="px-3 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+          <button
+            onClick={() => onNavigate('suite')}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded text-xs transition-colors hover:bg-white/10 ${collapsed ? 'justify-center' : ''}`}
+            style={{ backgroundColor: isSuite ? 'rgba(0,176,242,0.14)' : 'rgba(255,255,255,0.05)', color: '#C8F0FD' }}
+            title={collapsed ? 'Todos los módulos' : undefined}
+          >
+            <Icon name="apps" className="w-4 h-4 shrink-0" />
+            {!collapsed && <span className="flex-1 text-left">Todos los módulos</span>}
+          </button>
+        </div>
+
         {/* Nav */}
         <nav className="flex-1 py-2 overflow-y-auto">
+          {isSuite && (
+            <div className="px-2">
+              <div className={collapsed ? 'sr-only' : 'px-3 pt-2 pb-2 text-[10px] font-semibold uppercase tracking-widest'} style={{ color: '#7BDCFB' }}>Módulos</div>
+              <button
+                onClick={() => onNavigate('dashboard')}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded transition-colors hover:bg-white/5"
+              >
+                <Icon name="ledger" className="w-5 h-5 shrink-0" />
+                {!collapsed && <span>Contabilidad general</span>}
+              </button>
+              {MODULE_ORDER.map(id => {
+                const module = FINANCIAL_MODULES[id];
+                return (
+                  <button
+                    key={id}
+                    onClick={() => onNavigate(id)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded transition-colors hover:bg-white/5"
+                  >
+                    <Icon name={module.icon} className="w-5 h-5 shrink-0" />
+                    {!collapsed && <span>{module.name}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {financialModule && (
+            <div className="px-2">
+              <div className={`mx-1 mb-2 px-2 py-3 rounded ${collapsed ? 'flex justify-center' : ''}`} style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                <div className="flex items-center gap-3">
+                  <Icon name={financialModule.icon} className="w-5 h-5 shrink-0 text-white" />
+                  {!collapsed && <div><div className="text-xs font-semibold text-white">{financialModule.name}</div><div className="text-[10px] mt-0.5" style={{ color: '#7BDCFB' }}>Espacio operativo</div></div>}
+                </div>
+              </div>
+              <button
+                onClick={() => onNavigate(financialModule.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs rounded transition-colors ${!financialSlug ? 'font-medium text-white' : 'hover:bg-white/5'}`}
+                style={!financialSlug ? { backgroundColor: '#0073C0' } : {}}
+              >
+                <Icon name="apps" className="w-4 h-4 shrink-0" />
+                {!collapsed && <span>Resumen del módulo</span>}
+              </button>
+              {financialModule.nav.map(item => {
+                const active = financialSlug === item.slug;
+                const badge = liveBadges[`${financialModule.id}/${item.slug}`] ?? item.badge;
+                return (
+                  <button
+                    key={item.slug}
+                    title={collapsed ? item.label : undefined}
+                    onClick={() => onNavigate(`${financialModule.id}/${item.slug}` as NavPage)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs rounded transition-colors ${active ? 'font-medium text-white' : 'hover:bg-white/5'}`}
+                    style={active ? { backgroundColor: '#0073C0' } : {}}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-white' : 'bg-petroleum-400'}`} />
+                    {!collapsed && <><span className="flex-1 text-left">{item.label}</span>{badge ? <span className={`min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[10px] ${active ? 'bg-white/20' : 'bg-white/10'}`}>{badge}</span> : null}</>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {!isSuite && !financialModule && (
+            <>
+              <div className={collapsed ? 'sr-only' : 'px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-widest'} style={{ color: '#7BDCFB' }}>Contabilidad general</div>
           {/* Inicio */}
           <button
             onClick={() => onNavigate('dashboard')}
@@ -262,7 +363,7 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
             style={currentPage === 'dashboard' ? { backgroundColor: '#0073C0', color: '#fff' } : {}}
           >
             <span className="text-base w-5 text-center shrink-0">⌂</span>
-            {!collapsed && <span>Inicio</span>}
+            {!collapsed && <span>Inicio contable</span>}
           </button>
 
           {/* Reprocesos - standalone */}
@@ -342,6 +443,8 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
               </button>
             );
           })}
+            </>
+          )}
         </nav>
 
         {/* Collapse toggle */}

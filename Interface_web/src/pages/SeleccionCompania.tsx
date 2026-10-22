@@ -59,7 +59,7 @@ export default function SeleccionCompania({ onSelect }: SeleccionCompaniaProps) 
             <div>
               <div className="rounded-xl bg-white p-5 shadow-sm">
                 <img
-                  src={`${import.meta.env.BASE_URL}dsi-logo.png`}
+                  src={`${import.meta.env.BASE_URL}dsi-logo.svg`}
                   alt="DSI S.A."
                   width={176}
                   height={51}

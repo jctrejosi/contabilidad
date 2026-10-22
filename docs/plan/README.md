@@ -1,10 +1,12 @@
 # Planes
 
-Aquí viven **tres planes separados**. Ordenan trabajos distintos, aunque
-compartan las mismas fuentes: el plan de la suite financiera define *el destino
-funcional y el flujo definitivo del dato*; el plan de backend dice *qué endpoints
-y qué tablas faltan* para cerrar la brecha actual; el plan del bot dice *qué
-herramientas y qué fases necesita el asistente*.
+Aquí viven **tres planes separados** y el **brief de diseño para Figma Make**.
+Los planes ordenan trabajos distintos, aunque compartan las mismas fuentes: el
+plan de la suite financiera define *el destino funcional y el flujo definitivo
+del dato*; el plan de backend dice *qué endpoints y qué tablas faltan* para
+cerrar la brecha actual; el plan del bot dice *qué herramientas y qué fases
+necesita el asistente*. El brief de diseño traduce los módulos nuevos de la
+suite a pantallas, flujos y datos mock.
 
 Cuando el plan de backend y el de la suite difieran en modelo de datos,
 arquitectura o flujo del dato, prevalece el de la suite.
@@ -34,8 +36,11 @@ una.
 | `suite-financiera/08-calidad-y-operacion.md` | Pruebas, CI/CD, requisitos no funcionales y operación |
 | `suite-financiera/09-migracion-legado.md` | Migración desde Advantage, conciliación y cutover |
 | `suite-financiera/10-adr.md` | Decisiones de arquitectura con contexto y consecuencias |
-| `suite-financiera/11-figma-make.md` | Brief autónomo para Figma Make: módulos, funciones, pantallas, flujos y datos mock |
 | `suite-financiera/glosario.md` | Lenguaje común del dominio financiero |
+
+El **brief de diseño para Figma Make** vive fuera de la carpeta de la suite, en
+`FIGMA_MAKE_SUITE.md`: es un documento autónomo con 11 módulos, 124 funciones,
+82 pantallas, 8 flujos, datos mock y prompt final.
 
 ---
 

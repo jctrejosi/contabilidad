@@ -1,17 +1,20 @@
 {
-  "archivo": "contabdsi_datos_20261021.dump",
-  "creado": "2026-10-21",
+  "archivo": "contabdsi_datos_20261022.dump",
+  "creado": "2026-10-22",
   "base": "contabdsi_datos",
   "postgres": "18",
-  "bytes": 126962562,
-  "sha256": "0c1fe26883f1b6c632aa690a574bd915fc8e5df428c71a4f379355f63de16aad",
+  "bytes": 312102488,
+  "sha256": "ac7d3ddbec63dc194cb0dc6614388245f542789bff18a951ace7150ad7e6bbe8",
   "partes": [
-    "contabdsi_datos_20261021.dump.part00",
-    "contabdsi_datos_20261021.dump.part01"
+    "contabdsi_datos_20261022.dump.part00",
+    "contabdsi_datos_20261022.dump.part01",
+    "contabdsi_datos_20261022.dump.part02",
+    "contabdsi_datos_20261022.dump.part03",
+    "contabdsi_datos_20261022.dump.part04"
   ],
   "conteos": {
-    "documentos": 740689,
-    "documento_lineas": 5043942,
-    "terceros": 125993
+    "documentos": 1296376,
+    "documento_lineas": 15136640,
+    "terceros": 125995
   }
 }

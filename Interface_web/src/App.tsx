@@ -49,12 +49,16 @@ import Bitacora from './pages/Bitacora';
 import Integraciones from './pages/Integraciones';
 import Reorganizacion from './pages/Reorganizacion';
 import SeleccionCompania from './pages/SeleccionCompania';
+import SuiteHome from './pages/SuiteHome';
+import FinanceModulePage from './pages/finance/FinanceModulePage';
+import { FinanceProvider } from './finance/store';
+import { getModuleFromPage } from './data/finance';
 
 const URGENTE_ALERTS = ALERTAS.filter(a => a.tipo === 'error').length;
 
 export default function App() {
   const [compania, setCompania] = useState<CompaniaSesion | null>(null);
-  const [page, setPage] = useState<NavPage>('dashboard');
+  const [page, setPage] = useState<NavPage>('suite');
   const [lotes, setLotes] = useState<Lote[]>(LOTES_INICIALES);
   const [showDocumentPage, setShowDocumentPage] = useState(false);
   const [documentoOficial, setDocumentoOficial] = useState<ClaveDocumento | null>(null);
@@ -64,7 +68,7 @@ export default function App() {
       <SeleccionCompania
         onSelect={seleccion => {
           setCompania(seleccion);
-          setPage('dashboard');
+          setPage('suite');
           setShowDocumentPage(false);
         }}
       />
@@ -95,12 +99,19 @@ export default function App() {
   }
 
   function renderPage() {
+    if (getModuleFromPage(page)) {
+      return <FinanceModulePage page={page} onNavigate={navigate} />;
+    }
+
     // Special case: document official page
     if (showDocumentPage && page === 'movimientos/lotes') {
       return <DocumentoOficial cia={companiaActiva.codigo} compania={companiaActiva} clave={documentoOficial} onNavigate={navigate} />;
     }
 
     switch (page) {
+      case 'suite':
+        return <SuiteHome onNavigate={navigate} compania={companiaActiva} />;
+
       case 'dashboard':
         return (
           <Dashboard
@@ -253,18 +264,20 @@ export default function App() {
   }
 
   return (
-    <Shell
-      currentPage={page}
-      onNavigate={navigate}
-      badgeAlerts={URGENTE_ALERTS}
-      compania={companiaActiva}
-      onChangeCompany={() => {
-        setPage('dashboard');
-        setShowDocumentPage(false);
-        setCompania(null);
-      }}
-    >
-      {renderPage()}
-    </Shell>
+    <FinanceProvider key={companiaActiva.codigo} companyCode={companiaActiva.codigo}>
+      <Shell
+        currentPage={page}
+        onNavigate={navigate}
+        badgeAlerts={URGENTE_ALERTS}
+        compania={companiaActiva}
+        onChangeCompany={() => {
+          setPage('suite');
+          setShowDocumentPage(false);
+          setCompania(null);
+        }}
+      >
+        {renderPage()}
+      </Shell>
+    </FinanceProvider>
   );
 }

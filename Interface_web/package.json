@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test:parametros": "node --experimental-strip-types --test tests/parametrosOperacion.test.ts",
     "smoke": "node scripts/smoke.mjs",
+    "test:finance": "node scripts/verify-finance.mjs",
     "format": "oxfmt"
   },
   "dependencies": {

@@ -39,9 +39,15 @@
  *   node dev.js --keep-db        no detiene PostgreSQL al hacer --stop
  *   node dev.js --no-docker-autostart
  *                                no intenta abrir Docker Desktop
+ *   node dev.js --yes            termina sin preguntar lo que ocupe los puertos
+ *
+ * Si un puerto necesario está ocupado, se muestran los procesos o contenedores
+ * que lo usan y se pide confirmación antes de terminarlos. Sin terminal
+ * interactiva no se termina nada: usa `--yes` (o DEV_KILL_OCCUPANTS=1).
  *
  * Variables de entorno: BACKEND_PORT, WEB_PORT (o PORT), DB_PORT, DB_USER,
- * DB_NAME, DATABASE_URL, DEV_TIMEOUT_MS, DOCKER_START_TIMEOUT_MS, NO_COLOR.
+ * DB_NAME, DATABASE_URL, DEV_TIMEOUT_MS, DOCKER_START_TIMEOUT_MS, NO_COLOR,
+ * DEV_KILL_OCCUPANTS.
  *
  * Motor de datos: con `--db-postgres` el backend usa el modelo nuevo
  * (`CONTABDSI_STORE=postgres` + `DATABASE_URL`); con `--db-advantage` (por
@@ -55,6 +61,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
+const readline = require("node:readline");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Rutas y configuración
@@ -115,6 +122,11 @@ function resolvedDatabaseUrl() {
   const fromFile = (readLocalEnv().DATABASE_URL || "").trim();
   if (fromFile) return fromFile;
   return `postgres://${CONFIG.dbUser}:${CONFIG.dbUser}@127.0.0.1:${CONFIG.dbPort}/${CONFIG.dbName}`;
+}
+
+/** ¿DATABASE_URL viene del entorno o de .env (y no del valor por defecto)? */
+function hasExplicitDatabaseUrl() {
+  return Boolean((process.env.DATABASE_URL || "").trim() || (readLocalEnv().DATABASE_URL || "").trim());
 }
 
 // Los paquetes que el backend necesita importar para considerarse instalado.
@@ -323,31 +335,231 @@ function freePort(port) {
   return [...new Set([...pids, ...recargadores])];
 }
 
-/**
- * Deja el puerto libre antes de arrancar un servicio: si quedó ocupado por una
- * ejecución previa, se cierra su proceso y se espera a que el sistema suelte
- * el socket.
- */
-async function releasePort(label, port) {
-  if (!(await portOpen(port))) return;
+/** Contenedores Docker que publican puertos TCP en el host (se consulta una vez). */
+let dockerPortsCache = null;
 
-  warn(`El puerto ${port} (${label}) estaba en uso; liberándolo…`);
-  const pids = freePort(port);
-  if (pids.length) info(`Procesos cerrados: ${pids.join(", ")}`);
+function dockerPortOwners() {
+  if (dockerPortsCache) return dockerPortsCache;
+  dockerPortsCache = [];
+  if (!commandExists("docker")) return dockerPortsCache;
 
-  const deadline = Date.now() + 8000;
-  while (Date.now() < deadline) {
-    if (!(await portOpen(port))) {
-      ok(`Puerto ${port} liberado.`);
-      return;
+  const result = spawnSync("docker", ["ps", "--format", "{{.Names}}\t{{.Ports}}"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0 || !result.stdout) return dockerPortsCache;
+
+  for (const line of result.stdout.split(/\r?\n/)) {
+    const [name, ports = ""] = line.split("\t");
+    if (!name) continue;
+    for (const mapping of ports.split(",")) {
+      const owner = mapping.trim().match(/:(\d+)->/);
+      if (!owner) continue;
+      dockerPortsCache.push({ port: Number(owner[1]), container: name, mapping: mapping.trim() });
     }
-    await sleep(250);
+  }
+  return dockerPortsCache;
+}
+
+/** Procesos que escuchan en un puerto según `ss -ltnp` (Linux). */
+function listenersFromSs(port) {
+  const result = spawnSync("ss", ["-ltnp"], { encoding: "utf8", windowsHide: true });
+  if (result.status !== 0 || !result.stdout) return [];
+
+  const suffix = `:${port}`;
+  const found = [];
+  for (const line of result.stdout.split("\n")) {
+    const columns = line.trim().split(/\s+/);
+    if (columns.length < 4 || !columns[3].endsWith(suffix)) continue;
+    for (const match of line.matchAll(/users:\(\("([^"]+)",pid=(\d+)/g)) {
+      found.push({ pid: Number(match[2]), name: match[1] });
+    }
+  }
+  return found;
+}
+
+/** Procesos que escuchan en un puerto según `lsof` (Linux, respaldo de `ss`). */
+function listenersFromLsof(port) {
+  if (!commandExists("lsof")) return [];
+  const result = spawnSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-F", "pc"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0 || !result.stdout) return [];
+
+  const found = [];
+  let pid = null;
+  for (const line of result.stdout.split("\n")) {
+    if (line.startsWith("p")) pid = Number(line.slice(1));
+    else if (line.startsWith("c") && pid) found.push({ pid, name: line.slice(1) });
+  }
+  return found;
+}
+
+/** Nombre del proceso de un PID (Windows). */
+function windowsProcessName(pid) {
+  const result = spawnSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  const firstLine = `${result.stdout || ""}`.trim().split(/\r?\n/)[0] || "";
+  const name = firstLine.match(/^"([^"]+)"/);
+  return name ? name[1] : "proceso";
+}
+
+/**
+ * Procesos y contenedores que escuchan en un puerto. En Docker, el socket lo
+ * publica `docker-proxy` (de root y en otro namespace), por eso `ss`/`fuser`
+ * no lo atribuyen a nadie: se identifica el contenedor con `docker ps`.
+ */
+function portOccupants(port) {
+  const occupants = [];
+
+  const seenContainers = new Set();
+  for (const owner of dockerPortOwners()) {
+    if (owner.port !== port || seenContainers.has(owner.container)) continue;
+    seenContainers.add(owner.container);
+    occupants.push({
+      pid: null,
+      name: "docker",
+      container: owner.container,
+      command: owner.mapping,
+    });
   }
 
-  throw new Error(
-    `No se pudo liberar el puerto ${port} (${label}) tras cerrar sus procesos. ` +
-      "Ciérralo manualmente o usa otro puerto (BACKEND_PORT / WEB_PORT).",
-  );
+  const processes = IS_WIN
+    ? listenersOnPort(port).map((pid) => ({ pid, name: windowsProcessName(pid) }))
+    : [...listenersFromSs(port), ...listenersFromLsof(port)];
+
+  const seen = new Set(occupants.filter((occupant) => occupant.pid).map((occupant) => occupant.pid));
+  for (const process of processes) {
+    if (!process.pid || seen.has(process.pid)) continue;
+    seen.add(process.pid);
+    occupants.push({ ...process, command: IS_WIN ? "" : cmdlineOf(process.pid) });
+  }
+
+  return occupants;
+}
+
+/** Pregunta por consola; resuelve con la respuesta (o vacío si se cierra). */
+function ask(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      rl.close();
+      resolve(value);
+    };
+    rl.question(question, finish);
+    rl.on("close", () => finish(""));
+  });
+}
+
+function confirmed(answer) {
+  return /^(s|si|sí|y|yes)$/i.test(`${answer || ""}`.trim());
+}
+
+class CancelledByUserError extends Error {}
+
+/**
+ * Preflight de los puertos que necesita el proyecto. Si están ocupados, muestra
+ * quién los usa y pide confirmación antes de terminarlos. Cancelar no toca nada.
+ */
+async function resolvePortConflicts() {
+  const targets = [
+    { label: "backend", port: CONFIG.backendPort },
+    { label: "interfaz web", port: CONFIG.webPort },
+  ];
+  if (options.ia) targets.push({ label: "asistente IA", port: CONFIG.iaServicePort });
+  // Si DATABASE_URL es explícita, la base del compose no hace falta.
+  if (options.db && !hasExplicitDatabaseUrl()) {
+    targets.unshift({ label: "PostgreSQL del proyecto", port: CONFIG.dbPort, database: true });
+  }
+
+  const conflicts = [];
+  for (const target of targets) {
+    if (conflicts.some((conflict) => conflict.port === target.port)) continue;
+    const owners = portOccupants(target.port);
+    const projectDatabase = owners.some((owner) => owner.container === DB_CONTAINER);
+    const occupants = target.database
+      ? owners.filter((owner) => owner.container !== DB_CONTAINER)
+      : owners;
+    // Se comprueba también por sockets: un listener en otra interfaz no aparece
+    // al conectar a 127.0.0.1, pero impediría enlazar el puerto.
+    const open = await portOpen(target.port);
+    // El PostgreSQL del propio proyecto no es un conflicto: se reutiliza.
+    if (target.database && projectDatabase && !occupants.length) continue;
+    if (!occupants.length && !open) continue;
+    conflicts.push({ ...target, occupants });
+  }
+  if (!conflicts.length) return;
+
+  warn("Los siguientes puertos ya están ocupados:");
+  log("");
+  for (const conflict of conflicts) {
+    log(`  ${c.yellow(`Puerto ${conflict.port}`)} ${c.dim(`(${conflict.label})`)}`);
+    if (!conflict.occupants.length) {
+      log(c.dim("     · proceso no identificable (sin permisos para verlo)"));
+      continue;
+    }
+    for (const occupant of conflict.occupants) {
+      if (occupant.container) {
+        log(`     · contenedor Docker ${c.cyan(occupant.container)} · ${occupant.command}`);
+      } else {
+        const pid = occupant.pid ? `PID ${occupant.pid}` : "PID desconocido";
+        const command = occupant.command ? ` · ${occupant.command.slice(0, 120)}` : "";
+        log(`     · ${pid} · ${occupant.name}${command}`);
+      }
+    }
+  }
+  log("");
+  warn("Terminarlos detiene esos servicios, que pueden pertenecer a otro proyecto.");
+
+  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  let approved = options.yes || confirmed(process.env.DEV_KILL_OCCUPANTS);
+  if (!approved && interactive) {
+    approved = confirmed(await ask("¿Terminar esos procesos y continuar? [s/N] "));
+  }
+  if (!approved) {
+    const hint = interactive
+      ? "No se terminó nada. Libera los puertos, usa otros (BACKEND_PORT, WEB_PORT, IA_SERVICE_PORT) o define DATABASE_URL para otra base."
+      : "Sin terminal interactiva no se termina nada. Usa --yes o libera los puertos a mano.";
+    throw new CancelledByUserError(`Arranque cancelado: los puertos siguen ocupados. ${hint}`);
+  }
+
+  for (const conflict of conflicts) {
+    const containers = [
+      ...new Set(conflict.occupants.filter((occupant) => occupant.container).map((occupant) => occupant.container)),
+    ];
+    for (const container of containers) {
+      info(`Deteniendo el contenedor ${container}…`);
+      const result = run("docker", ["stop", container], { capture: true });
+      if (result.status !== 0) warn(`No se pudo detener el contenedor ${container}.`);
+    }
+
+    const pids = freePort(conflict.port);
+    if (pids.length) info(`Procesos cerrados en el puerto ${conflict.port}: ${pids.join(", ")}`);
+  }
+
+  const deadline = Date.now() + 15000;
+  let pending = [];
+  do {
+    await sleep(250);
+    pending = [];
+    for (const conflict of conflicts) {
+      if (await portOpen(conflict.port)) pending.push(conflict);
+    }
+  } while (pending.length && Date.now() < deadline);
+
+  if (pending.length) {
+    throw new Error(
+      `No se pudieron liberar los puertos ${pending.map((item) => `${item.port} (${item.label})`).join(", ")}. ` +
+        "Ciérralos manualmente o usa otros puertos (BACKEND_PORT, WEB_PORT, IA_SERVICE_PORT); para la base, define DATABASE_URL."
+    );
+  }
+  ok("Puertos liberados.");
 }
 
 function portOpen(port, host = "127.0.0.1") {
@@ -881,6 +1093,47 @@ function dbContainerRunning() {
   return dbContainerState;
 }
 
+let dbContainerHostPort;
+
+/** Puerto del anfitrión al que el contenedor publica 5432 ("" si no se sabe). */
+function dbContainerPublishedPort() {
+  if (dbContainerHostPort !== undefined) return dbContainerHostPort;
+  dbContainerHostPort = "";
+  if (dbContainerRunning()) {
+    const result = spawnSync("docker", ["port", DB_CONTAINER, "5432/tcp"], {
+      stdio: "pipe",
+      windowsHide: true,
+      encoding: "utf8",
+    });
+    const match = /:(\d+)\s*$/m.exec(result.status === 0 ? result.stdout || "" : "");
+    if (match) dbContainerHostPort = match[1];
+  }
+  return dbContainerHostPort;
+}
+
+const LOCAL_DB_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "0.0.0.0", "[::1]"]);
+
+/**
+ * ¿Los comandos de PostgreSQL (`psql`, `pg_dump`, `pg_restore`) van dentro del
+ * contenedor? Sólo cuando la base es la del contenedor: sin `DATABASE_URL`
+ * explícita, sí; con ella manda su host y puerto, para no volcar o crear bases en
+ * una instancia distinta de la que pide la URL (el error que dejó una base vacía
+ * en el contenedor mientras los datos estaban en un clúster local).
+ */
+function dbCommandsInContainer(url) {
+  if (!dbContainerRunning()) return false;
+  if (!hasExplicitDatabaseUrl()) return true;
+  const published = dbContainerPublishedPort();
+  if (!published) return false;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  return published === (parsed.port || "5432") && LOCAL_DB_HOSTS.has(parsed.hostname);
+}
+
 /** Nombre de la base dentro de una URL de conexión. */
 function databaseNameOf(url) {
   try {
@@ -900,7 +1153,7 @@ function maintenanceUrlOf(url) {
  * información —base o tabla inexistente— y no un error.
  */
 function psqlScalar(url, database, sql) {
-  const inContainer = dbContainerRunning();
+  const inContainer = dbCommandsInContainer(url);
   const command = inContainer ? "docker" : "psql";
   const args = inContainer
     ? ["exec", DB_CONTAINER, "psql", "-U", CONFIG.dbUser, "-d", database, "-t", "-A", "-c", sql]
@@ -915,7 +1168,7 @@ function psqlScalar(url, database, sql) {
  * y así no choca con `--clean`.
  */
 function createMigrationDatabase(url, database, fd) {
-  const inContainer = dbContainerRunning();
+  const inContainer = dbCommandsInContainer(url);
   const command = inContainer ? "docker" : "psql";
   const args = inContainer
     ? ["exec", DB_CONTAINER, "createdb", "-U", CONFIG.dbUser, database]
@@ -982,7 +1235,7 @@ function materializeBackup(manifest) {
  */
 function restoreBackup(url, database, dumpPath, fd) {
   const timeout = 3600000;
-  if (dbContainerRunning()) {
+  if (dbCommandsInContainer(url)) {
     const remoto = "/tmp/contabdsi-restore.dump";
     const copiado = spawnSync("docker", ["cp", dumpPath, `${DB_CONTAINER}:${remoto}`], {
       stdio: ["ignore", fd, fd],
@@ -1121,7 +1374,7 @@ function tableCount(url, database, table) {
  * volcado se deja en `/tmp` y se copia con `docker cp`.
  */
 function dumpDatabase(url, database, target) {
-  if (dbContainerRunning()) {
+  if (dbCommandsInContainer(url)) {
     const remoto = "/tmp/contabdsi-backup.dump";
     const dumped = spawnSync(
       "docker",
@@ -1309,6 +1562,8 @@ async function runRestore(options) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const startedPids = {};
+// Solo se liberan puertos al abortar si esta ejecución llegó a arrancar algo.
+let servicesStarted = false;
 
 /**
  * Lanza un servicio desacoplado con la salida directa al archivo de log.
@@ -1332,6 +1587,7 @@ function startService({ name, command, args, cwd, env }) {
   fs.closeSync(fd);
 
   startedPids[name] = [child.pid];
+  servicesStarted = true;
   info(`[${name}] ▶ arrancado (pid ${child.pid}) · log: ${rel(logPath)}`);
   return child;
 }
@@ -1425,11 +1681,6 @@ function startWeb() {
   });
 }
 
-async function releaseServicePorts() {
-  await releasePort("backend", CONFIG.backendPort);
-  await releasePort("interfaz web", CONFIG.webPort);
-  if (options.ia) await releasePort("asistente IA", CONFIG.iaServicePort);
-}
 
 function savePids() {
   fs.mkdirSync(LOGS_DIR, { recursive: true });
@@ -1449,6 +1700,7 @@ function abortStarted() {
   for (const value of Object.values(startedPids)) {
     for (const pid of Array.isArray(value) ? value : [value]) killPid(pid);
   }
+  if (!servicesStarted) return;
   freePort(CONFIG.backendPort);
   freePort(CONFIG.webPort);
   if (options.ia) freePort(CONFIG.iaServicePort);
@@ -1513,10 +1765,13 @@ function stopAll() {
     }
   }
 
-  // Red de seguridad: liberar los puertos aunque algún pid haya quedado viejo.
-  freePort(CONFIG.backendPort);
-  freePort(CONFIG.webPort);
-  if (options.ia) freePort(CONFIG.iaServicePort);
+  // Red de seguridad: liberar los puertos solo si esta ejecución tenía servicios
+  // registrados. Sin PIDs propios no se toca lo que esté escuchando ahí.
+  if (entries.length) {
+    freePort(CONFIG.backendPort);
+    freePort(CONFIG.webPort);
+    if (options.ia) freePort(CONFIG.iaServicePort);
+  }
 
   if (!options.keepDb && commandExists("docker") && dockerDaemonUp()) {
     info("Deteniendo PostgreSQL…");
@@ -1636,6 +1891,7 @@ function printHelp() {
   log("   --no-reload                  uvicorn sin recarga automática");
   log("   --keep-db                    no detiene PostgreSQL al hacer --stop");
   log("   --no-docker-autostart        no intenta abrir Docker Desktop");
+  log("   --yes                        termina sin preguntar lo que ocupe los puertos");
   log("");
   log(c.dim("   Puertos: BACKEND_PORT, IA_SERVICE_PORT, WEB_PORT/PORT, DB_PORT"));
   log(c.dim("   --db-postgres usa DATABASE_URL (o DB_USER/DB_PORT/DB_NAME); sin ella,"));
@@ -1672,6 +1928,7 @@ function parseArgs(argv) {
     restore: true,
     backup: false,
     restoreOnly: false,
+    yes: false,
   };
 
   for (const argument of argv) {
@@ -1724,6 +1981,10 @@ function parseArgs(argv) {
         break;
       case "--restore":
         parsed.restoreOnly = true;
+        break;
+      case "--yes":
+      case "-y":
+        parsed.yes = true;
         break;
       default:
         warn(`Opción desconocida: ${argument}`);
@@ -1778,6 +2039,9 @@ async function main() {
     ensureAdvantage(options);
   }
 
+  step("Comprobando puertos");
+  await resolvePortConflicts();
+
   if (options.db) {
     // Con el modelo nuevo, si ya hay PostgreSQL escuchando (un clúster local, por
     // ejemplo) se usa esa instancia y no se intenta el contenedor: arrancarlo daría
@@ -1807,8 +2071,6 @@ async function main() {
   }
 
   step("Levantando servicios");
-  await releaseServicePorts();
-
   startBackend();
   startWeb();
   if (options.ia) startIaService();
@@ -1860,6 +2122,6 @@ process.on("SIGINT", () => {
 
 main().catch((error) => {
   fail(error.message);
-  abortStarted();
+  if (!(error instanceof CancelledByUserError)) abortStarted();
   process.exit(1);
 });

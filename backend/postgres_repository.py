@@ -1036,18 +1036,20 @@ def build_trial_balance(
         nombre, nit, digito = cursor.fetchone()
 
         cursor.execute(
-            "SELECT p.anio_operacion FROM parametros_operacion p "
-            "JOIN companias co ON co.id = p.compania_id WHERE co.codigo = %s",
-            (codigo,),
+            "SELECT s.anio FROM saldos_cuenta s JOIN companias co ON co.id = s.compania_id "
+            "WHERE co.codigo = %s AND s.anio = %s LIMIT 1",
+            (codigo, year),
         )
-        fila_control = cursor.fetchone()
-        if fila_control is None or not _text(fila_control[0]).strip():
-            raise ValueError("No existe configuración contable en CONCTR.")
-        control_year = int(float(_text(fila_control[0])))
-        if year != control_year:
+        if cursor.fetchone() is None:
+            cursor.execute(
+                "SELECT DISTINCT s.anio FROM saldos_cuenta s JOIN companias co ON co.id = s.compania_id "
+                "WHERE co.codigo = %s ORDER BY 1",
+                (codigo,),
+            )
+            cargados = [fila[0] for fila in cursor.fetchall()]
             raise ValueError(
-                f"CONMAE contiene los acumulados del ejercicio {control_year}; "
-                f"no es posible generar el año {year}."
+                f"No hay acumulados del ejercicio {year} para la compañía {codigo}; "
+                f"los años cargados son {cargados or 'ninguno'}."
             )
 
         cursor.execute(
