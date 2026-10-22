@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:parametros": "node --experimental-strip-types --test tests/parametrosOperacion.test.ts",
+    "test:assets": "node --experimental-strip-types --test tests/activosFijos.test.ts",
     "smoke": "node scripts/smoke.mjs",
     "test:finance": "node scripts/verify-finance.mjs",
     "format": "oxfmt"

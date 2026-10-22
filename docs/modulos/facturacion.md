@@ -2,7 +2,8 @@
 
 **Ruta:** `facturacion`
 **Archivo:** `Interface_web/src/pages/finance/Facturacion.tsx`
-**Datos:** `invoices`, `resolutions`, `dianEvents`, `products` en `FinanceState`.
+**Datos:** `invoices`, `resolutions`, `dianEvents`, `products`, `taxFilings`
+y `exogenousReports` en `FinanceState`.
 
 ## Objetivo
 
@@ -21,6 +22,11 @@ cuentas por pagar.
 | `resoluciones` | Resoluciones y numeración | Rangos, vigencia, consecutivo y disponibles |
 | `productos` | Productos y servicios | Catálogo con precio, IVA, cuenta y estado |
 | `importar` | Importar documentos | Carga validada y creación de borradores |
+| `formulario-300` | Formulario 300 · IVA | IVA generado, descontable y saldo a pagar |
+| `formulario-350` | Formulario 350 · Retención | Retención en la fuente y ReteICA |
+| `formulario-110` | Formulario 110 · Renta | Renta líquida, presuntiva e impuesto anual |
+| `declaracion` | Declaración electrónica | Checklist, validación, presentación y acuse |
+| `exogena` | Exógena y medios | Formatos anuales, terceros e incidencias |
 
 ## Funcionalidad implementada
 
@@ -78,6 +84,49 @@ cuentas por pagar.
 - Creación de facturas de compra en borrador con numeración `FC-8872+`.
 - Plantilla de columnas requeridas visible en pantalla.
 
+### Formulario 300 · IVA
+
+- Calcula el IVA del período desde las facturas contabilizadas: las notas
+  crédito restan de los ingresos y del IVA generado.
+- Casillas informativas, calculadas y editables; estas últimas permiten ajustes
+  con soporte (operaciones excluidas, no gravadas, retenciones de IVA).
+- Saldo a pagar = IVA generado − IVA descontable − retenciones de IVA.
+- Acciones: recalcular desde documentos, guardar ajustes, validar y exportar
+  borrador.
+
+### Formulario 350 · Retención
+
+- Agrupa las retenciones del período por concepto: retención en la fuente y
+  ReteICA.
+- Muestra base y valor practicado de cada concepto y el total del período.
+- Mismas acciones de recálculo, ajuste y validación del formulario 300.
+
+### Formulario 110 · Renta
+
+- Declaración anual con ingresos brutos, devoluciones, costos y deducciones,
+  renta líquida, presuntiva y renta líquida gravable.
+- Impuesto al 35 %, menos descuentos tributarios y autorretenciones.
+- Casillas editables para ingresos, deducciones, presuntiva, descuentos y
+  autorretenciones; los totales se recalculan.
+
+### Declaración electrónica
+
+- Bandeja de formularios con período, vencimiento, saldo, estado y acuse.
+- Checklist previo: formulario calculado, cifras revisadas, firma vigente y
+  pago programado.
+- Validación y presentación con confirmación escrita (`PRESENTAR`).
+- La presentación genera acuse `DIAN-<formulario>-<período>-<secuencia>` y deja
+  el formulario en `Aceptada`.
+- La presentación es simulada: no transmite XML ni firma electrónicamente.
+
+### Exógena y medios magnéticos
+
+- Reporte anual por formato (1001, 1005, 1006, 1007, 1008, 1009, 1010).
+- Terceros informados, valor reportado e incidencias por formato.
+- Corrección individual de incidencias.
+- Validación bloqueada mientras existan incidencias.
+- Presentación con confirmación escrita (`EXOGENA`) y acuse `EXO-<año>-<secuencia>`.
+
 ## Reglas de negocio
 
 - Una factura requiere tercero, al menos una línea y subtotal mayor que cero.
@@ -88,6 +137,11 @@ cuentas por pagar.
 - Una compra genera CxP por el neto después de retenciones.
 - Una venta genera CxC por el total del documento.
 - La aceptación DIAN no altera el asiento ni el valor.
+- Un formulario no se presenta si la lista de verificación está incompleta.
+- La exógena no se valida ni presenta mientras tenga incidencias.
+- Las casillas editables se conservan al recalcular; las calculadas se derivan
+  de las facturas y retenciones.
+- La presentación ante la DIAN es simulada y genera un acuse local.
 
 ## Cobertura funcional
 
@@ -105,6 +159,11 @@ cuentas por pagar.
 | F-INV-010 Eventos DIAN | `dian` |
 | F-INV-011 Contingencia | Cola DIAN (estado y evento) |
 | F-INV-012 Reversión y anulación | Notas y estado del documento |
+| F-TAX-001 Formulario 300 | `formulario-300` |
+| F-TAX-002 Formulario 350 | `formulario-350` |
+| F-TAX-003 Formulario 110 | `formulario-110` |
+| F-TAX-004 Declaración electrónica | `declaracion` |
+| F-TAX-005 Exógena | `exogena` |
 
 ## Integración pendiente
 
@@ -112,3 +171,8 @@ cuentas por pagar.
 - Validar NIT, municipio y responsabilidad fiscal contra la DIAN real.
 - Reservar consecutivos en una transacción de servidor.
 - Crear el asiento contable en el libro Advantage al contabilizar.
+- Generar XML UBL, firmar y transmitir a la DIAN desde `declaracion`.
+- Calcular el formulario 110 desde el cierre del ejercicio y no desde valores
+  de referencia.
+- Generar los archivos oficiales de exógena y validarlos contra los formatos
+  vigentes.

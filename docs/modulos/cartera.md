@@ -3,7 +3,8 @@
 **Ruta:** `cartera`
 **Archivo:** `Interface_web/src/pages/finance/Cartera.tsx`
 **Datos:** `receivables`, `receipts`, `applications`, `collections`,
-`writeOffs`, `advances` (dirección `AR`).
+`writeOffs`, `advances` (dirección `AR`), `impairmentProvisions`,
+`customerReconciliations`.
 
 ## Objetivo
 
@@ -23,6 +24,8 @@ partidas incobrables.
 | `cobro` | Cobro y promesas | Gestiones, compromisos y cumplimiento |
 | `ajustes` | Castigos y ajustes | Solicitud, aprobación y rechazo de castigos |
 | `anticipos` | Anticipos de clientes | Registro y aplicación de dineros recibidos sin factura |
+| `deterioro` | Provisión por deterioro | Cálculo por edades, aprobación y contabilización de la pérdida esperada |
+| `conciliacion` | Conciliación con clientes | Auxiliar contra estado de cuenta y confirmación del cliente |
 
 ## Funcionalidad implementada
 
@@ -90,6 +93,28 @@ partidas incobrables.
 - Aplicación a una factura del mismo cliente, total o parcial.
 - El remanente permanece disponible.
 
+### Provisión por deterioro
+
+- Calcula la cartera abierta por los cinco rangos de edad (`AGING_BUCKETS`).
+- Aplica la política NIIF 9 por tramo: Corriente 0 %, 1–30 1 %, 31–60 5 %,
+  61–90 15 % y +90 35 %.
+- Muestra provisión requerida, provisión registrada, cobertura y variación del
+  período (cargo o recuperación).
+- Genera el registro del período con apertura, cargo, recuperación y cierre.
+- Flujo de estados: `Calculada` → `Aprobada` → `Contabilizada`.
+- El cargo es `max(0, requerido − apertura)` y la recuperación
+  `max(0, apertura − requerido)`.
+- Historial por período con aprobador y nota.
+
+### Conciliación con clientes
+
+- Compara el saldo del auxiliar (`1305`) contra el estado de cuenta del cliente.
+- KPIs de clientes conciliados, diferencias, saldo auxiliar y diferencia total.
+- Marca la cuenta como conciliada con nota y usuario; si hay diferencia, ajusta
+  el saldo auxiliar al estado de cuenta y deja el soporte en la nota.
+- Registra confirmación del cliente y fecha de revisión.
+- Acción para enviar el estado de cuenta y dejar la solicitud en la nota.
+
 ## Reglas de negocio
 
 - Una aplicación no puede exceder el saldo del recibo ni el de la partida.
@@ -98,6 +123,11 @@ partidas incobrables.
 - Las promesas no modifican el saldo; solo documentan el compromiso.
 - El castigo requiere motivo y aprobación; conserva la partida.
 - Un anticipo solo se aplica al mismo cliente.
+- La provisión se calcula sobre partidas con saldo mayor a cero.
+- La provisión contabilizada no se recalcula hasta que se apruebe un nuevo
+  cálculo del período.
+- Conciliar con diferencia exige nota y deja el saldo auxiliar igual al estado
+  de cuenta.
 - Los importes se normalizan a pesos sin decimales.
 
 ## Cobertura funcional
@@ -116,10 +146,15 @@ partidas incobrables.
 | F-AR-010 Anticipos de cliente | `anticipos` |
 | F-AR-011 Conciliación de recibos | `recibos` + módulo Tesorería |
 | F-AR-012 Notas crédito | Notas de Facturación + `partidas` |
+| F-AR-013 Provisión por deterioro | `deterioro` |
+| F-AR-014 Conciliación con clientes | `conciliacion` |
 
 ## Integración pendiente
 
 - Aplicar automáticamente el recibo contra la partida sugerida por el banco.
 - Enviar recordatorios reales por correo o mensajería.
 - Generar el asiento contable del recibo y del castigo en Advantage.
+- Contabilizar la provisión por deterioro en el libro legado (hoy solo cambia
+  el estado de la provisión).
+- Sincronizar la conciliación con el estado de cuenta emitido al cliente.
 - Exportar estado de cuenta a PDF/XLSX con plantilla corporativa.

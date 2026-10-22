@@ -8,6 +8,10 @@ export type IconName =
   | 'payable'
   | 'bank'
   | 'budget'
+  | 'asset'
+  | 'cost'
+  | 'loan'
+  | 'indicator'
   | 'search'
   | 'bell'
   | 'chevron'
@@ -32,6 +36,10 @@ const paths: Record<IconName, React.ReactNode> = {
   payable: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h3" /></>,
   bank: <><path d="M3 9l9-5 9 5M5 10h14M6 10v7M10 10v7M14 10v7M18 10v7M4 20h16" /></>,
   budget: <><path d="M4 19V9M10 19V4M16 19v-7M22 19H2" /><path d="M3 6l6-3 6 5 6-4" /></>,
+  asset: <><path d="M3 21h18M5 21V8l7-4 7 4v13" /><path d="M9 12h2M13 12h2M9 16h2M13 16h2M10 21v-3h4v3" /></>,
+  cost: <><path d="M4 19V9M10 19V4M16 19v-7M22 19H2" /><circle cx="10" cy="4" r="1.4" /><circle cx="16" cy="12" r="1.4" /></>,
+  loan: <><path d="M3 7h18v11H3z" /><path d="M3 11h18M7 15h3" /><path d="M16 4l3 3-3 3" /></>,
+  indicator: <><path d="M3 21h18" /><path d="M5 17l4-5 3 3 5-7" /><path d="M17 4h3v3" /></>,
   search: <><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></>,
   bell: <><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
   chevron: <path d="M9 6l6 6-6 6" />,

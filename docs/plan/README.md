@@ -44,6 +44,21 @@ El **brief de diseño para Figma Make** vive fuera de la carpeta de la suite, en
 
 ---
 
+## `SUITE_FINANCIERA_FASE2.md` — fases 2 a 3.5 de la suite
+
+Plan y resultado de la segunda fase de la suite. Agrega tres módulos
+independientes al sidebar, sin fusionar los existentes: **Costos** (CIF,
+costeo estándar, ABC y proyectos), **Financiación y deuda** (préstamos,
+amortizaciones, cupos y leasing) e **Indicadores y proyecciones** (tablero,
+catálogo, escenarios e informes). Incluye el catálogo funcional con criterios de
+aceptación y las brechas que quedan para la fase 3. Las secciones 8 a 12
+documentan lo ejecutado después: flujo de caja y liquidez (3.1), cierre y
+apertura real de períodos (3.2), brechas operativas de cartera, CxP, activos y
+presupuesto (3.3), tributación (3.4) y transversales de aprobaciones,
+auditoría, consolidación y distribución secundaria (3.5).
+
+---
+
 ## `backend/` — plan de implementación de la funcionalidad faltante
 
 Ordena, por dependencia, todo lo que falta para que los controles que hoy simulan

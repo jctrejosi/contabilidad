@@ -33,11 +33,32 @@ function loadState(companyCode: string): FinanceState {
   try {
     const raw = localStorage.getItem(storageKey(companyCode));
     if (!raw) return createSeed();
-    const parsed = JSON.parse(raw) as FinanceState;
+    const parsed = JSON.parse(raw) as Partial<FinanceState>;
     if (!parsed || !Array.isArray(parsed.invoices) || !Array.isArray(parsed.parties)) {
       return createSeed();
     }
-    return parsed;
+    const base = createSeed();
+    const merged = { ...base, ...parsed } as FinanceState;
+    // Migración retrocompatible: compañías creadas antes de un módulo nuevo
+    // reciben las colecciones que aún no existen en su estado guardado.
+    const collections: (keyof FinanceState)[] = [
+      'impairmentProvisions', 'customerReconciliations',
+      'supplierAdjustments', 'supplierReconciliations',
+      'assetCategories', 'assets', 'depreciationEntries', 'assetMovements',
+      'revaluations', 'disposals', 'assetReconciliations', 'assetTransfers',
+      'costCenters', 'costPools', 'costAllocations', 'costObjects', 'costActivities', 'costRuns',
+      'loans', 'amortization', 'creditLines', 'leases',
+      'indicators', 'projections', 'budgetProjections',
+      'taxFilings', 'exogenousReports',
+      'approvalRules', 'approvalRequests', 'roles', 'rolePermissions',
+      'consolidationCompanies', 'eliminations', 'secondaryAllocations',
+    ];
+    for (const key of collections) {
+      if (!Array.isArray(parsed[key])) {
+        (merged as unknown as Record<string, unknown>)[key] = base[key];
+      }
+    }
+    return merged;
   } catch {
     return createSeed();
   }

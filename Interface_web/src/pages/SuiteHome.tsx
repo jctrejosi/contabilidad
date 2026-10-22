@@ -4,7 +4,7 @@ import { PERIODO } from '../data/mock';
 import type { CompaniaSesion } from '../types';
 import type { NavPage } from '../components/Shell';
 import { useFinance } from '../finance/store';
-import { budgetAvailable, budgetTotal, compactMoney, currentVersion, HOY } from '../finance/selectors';
+import { budgetAvailable, budgetTotal, compactMoney, currentVersion, HOY, assetTotals } from '../finance/selectors';
 
 interface SuiteHomeProps {
   onNavigate: (page: NavPage) => void;
@@ -39,6 +39,31 @@ export default function SuiteHome({ onNavigate, compania }: SuiteHomeProps) {
   const openAlerts = state.budgetAlerts.filter(item => item.status === 'Abierta').length;
   const collected = state.receipts.filter(item => item.date.startsWith('2026-02')).reduce((total, item) => total + item.applied, 0);
   const paid = state.payments.filter(item => item.date.startsWith('2026-02')).reduce((total, item) => total + item.applied, 0);
+  const assetSummary = assetTotals(state.assets);
+  const pendingAssetEvents = state.revaluations.filter(item => item.status === 'Borrador' || item.status === 'Aprobada').length
+    + state.disposals.filter(item => item.status === 'Solicitada' || item.status === 'Aprobada').length
+    + state.assetReconciliations.filter(item => item.status === 'Diferencia' || item.status === 'Pendiente').length;
+
+  const allocatedByPool = new Map<string, number>();
+  for (const item of state.costAllocations) {
+    allocatedByPool.set(item.poolId, (allocatedByPool.get(item.poolId) ?? 0) + item.amount);
+  }
+  const costTotal = state.costCenters.filter(center => center.status === 'Activo').reduce((total, center) => total + center.directCost, 0)
+    + state.costPools.reduce((total, pool) => total + pool.amount, 0);
+  const pendingPools = state.costPools.filter(pool => (allocatedByPool.get(pool.id) ?? 0) < pool.amount).length;
+
+  const debt = state.loans.filter(loan => loan.status === 'Vigente' || loan.status === 'En mora').reduce((total, loan) => {
+    const pending = state.amortization
+      .filter(row => row.loanId === loan.id && row.status === 'Pendiente')
+      .sort((a, b) => a.number - b.number);
+    return total + (pending[0]?.opening ?? 0);
+  }, 0)
+    + state.leases.filter(lease => lease.status === 'Vigente').reduce((total, lease) => total + lease.monthlyPayment * lease.termMonths, 0);
+  const loansInArrears = state.loans.filter(loan => loan.status === 'En mora').length;
+
+  const offTarget = state.indicators.filter(indicator => (
+    indicator.direction === 'Mayor es mejor' ? indicator.actual < indicator.target : indicator.actual > indicator.target
+  )).length;
 
   const liveMetrics: Record<string, { value: string; label: string; alert?: string }> = {
     facturacion: { value: compactMoney(billed), label: 'facturado en febrero', alert: rejected ? `${rejected} rechazada${rejected === 1 ? '' : 's'} DIAN` : 'DIAN al día' },
@@ -46,6 +71,10 @@ export default function SuiteHome({ onNavigate, compania }: SuiteHomeProps) {
     'cuentas-pagar': { value: compactMoney(payable), label: 'saldo por pagar', alert: proposals ? `${proposals} por aprobar` : 'Sin pendientes' },
     tesoreria: { value: compactMoney(treasury), label: 'disponible hoy', alert: unreconciled ? `${unreconciled} sin conciliar` : 'Conciliado' },
     presupuesto: { value: `${availablePct.toFixed(1)} %`, label: 'disponible anual', alert: openAlerts ? `${openAlerts} alerta${openAlerts === 1 ? '' : 's'}` : 'Sin alertas' },
+    'activos-fijos': { value: compactMoney(assetSummary.net), label: 'valor neto en libros', alert: pendingAssetEvents ? `${pendingAssetEvents} pendiente${pendingAssetEvents === 1 ? '' : 's'}` : 'Al día' },
+    costos: { value: compactMoney(costTotal), label: 'costo del período', alert: pendingPools ? `${pendingPools} pool${pendingPools === 1 ? '' : 's'} sin distribuir` : 'CIF distribuido' },
+    financiacion: { value: compactMoney(debt), label: 'deuda financiera', alert: loansInArrears ? `${loansInArrears} en mora` : 'Sin mora' },
+    indicadores: { value: String(state.indicators.length), label: 'indicadores en seguimiento', alert: offTarget ? `${offTarget} fuera de meta` : 'Todos en meta' },
   };
 
   const pendientes: { tag: string; title: string; page: NavPage; tone: 'danger' | 'warning' | 'info' }[] = [];
@@ -54,6 +83,12 @@ export default function SuiteHome({ onNavigate, compania }: SuiteHomeProps) {
   if (proposals) pendientes.push({ tag: 'Aprobación', title: `${proposals} propuesta${proposals === 1 ? '' : 's'} de pago`, page: 'cuentas-pagar/propuestas', tone: 'warning' });
   if (unreconciled) pendientes.push({ tag: 'Conciliación', title: `${unreconciled} movimiento${unreconciled === 1 ? '' : 's'} pendiente${unreconciled === 1 ? '' : 's'}`, page: 'tesoreria/conciliacion', tone: 'info' });
   if (openAlerts) pendientes.push({ tag: 'Presupuesto', title: `${openAlerts} alerta${openAlerts === 1 ? '' : 's'} de ejecución`, page: 'presupuesto/alertas', tone: 'warning' });
+  const pendingRevaluations = state.revaluations.filter(item => item.status === 'Borrador' || item.status === 'Aprobada').length;
+  const pendingDisposals = state.disposals.filter(item => item.status === 'Solicitada' || item.status === 'Aprobada').length;
+  const reconciliationGaps = state.assetReconciliations.filter(item => item.status === 'Diferencia').length;
+  if (pendingRevaluations) pendientes.push({ tag: 'Activos fijos', title: `${pendingRevaluations} revalorización${pendingRevaluations === 1 ? '' : 'es'} pendiente${pendingRevaluations === 1 ? '' : 's'}`, page: 'activos-fijos/revalorizaciones', tone: 'warning' });
+  if (pendingDisposals) pendientes.push({ tag: 'Activos fijos', title: `${pendingDisposals} baja${pendingDisposals === 1 ? '' : 's'} por gestionar`, page: 'activos-fijos/bajas', tone: 'warning' });
+  if (reconciliationGaps) pendientes.push({ tag: 'Activos fijos', title: `${reconciliationGaps} categoría${reconciliationGaps === 1 ? '' : 's'} con diferencia`, page: 'activos-fijos/conciliacion', tone: 'danger' });
   return (
     <div className="p-6 max-w-screen-2xl mx-auto space-y-6">
       <section className="relative overflow-hidden rounded-xl bg-petroleum-900 text-white p-6 shadow-sm">
@@ -79,7 +114,7 @@ export default function SuiteHome({ onNavigate, compania }: SuiteHomeProps) {
             <h2 className="text-base font-semibold text-gray-900">Módulos de la suite</h2>
             <p className="text-xs text-gray-500 mt-1">Seleccione un módulo para ingresar a su espacio de trabajo.</p>
           </div>
-          <span className="text-xs text-gray-400">6 módulos activos</span>
+          <span className="text-xs text-gray-400">{MODULE_ORDER.length + 1} módulos activos</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <button
@@ -102,7 +137,7 @@ export default function SuiteHome({ onNavigate, compania }: SuiteHomeProps) {
 
           {MODULE_ORDER.map(id => {
             const module = FINANCIAL_MODULES[id];
-            const metric = liveMetrics[id];
+            const metric = liveMetrics[id] ?? { value: '—', label: 'sin datos del período' };
             return (
               <button
                 key={id}

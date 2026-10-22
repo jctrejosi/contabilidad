@@ -47,6 +47,8 @@ import type {
   Receipt,
   WriteOff,
 } from '../../finance/types';
+import Deterioro from './cartera/Deterioro';
+import Conciliacion from './cartera/Conciliacion';
 
 interface Props {
   page: string;
@@ -65,6 +67,8 @@ const TITULOS: Record<string, { title: string; subtitle: string }> = {
   cobro: { title: 'Cobro y promesas', subtitle: 'Gestiones realizadas, compromisos de pago y seguimiento de cumplimiento.' },
   ajustes: { title: 'Castigos y ajustes', subtitle: 'Solicitudes de castigo, aprobación y depuración de partidas incobrables.' },
   anticipos: { title: 'Anticipos de clientes', subtitle: 'Recursos recibidos antes de la facturación y su aplicación a partidas.' },
+  deterioro: { title: 'Provisión por deterioro', subtitle: 'Cálculo por edades, aprobación y contabilización de la pérdida esperada de cartera.' },
+  conciliacion: { title: 'Conciliación con clientes', subtitle: 'Saldo del auxiliar contra el estado de cuenta enviado y confirmado por cada cliente.' },
 };
 
 const RECEIVABLE_STATUSES: Receivable['status'][] = [
@@ -662,6 +666,10 @@ export default function Cartera({ page, onNavigate }: Props) {
           onApply={advanceId => setAdvanceApply({ advanceId })}
         />
       )}
+
+      {activeSlug === 'deterioro' && <Deterioro showToast={showToast} />}
+
+      {activeSlug === 'conciliacion' && <Conciliacion showToast={showToast} />}
 
       {selected && (
         <ReceivableDrawer

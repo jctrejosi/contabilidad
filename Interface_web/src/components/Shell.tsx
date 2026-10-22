@@ -215,6 +215,9 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
     'tesoreria/cheques': state.checks.filter(item => item.status === 'Emitido').length,
     'presupuesto/aprobacion': state.budgets.filter(item => item.status === 'En revisión').length,
     'presupuesto/alertas': state.budgetAlerts.filter(item => item.status === 'Abierta').length,
+    'activos-fijos/revalorizaciones': state.revaluations.filter(item => item.status === 'Borrador' || item.status === 'Aprobada').length,
+    'activos-fijos/bajas': state.disposals.filter(item => item.status === 'Solicitada' || item.status === 'Aprobada').length,
+    'activos-fijos/conciliacion': state.assetReconciliations.filter(item => item.status === 'Diferencia' || item.status === 'Pendiente').length,
   };
 
   function toggleGroup(id: string) {

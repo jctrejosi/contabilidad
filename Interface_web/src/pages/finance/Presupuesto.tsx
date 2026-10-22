@@ -46,6 +46,7 @@ import type {
   FinanceState,
   FinancialModuleId,
 } from '../../finance/types';
+import Proyectos from './presupuesto/Proyectos';
 
 interface Props {
   page: string;
@@ -94,6 +95,10 @@ const NAV_TITLES: Record<string, { title: string; subtitle: string }> = {
   alertas: {
     title: 'Alertas presupuestales',
     subtitle: 'Seguimiento de umbrales, desviaciones y compromisos con control de silencio.',
+  },
+  proyectos: {
+    title: 'Proyección por proyecto',
+    subtitle: 'Presupuesto, ejecución y cierre estimado de cada iniciativa con desviación proyectada.',
   },
 };
 
@@ -2644,6 +2649,10 @@ export default function Presupuesto({ page, onNavigate }: Props) {
 
       {version && activeSlug === 'alertas' && (
         <AlertsView state={state} version={version} update={update} showToast={showToast} />
+      )}
+
+      {version && activeSlug === 'proyectos' && (
+        <Proyectos version={version} showToast={showToast} />
       )}
 
       {newVersionOpen && (

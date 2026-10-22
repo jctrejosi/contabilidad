@@ -1,4 +1,7 @@
 import type {
+  Asset,
+  AssetCategory,
+  AssetReconciliation,
   BudgetLine,
   BudgetVersion,
   FinanceState,
@@ -190,4 +193,151 @@ export function groupBy<T>(rows: T[], key: (row: T) => string): Record<string, T
 
 export function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
+}
+
+export function periodOf(value: string): string {
+  return value.slice(0, 7);
+}
+
+export function monthsBetweenPeriods(from: string, to: string): number {
+  const [fromYear, fromMonth] = from.split('-').map(Number);
+  const [toYear, toMonth] = to.split('-').map(Number);
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth);
+}
+
+export function addMonthsToPeriod(period: string, months: number): string {
+  const [year, month] = period.split('-').map(Number);
+  const total = year * 12 + (month - 1) + months;
+  const nextYear = Math.floor(total / 12);
+  const nextMonth = (total % 12) + 1;
+  return `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
+}
+
+export function periodLabel(period: string): string {
+  const [year, month] = period.split('-');
+  if (!year || !month) return period;
+  return `${MESES[Number(month) - 1] ?? month} ${year}`;
+}
+
+export function assetGross(asset: Asset): number {
+  return asset.acquisitionCost + asset.improvements + asset.revaluation;
+}
+
+export function assetNetBook(asset: Asset): number {
+  return assetGross(asset) - asset.impairment - asset.accumulatedDepreciation;
+}
+
+export function assetDepreciableBase(asset: Asset): number {
+  return Math.max(0, assetGross(asset) - asset.impairment - asset.residualValue);
+}
+
+export function assetRemainingMonths(asset: Asset): number {
+  return Math.max(0, asset.usefulLifeMonths - asset.depreciatedMonths);
+}
+
+export function isAssetActive(asset: Asset): boolean {
+  return asset.status !== 'Dado de baja' && asset.status !== 'Vendido';
+}
+
+export function assetIsFullyDepreciated(asset: Asset): boolean {
+  return asset.usefulLifeMonths > 0 && asset.accumulatedDepreciation >= assetDepreciableBase(asset) - 1;
+}
+
+export function assetMonthlyDepreciation(asset: Asset, unitsThisPeriod = 0): number {
+  if (!isAssetActive(asset) || asset.status === 'En montaje' || asset.usefulLifeMonths <= 0) return 0;
+  if (assetIsFullyDepreciated(asset)) return 0;
+  const net = assetNetBook(asset);
+  const residual = asset.residualValue;
+  const depreciable = Math.max(0, net - residual);
+  if (depreciable <= 0) return 0;
+
+  if (asset.method === 'Unidades de producción') {
+    if (asset.estimatedUnits <= 0) return 0;
+    return Math.min(depreciable, assetDepreciableBase(asset) * (unitsThisPeriod / asset.estimatedUnits));
+  }
+
+  if (asset.method === 'Saldos decrecientes') {
+    const years = asset.usefulLifeMonths / 12;
+    const gross = Math.max(1, assetGross(asset) - asset.impairment);
+    const rate = residual > 0 && residual < gross ? 1 - Math.pow(residual / gross, 1 / years) : 2 / years;
+    return Math.min(depreciable, net * (rate / 12));
+  }
+
+  const remaining = assetRemainingMonths(asset);
+  if (remaining <= 0) return 0;
+  return depreciable / remaining;
+}
+
+export function assetDepreciationPct(asset: Asset): number {
+  const base = assetDepreciableBase(asset);
+  if (base <= 0) return 0;
+  return Math.min(100, (asset.accumulatedDepreciation / base) * 100);
+}
+
+export function assetProjection(asset: Asset, months = 12): { period: string; amount: number; accumulated: number }[] {
+  const rows: { period: string; amount: number; accumulated: number }[] = [];
+  const base = assetDepreciableBase(asset);
+  let accumulated = asset.accumulatedDepreciation;
+  let projectedMonths = asset.depreciatedMonths;
+  let period = periodOf(HOY);
+  for (let index = 0; index < months; index += 1) {
+    period = addMonthsToPeriod(period, 1);
+    const remaining = Math.max(0, asset.usefulLifeMonths - projectedMonths);
+    let amount = 0;
+    if (asset.usefulLifeMonths > 0 && remaining > 0 && isAssetActive(asset) && asset.status !== 'En montaje') {
+      if (asset.method === 'Unidades de producción') {
+        amount = (base - accumulated) / remaining;
+      } else if (asset.method === 'Saldos decrecientes') {
+        const years = asset.usefulLifeMonths / 12;
+        const gross = Math.max(1, assetGross(asset) - asset.impairment);
+        const rate = asset.residualValue > 0 && asset.residualValue < gross ? 1 - Math.pow(asset.residualValue / gross, 1 / years) : 2 / years;
+        const net = assetGross(asset) - asset.impairment - accumulated;
+        amount = Math.max(0, Math.min(net - asset.residualValue, net * (rate / 12)));
+      } else {
+        amount = Math.max(0, (assetGross(asset) - asset.impairment - asset.residualValue - accumulated) / remaining);
+      }
+    }
+    accumulated += amount;
+    projectedMonths += 1;
+    rows.push({ period, amount, accumulated });
+  }
+  return rows;
+}
+
+export function assetTotals(assets: Asset[]) {
+  const active = assets.filter(isAssetActive);
+  return {
+    count: active.length,
+    gross: sum(active.map(assetGross)),
+    accumulated: sum(active.map(asset => asset.accumulatedDepreciation)),
+    impairment: sum(active.map(asset => asset.impairment)),
+    revaluation: sum(active.map(asset => asset.revaluation)),
+    net: sum(active.map(assetNetBook)),
+    inService: active.filter(asset => asset.status === 'En operación').length,
+    inAssembly: active.filter(asset => asset.status === 'En montaje').length,
+    fullyDepreciated: active.filter(asset => asset.status === 'Totalmente depreciado' || assetIsFullyDepreciated(asset)).length,
+  };
+}
+
+export function assetCategoryOf(categories: AssetCategory[], id: string): AssetCategory | undefined {
+  return categories.find(category => category.id === id);
+}
+
+export function assetReconciliationValues(assets: Asset[], categoryId: string) {
+  const rows = assets.filter(asset => asset.categoryId === categoryId && isAssetActive(asset));
+  return {
+    gross: sum(rows.map(assetGross)),
+    accumulated: sum(rows.map(asset => asset.accumulatedDepreciation)),
+    impairment: sum(rows.map(asset => asset.impairment)),
+    net: sum(rows.map(assetNetBook)),
+  };
+}
+
+export function assetReconciliationDifference(
+  assets: Asset[],
+  reconciliation: AssetReconciliation,
+): number {
+  const system = assetReconciliationValues(assets, reconciliation.categoryId);
+  const ledgerNet = reconciliation.ledgerGross - reconciliation.ledgerAccumulated - reconciliation.ledgerImpairment;
+  return ledgerNet - system.net;
 }

@@ -48,6 +48,8 @@ import type {
   PaymentProposal,
   Retention,
 } from '../../finance/types';
+import Descuentos from './cuentas-pagar/Descuentos';
+import Conciliacion from './cuentas-pagar/Conciliacion';
 
 interface Props {
   page: string;
@@ -95,6 +97,14 @@ const HEADERS: Record<string, { title: string; subtitle: string }> = {
   notas: {
     title: 'Notas de proveedor',
     subtitle: 'Notas crédito emitidas por proveedores y ajuste de la obligación asociada.',
+  },
+  descuentos: {
+    title: 'Descuentos y notas débito',
+    subtitle: 'Descuentos pronto pago, notas débito y ajustes de precio sobre obligaciones.',
+  },
+  conciliacion: {
+    title: 'Conciliación con proveedores',
+    subtitle: 'Saldo del auxiliar contra el estado del proveedor y confirmación formal.',
   },
 };
 
@@ -305,6 +315,8 @@ export default function CuentasPagar({ page, onNavigate }: Props) {
       {activeSlug === 'estados-cuenta' && <SupplierStatementScreen />}
       {activeSlug === 'gastos' && <ExpensesScreen showToast={showToast} />}
       {activeSlug === 'notas' && <SupplierNotesScreen showToast={showToast} />}
+      {activeSlug === 'descuentos' && <Descuentos showToast={showToast} />}
+      {activeSlug === 'conciliacion' && <Conciliacion showToast={showToast} />}
 
       {toast && (
         <div className="fixed bottom-5 right-5 z-[90] flex items-center gap-2 rounded-xl bg-[#001F4C] px-4 py-3 text-xs text-white shadow-2xl">

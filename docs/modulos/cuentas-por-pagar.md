@@ -3,7 +3,8 @@
 **Ruta:** `cuentas-pagar`
 **Archivo:** `Interface_web/src/pages/finance/CuentasPagar.tsx`
 **Datos:** `payables`, `proposals`, `payments`, `retentions`, `advances`
-(dirección `AP`), `expenses`, `invoices` (notas de proveedor) y `accounts`.
+(dirección `AP`), `expenses`, `invoices` (notas de proveedor), `accounts`,
+`supplierAdjustments` y `supplierReconciliations`.
 
 ## Objetivo
 
@@ -24,6 +25,8 @@ controlar gastos y anticipos.
 | `estados-cuenta` | Estados de cuenta | Documentos, pagos y notas con saldo corrido por proveedor |
 | `gastos` | Gastos y reembolsos | Registrar, aprobar y reembolsar gastos |
 | `notas` | Notas de proveedor | Crear notas crédito y ajustar la CxP |
+| `descuentos` | Descuentos y notas débito | Pronto pago, notas débito/crédito y devoluciones |
+| `conciliacion` | Conciliación con proveedores | Auxiliar contra estado del proveedor y confirmación |
 
 ## Funcionalidad implementada
 
@@ -105,6 +108,29 @@ controlar gastos y anticipos.
 - Creación de la nota en `state.invoices` y reducción de la CxP asociada.
 - Histórico visible en la bandeja de obligaciones.
 
+### Descuentos y notas débito
+
+- Registro de ajustes con obligación, tipo, base, tasa y valor.
+- Tipos: descuento pronto pago, nota débito, nota crédito, devolución y ajuste
+  de precio.
+- Descuento pronto pago calculado como base × tasa; los demás con valor directo.
+- Flujo de estados: `Borrador` → `Aprobado` → `Aplicado` (o `Rechazado`).
+- Al aplicar, el saldo de la obligación cambia: descuentos y notas crédito lo
+  reducen; la nota débito lo incrementa.
+- El valor nunca supera el saldo de la obligación.
+- Historial con solicitante, aprobador y soporte.
+
+### Conciliación con proveedores
+
+- Compara el saldo del auxiliar (`2205`) contra el estado de cuenta del
+  proveedor.
+- KPIs de proveedores conciliados, diferencias, saldo auxiliar y diferencia
+  total.
+- Marca la cuenta como conciliada con nota y usuario; si hay diferencia, ajusta
+  el saldo auxiliar al estado del proveedor.
+- Registra confirmación del proveedor y fecha de revisión.
+- Acción para solicitar confirmación de saldo.
+
 ## Reglas de negocio
 
 - `payable.balance` nunca es negativo.
@@ -116,6 +142,11 @@ controlar gastos y anticipos.
   cuenta.
 - Un gasto sin soporte no se aprueba.
 - La retención certificada es inmutable.
+- Los descuentos y notas crédito reducen la obligación; la nota débito la
+  incrementa.
+- Un ajuste aplicado no se vuelve a aplicar.
+- Conciliar con diferencia exige nota y deja el saldo auxiliar igual al estado
+  del proveedor.
 
 ## Cobertura funcional
 
@@ -133,6 +164,8 @@ controlar gastos y anticipos.
 | F-AP-010 Programación y priorización | `programacion` |
 | F-AP-011 Conciliación de pagos | `pagos` + módulo Tesorería |
 | F-AP-012 Edades y estado de cuenta | `programacion` + `estados-cuenta` |
+| F-AP-013 Descuentos y notas débito | `descuentos` |
+| F-AP-014 Conciliación con proveedores | `conciliacion` |
 
 ## Integración pendiente
 
@@ -141,3 +174,6 @@ controlar gastos y anticipos.
 - Cálculo de retenciones con UVT y conceptos vigentes del año.
 - Certificados en PDF y envío al proveedor.
 - Asiento contable del pago y de la retención en Advantage.
+- Contabilizar descuentos y notas débito en el libro legado (hoy solo ajustan
+  el saldo de la obligación).
+- Sincronizar la conciliación con la confirmación formal del proveedor.

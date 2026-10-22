@@ -39,6 +39,9 @@ import type {
   Product,
   Resolution,
 } from '../../finance/types';
+import Formulario from './facturacion/Formulario';
+import Declaracion from './facturacion/Declaracion';
+import Exogena from './facturacion/Exogena';
 
 interface Props {
   page: string;
@@ -124,7 +127,15 @@ export default function Facturacion({ page, onNavigate }: Props) {
     resoluciones: { title: 'Resoluciones y numeración', subtitle: 'Rangos autorizados, vigencia y disponibilidad de consecutivos.' },
     productos: { title: 'Productos y servicios', subtitle: 'Catálogo usado en las líneas de facturación.' },
     importar: { title: 'Importar documentos', subtitle: 'Carga masiva de facturas con validación previa y resumen de resultados.' },
+    'formulario-300': { title: 'Formulario 300 · IVA', subtitle: 'Declaración bimestral de IVA calculada desde las facturas contabilizadas.' },
+    'formulario-350': { title: 'Formulario 350 · Retención', subtitle: 'Retenciones en la fuente y ReteICA practicadas en el período.' },
+    'formulario-110': { title: 'Formulario 110 · Renta', subtitle: 'Declaración anual de renta con renta líquida, presuntiva e impuesto.' },
+    declaracion: { title: 'Declaración electrónica', subtitle: 'Validación, presentación y acuse de los formularios tributarios.' },
+    exogena: { title: 'Exógena y medios magnéticos', subtitle: 'Formatos anuales, terceros informados, incidencias y presentación.' },
   };
+
+  const TAX_SLUGS = ['formulario-300', 'formulario-350', 'formulario-110', 'declaracion', 'exogena'];
+  const isTax = TAX_SLUGS.includes(activeSlug);
 
   function showToast(text: string) {
     setToast(text);
@@ -507,6 +518,7 @@ export default function Facturacion({ page, onNavigate }: Props) {
     if (activeSlug === 'productos') return <Button variant="primary" onClick={() => setProductOpen(true)}><Icon name="plus" className="h-3.5 w-3.5" /> Nuevo producto</Button>;
     if (activeSlug === 'dian') return <Button variant="primary" onClick={processPendingDian}>Procesar pendientes</Button>;
     if (activeSlug === 'importar') return <Button variant="primary" disabled={!importValidated} onClick={importDocuments}>Importar documentos</Button>;
+    if (TAX_SLUGS.includes(activeSlug)) return undefined;
     return <Button variant="primary" onClick={() => setEditor('FV')}><Icon name="plus" className="h-3.5 w-3.5" /> Nueva factura</Button>;
   })();
 
@@ -514,12 +526,14 @@ export default function Facturacion({ page, onNavigate }: Props) {
     <div className="mx-auto max-w-[1500px] space-y-4 p-4 lg:p-5">
       <PageHeader eyebrow="Facturación" title={header.title} subtitle={header.subtitle} actions={action} />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Facturado en febrero" value={money(kpis.billed)} detail="Documentos de venta contabilizados" tone="green" />
-        <KpiCard label="Por enviar o en tránsito" value={String(kpis.pending)} detail={money(kpis.pendingAmount)} tone="amber" />
-        <KpiCard label="Rechazadas por DIAN" value={String(kpis.rejected)} detail="Requieren corrección y reenvío" tone="red" />
-        <KpiCard label="Saldo en cartera" value={money(kpis.receivable)} detail="Partidas abiertas al día de hoy" tone="blue" />
-      </div>
+      {!isTax && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <KpiCard label="Facturado en febrero" value={money(kpis.billed)} detail="Documentos de venta contabilizados" tone="green" />
+          <KpiCard label="Por enviar o en tránsito" value={String(kpis.pending)} detail={money(kpis.pendingAmount)} tone="amber" />
+          <KpiCard label="Rechazadas por DIAN" value={String(kpis.rejected)} detail="Requieren corrección y reenvío" tone="red" />
+          <KpiCard label="Saldo en cartera" value={money(kpis.receivable)} detail="Partidas abiertas al día de hoy" tone="blue" />
+        </div>
+      )}
 
       {activeSlug === 'documentos' && (
         <SalesInvoices state={state} query={query} status={status} onQuery={setQuery} onStatus={setStatus} onOpen={setSelectedId} />
@@ -542,6 +556,11 @@ export default function Facturacion({ page, onNavigate }: Props) {
           onImport={importDocuments}
         />
       )}
+      {activeSlug === 'formulario-300' && <Formulario code="300" showToast={showToast} />}
+      {activeSlug === 'formulario-350' && <Formulario code="350" showToast={showToast} />}
+      {activeSlug === 'formulario-110' && <Formulario code="110" showToast={showToast} />}
+      {activeSlug === 'declaracion' && <Declaracion showToast={showToast} />}
+      {activeSlug === 'exogena' && <Exogena showToast={showToast} />}
 
       {selected && (
         <InvoiceDrawer

@@ -43,6 +43,9 @@ import type {
   StatementLine,
   Transfer,
 } from '../../finance/types';
+import FlujoReal from './tesoreria/FlujoReal';
+import FlujoProyectado from './tesoreria/FlujoProyectado';
+import Liquidez from './tesoreria/Liquidez';
 
 interface Props {
   page: string;
@@ -58,6 +61,18 @@ const NAV_TITLE: Record<string, { title: string; subtitle: string }> = {
   panel: {
     title: 'Panel de tesorería',
     subtitle: 'Posición consolidada de bancos y caja, movimientos del día, conciliación y alertas operativas.',
+  },
+  flujo: {
+    title: 'Flujo de caja real',
+    subtitle: 'Entradas y salidas efectivas por mes, saldo de cierre y detalle de movimientos.',
+  },
+  proyectado: {
+    title: 'Flujo de caja proyectado',
+    subtitle: 'Recaudos, pagos, deuda y leasing proyectados a seis meses.',
+  },
+  liquidez: {
+    title: 'Liquidez y recaudos',
+    subtitle: 'Cobertura de pagos, posición semanal y calendario de recaudos y compromisos.',
   },
   cuentas: {
     title: 'Cuentas bancarias',
@@ -978,6 +993,15 @@ export default function Tesoreria({ page, onNavigate }: Props) {
     if (activeSlug === 'partidas') {
       return <Button onClick={exportItems}><Icon name="download" className="h-3.5 w-3.5" /> Exportar CSV</Button>;
     }
+    if (activeSlug === 'flujo') {
+      return <Button onClick={() => showToast('Flujo de caja real exportado (simulación).')}><Icon name="download" className="h-3.5 w-3.5" /> Exportar</Button>;
+    }
+    if (activeSlug === 'proyectado') {
+      return <Button onClick={() => onNavigate('tesoreria/liquidez')}>Ver liquidez</Button>;
+    }
+    if (activeSlug === 'liquidez') {
+      return <Button onClick={() => onNavigate('tesoreria/proyectado')}>Ver proyección</Button>;
+    }
     return null;
   })();
 
@@ -986,6 +1010,9 @@ export default function Tesoreria({ page, onNavigate }: Props) {
       <PageHeader eyebrow={MODULE.name} title={header.title} subtitle={header.subtitle} actions={action} />
 
       {activeSlug === 'panel' && <PanelView state={state} onNavigate={onNavigate} />}
+      {activeSlug === 'flujo' && <FlujoReal state={state} />}
+      {activeSlug === 'proyectado' && <FlujoProyectado state={state} />}
+      {activeSlug === 'liquidez' && <Liquidez state={state} onNavigate={onNavigate} />}
       {activeSlug === 'cuentas' && (
         <AccountsView state={state} onToggle={toggleAccount} onCreate={() => setAccountOpen(true)} />
       )}

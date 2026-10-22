@@ -2,7 +2,8 @@
 
 **Ruta:** `presupuesto`
 **Archivo:** `Interface_web/src/pages/finance/Presupuesto.tsx`
-**Datos:** `budgets` (versiones y líneas) y `budgetAlerts`.
+**Datos:** `budgets` (versiones y líneas), `budgetAlerts` y
+`budgetProjections`.
 
 ## Objetivo
 
@@ -21,6 +22,7 @@ alertas por desviación.
 | `ejecucion` | Ejecución y compromisos | Disponible, comprometido, ejecutado y semáforo |
 | `comparativo` | Comparativo y escenarios | Variaciones entre versiones y gráfico |
 | `alertas` | Alertas presupuestales | Umbrales, silencio y reactivación |
+| `proyectos` | Proyección por proyecto | Presupuesto, ejecución y cierre estimado por iniciativa |
 
 ## Funcionalidad implementada
 
@@ -93,6 +95,17 @@ alertas por desviación.
 - Resumen por severidad.
 - Configuración de umbral que crea una alerta o muestra el resultado.
 
+### Proyección por proyecto
+
+- Proyectos asociados a la versión presupuestal vigente.
+- KPIs de presupuesto por proyecto, ejecutado y proyección anual.
+- Curva mensual del proyecto seleccionado.
+- Avance de ejecución y desviación proyectada contra el presupuesto anual.
+- Estados: `En curso`, `Cierre estimado` y `Cerrado`.
+- Creación de proyecto con nombre, centro, responsable, presupuesto y nota; el
+  valor se distribuye entre los meses restantes del año.
+- La proyección anual es `ejecutado + meses restantes`.
+
 ## Reglas de negocio
 
 - Una versión aprobada o cerrada no se edita.
@@ -103,6 +116,8 @@ alertas por desviación.
 - La distribución porcentual debe sumar 100 %.
 - La aprobación exige acta y aprobador distinto del responsable.
 - Los escenarios son versiones independientes y no contabilizan.
+- La proyección por proyecto solo aplica a la versión seleccionada.
+- La desviación proyectada se marca fuera de umbral a partir del 3 %.
 
 ## Cobertura funcional
 
@@ -118,6 +133,7 @@ alertas por desviación.
 | F-BGT-008 Cierre | Botón Cerrar en `versiones`, con motivo y bloqueo de edición |
 | F-BGT-009 Escenarios | `versiones` + `comparativo` |
 | F-BGT-010 Alertas | `alertas` |
+| F-BGT-011 Proyección por proyecto | `proyectos` |
 
 ## Integración pendiente
 
@@ -126,3 +142,5 @@ alertas por desviación.
 - Adjuntar acta y documentos de soporte.
 - Notificar alertas por correo o centro de notificaciones.
 - Importar/exportar plantillas Excel.
+- Alimentar la ejecución por proyecto desde centros de costo y proyectos del
+  libro (hoy el avance se registra en el módulo).
