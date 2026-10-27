@@ -43,10 +43,29 @@ datos PostgreSQL de referencia, el backend y la interfaz, y muestra las URLs:
 
 ```powershell
 node dev.js            # levanta todo y libera la terminal
+node dev.js --init     # reconstruye desde cero (base, entornos) y restaura datos
 node dev.js --check    # solo verifica herramientas y dependencias
 node dev.js --stop     # detiene los servicios levantados
 node dev.js --no-db    # omite PostgreSQL (backend sobre Advantage)
 node dev.js --no-ia    # omite el asistente IA (ia-service)
+```
+
+`--init` es el arranque de primera vez o de "empezar de nuevo": detiene los
+servicios, elimina el contenedor y el volumen de PostgreSQL del proyecto
+(`contabdsi-db`, es decir, esquema y seed incluidos), borra `backend/.venv`,
+`ia-service/.venv` e `Interface_web/node_modules`, y vuelve a instalar y
+levantar todo. Al quedar la base vacía, restaura el respaldo de los datos
+migrados desde `db/backups/partes/`. Pide confirmación; usa `--yes` para
+ejecutarlo sin preguntar (scripts, CI). Nunca vacía una base externa: si
+`DATABASE_URL` apunta fuera del contenedor, solo limpia lo local y avisa.
+Combínalo con `--no-db` para conservar la base, o `--no-install` para conservar
+los entornos ya instalados.
+
+En Windows se ejecuta igual desde PowerShell o `cmd`; también hay un lanzador
+`dev.bat` que reenvía los mismos flags y fija la consola en UTF-8:
+
+```powershell
+dev.bat --init
 ```
 
 Los servicios quedan corriendo en segundo plano y cada uno escribe su registro

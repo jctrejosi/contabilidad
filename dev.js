@@ -27,6 +27,8 @@
  *
  * Uso:
  *   node dev.js                  instala lo que falte, levanta todo y libera la terminal
+ *   node dev.js --init           reconstruye desde cero: borra contenedor, volumen,
+ *                                .venv y node_modules, y vuelve a instalar y restaurar
  *   node dev.js --check          solo verifica herramientas y dependencias
  *   node dev.js --stop           detiene los servicios levantados
  *   node dev.js --db-postgres    arranca el backend contra PostgreSQL (modelo nuevo)
@@ -39,7 +41,7 @@
  *   node dev.js --keep-db        no detiene PostgreSQL al hacer --stop
  *   node dev.js --no-docker-autostart
  *                                no intenta abrir Docker Desktop
- *   node dev.js --yes            termina sin preguntar lo que ocupe los puertos
+ *   node dev.js --yes            termina sin preguntar (puertos ocupados y --init)
  *
  * Si un puerto necesario está ocupado, se muestran los procesos o contenedores
  * que lo usan y se pide confirmación antes de terminarlos. Sin terminal
@@ -1790,6 +1792,239 @@ function stopAll() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Modo --init · reconstruir desde cero
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Nombre de proyecto y volumen que `docker compose` crea para db/postgresql.
+const COMPOSE_PROJECT = path.basename(DB_DIR);
+const DB_VOLUME = `${COMPOSE_PROJECT}_pgdata`;
+
+function dockerObjectExists(kind, name) {
+  return spawnSync("docker", [kind, "inspect", name], { stdio: "ignore", windowsHide: true }).status === 0;
+}
+
+/** ¿DATABASE_URL/puerto apuntan al PostgreSQL del compose y no a otra instancia? */
+function databasePointsToCompose() {
+  try {
+    const parsed = new URL(resolvedDatabaseUrl());
+    return LOCAL_DB_HOSTS.has(parsed.hostname) && (parsed.port || "5432") === String(CONFIG.dbPort);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Borra un directorio completo. En Windows `fs.rmSync` falla con EBUSY/EPERM
+ * cuando un proceso recién cerrado, el antivirus o el indexador todavía tiene
+ * un asa abierta, y con enlaces de directorio de pnpm; se reintenta y, si no
+ * basta, se quitan los atributos y se usa `rmdir /s /q`.
+ */
+function removeDirectory(target) {
+  if (!fs.existsSync(target)) return true;
+
+  try {
+    fs.rmSync(target, { recursive: true, force: true, maxRetries: 12, retryDelay: 500 });
+  } catch {
+    /* se intenta la vía nativa más abajo */
+  }
+  if (!fs.existsSync(target)) return true;
+
+  if (IS_WIN) {
+    // Quita atributos de solo lectura/ocultos/sistema antes de reintentar.
+    spawnSync("attrib", ["-R", "-H", "-S", `${target}\\*`, "/S", "/D"], {
+      stdio: "ignore",
+      windowsHide: true,
+      timeout: 600000,
+    });
+    // PowerShell recibe la ruta como argumento, así que los espacios no se
+    // escapan a mano; el prefijo \\?\ evita el límite de 260 caracteres.
+    const literal = target.startsWith("\\\\?\\") ? target : `\\\\?\\${path.resolve(target)}`;
+    const ps = path.join(
+      process.env.SystemRoot || "C:\\Windows",
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    );
+    spawnSync(
+      fs.existsSync(ps) ? ps : "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Remove-Item -LiteralPath $args[0] -Recurse -Force -ErrorAction SilentlyContinue",
+        literal,
+      ],
+      { stdio: "ignore", windowsHide: true, timeout: 600000 },
+    );
+    if (!fs.existsSync(target)) return true;
+  }
+
+  try {
+    fs.rmSync(target, { recursive: true, force: true });
+  } catch {
+    /* queda para el informe de error */
+  }
+  return !fs.existsSync(target);
+}
+
+/**
+ * Elimina el contenedor y el volumen de PostgreSQL del proyecto. `down -v`
+ * cubre el caso normal; si el contenedor o el volumen quedaron fuera de
+ * compose, se fuerzan. Nunca se da por hecho: se verifica antes de continuar,
+ * porque un `--init` que deja datos viejos es peor que un error claro.
+ */
+async function removeDatabaseState() {
+  const { fd, logPath } = openLog(SERVICES.db);
+  info("Eliminando contenedor y volumen de PostgreSQL (docker compose down -v)…");
+
+  compose(["down", "-v", "--remove-orphans"], fd, IS_WIN ? 600000 : 180000);
+
+  if (dockerObjectExists("container", DB_CONTAINER)) {
+    warn("El contenedor seguía presente; se elimina a la fuerza.");
+    spawnSync("docker", ["rm", "-f", DB_CONTAINER], {
+      stdio: ["ignore", fd, fd],
+      windowsHide: true,
+      timeout: 180000,
+    });
+  }
+
+  // Windows/Docker Desktop tarda en soltar el volumen tras cerrar el contenedor.
+  for (let intento = 0; intento < 3 && dockerObjectExists("volume", DB_VOLUME); intento++) {
+    if (intento > 0) {
+      warn("El volumen seguía presente; se reintenta su eliminación.");
+      await sleep(1500);
+    }
+    spawnSync("docker", ["volume", "rm", "-f", DB_VOLUME], {
+      stdio: ["ignore", fd, fd],
+      windowsHide: true,
+      timeout: 180000,
+    });
+  }
+
+  fs.closeSync(fd);
+
+  if (dockerObjectExists("container", DB_CONTAINER) || dockerObjectExists("volume", DB_VOLUME)) {
+    throw new Error(
+      `No se pudo eliminar la base de datos del proyecto (detalle en ${rel(logPath)}). ` +
+        "Cierra las conexiones o contenedores que la usen y reintenta.",
+    );
+  }
+  ok("Contenedor y volumen de PostgreSQL eliminados.");
+}
+
+/** Espera a que el puerto de la base quede libre tras eliminar el contenedor. */
+async function waitForDatabasePortRelease() {
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline && (await portOpen(CONFIG.dbPort))) await sleep(500);
+  if (await portOpen(CONFIG.dbPort)) {
+    warn(
+      `El puerto ${CONFIG.dbPort} sigue ocupado por otra instancia; el arranque usará esa base si responde.`,
+    );
+  }
+}
+
+/**
+ * `--init` deja el entorno como recién clonado: detiene los servicios, elimina el
+ * contenedor y el volumen de PostgreSQL del proyecto y borra los entornos
+ * instalados (`.venv`, `node_modules`). Después el flujo normal reinstala, levanta
+ * el contenedor (que recrea esquema y seed) y restaura el respaldo de los datos
+ * migrados si el motor es PostgreSQL.
+ *
+ * Nunca vacía una base ajena: si DATABASE_URL apunta fuera del compose solo se
+ * limpia lo local y se avisa. Con `--no-install` se conservan los entornos.
+ */
+async function runInit(options) {
+  step("Inicialización desde cero");
+
+  const venvBackend = path.join(BACKEND_DIR, ".venv");
+  const venvIa = path.join(IA_DIR, ".venv");
+  const modulesWeb = path.join(WEB_DIR, "node_modules");
+
+  const borraDependencias = options.install;
+  const directorios = [];
+  if (borraDependencias) {
+    directorios.push(venvBackend);
+    if (options.ia) directorios.push(venvIa);
+    directorios.push(modulesWeb);
+  }
+
+  const hayDocker = commandExists("docker");
+  if (!hayDocker) {
+    warn("Docker no está instalado: no se puede borrar la base de datos.");
+  } else if (!dockerDaemonUp()) {
+    if (options.dockerAutostart) tryStartDockerDesktop();
+    // Docker Desktop en frío (WSL2 recién arrancado) tarda más que un daemon ya activo.
+    const espera = Math.max(CONFIG.dockerTimeoutMs, 180000);
+    if (!(await waitForDockerDaemon(espera))) {
+      warn("El daemon de Docker no responde: no se borrará la base de datos.");
+    }
+  }
+  const conDocker = hayDocker && dockerDaemonUp();
+  const reseteaDb =
+    options.db &&
+    conDocker &&
+    (dockerObjectExists("container", DB_CONTAINER) || dockerObjectExists("volume", DB_VOLUME));
+
+  if (reseteaDb && options.store === STORE_POSTGRES && !databasePointsToCompose()) {
+    warn(`DATABASE_URL apunta a ${resolvedDatabaseUrl()}, fuera del contenedor: esa base no se vacía.`);
+  }
+
+  const objetivos = [];
+  if (reseteaDb) objetivos.push(`contenedor y volumen «${DB_CONTAINER}» (se pierde todo su contenido)`);
+  for (const dir of directorios) {
+    if (fs.existsSync(dir)) objetivos.push(rel(dir));
+  }
+
+  if (!objetivos.length) {
+    info("No hay nada que borrar.");
+  } else {
+    info("Se eliminarán:");
+    for (const objetivo of objetivos) log(`   ${c.yellow("•")} ${objetivo}`);
+    if (reseteaDb) info(`La base de demostración «${SEEDED_DB}» se recrea con su seed al levantar el contenedor.`);
+    if (options.store === STORE_POSTGRES && options.db) {
+      info(`Los datos migrados se restauran desde ${rel(BACKUP_PARTS_DIR)} si la base queda vacía.`);
+    }
+
+    if (!options.yes) {
+      if (!process.stdin.isTTY) {
+        warn("--init necesita confirmación y no hay terminal interactiva; repite con --yes.");
+        throw new CancelledByUserError("Inicialización cancelada.");
+      }
+      const respuesta = await ask("¿Eliminar todo eso y reconstruir? [s/N] ");
+      if (!confirmed(respuesta)) throw new CancelledByUserError("Inicialización cancelada.");
+    }
+
+    stopAll();
+
+    // Windows tarda en soltar las asas de un proceso recién terminado.
+    if (IS_WIN) await sleep(1000);
+
+    for (const dir of directorios) {
+      if (!fs.existsSync(dir)) continue;
+      if (!removeDirectory(dir)) {
+        throw new Error(
+          `No se pudo borrar ${rel(dir)}. Cierra terminales, editores y el explorador de archivos ` +
+            "que lo estén usando (o exclúyelo del antivirus) y vuelve a ejecutar con --init.",
+        );
+      }
+      ok(`${rel(dir)} eliminado.`);
+    }
+
+    if (reseteaDb) {
+      await removeDatabaseState();
+      await waitForDatabasePortRelease();
+      // El arranque siguiente debe volver a inspeccionar el contenedor y sus puertos.
+      dbContainerState = null;
+      dbContainerHostPort = undefined;
+      dockerPortsCache = null;
+      dbStarted = false;
+      dbReachable = false;
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Modo --check
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1872,6 +2107,8 @@ function printHelp() {
   log("");
   log("   node dev.js                  instala lo que falte, levanta db + backend + asistente");
   log("                                + interfaz e imprime las URLs; la terminal queda libre");
+  log("   node dev.js --init           reconstruye desde cero: borra contenedor, volumen,");
+  log("                                .venv y node_modules, reinstala y restaura los datos");
   log("   node dev.js --check          verifica herramientas y dependencias");
   log("   node dev.js --stop           detiene los servicios levantados");
   log("");
@@ -1891,7 +2128,12 @@ function printHelp() {
   log("   --no-reload                  uvicorn sin recarga automática");
   log("   --keep-db                    no detiene PostgreSQL al hacer --stop");
   log("   --no-docker-autostart        no intenta abrir Docker Desktop");
-  log("   --yes                        termina sin preguntar lo que ocupe los puertos");
+  log("   --yes                        termina sin preguntar lo que ocupe los puertos y --init");
+  log("");
+  log(c.dim("   --init pide confirmación; con --yes no pregunta (útil en scripts)."));
+  log(c.dim("   Sin --db-postgres/--db-advantage, --init usa PostgreSQL. "));
+  log(c.dim("   --no-install conserva .venv y node_modules; --no-db no toca la base."));
+  log(c.dim("   Windows: usa este mismo comando, o dev.bat (reenvía todos los flags)."));
   log("");
   log(c.dim("   Puertos: BACKEND_PORT, IA_SERVICE_PORT, WEB_PORT/PORT, DB_PORT"));
   log(c.dim("   --db-postgres usa DATABASE_URL (o DB_USER/DB_PORT/DB_NAME); sin ella,"));
@@ -1916,10 +2158,12 @@ function parseArgs(argv) {
     check: false,
     stop: false,
     help: false,
+    init: false,
     db: true,
     ia: true,
     install: true,
     store: STORE_ADVANTAGE,
+    storeExplicit: false,
     requireDb: false,
     requireAds: false,
     reload: true,
@@ -1939,6 +2183,9 @@ function parseArgs(argv) {
       case "--stop":
         parsed.stop = true;
         break;
+      case "--init":
+        parsed.init = true;
+        break;
       case "--help":
       case "-h":
         parsed.help = true;
@@ -1948,9 +2195,11 @@ function parseArgs(argv) {
         break;
       case "--db-postgres":
         parsed.store = STORE_POSTGRES;
+        parsed.storeExplicit = true;
         break;
       case "--db-advantage":
         parsed.store = STORE_ADVANTAGE;
+        parsed.storeExplicit = true;
         break;
       case "--no-ia":
         parsed.ia = false;
@@ -1996,6 +2245,10 @@ function parseArgs(argv) {
 async function main() {
   options = parseArgs(process.argv.slice(2));
 
+  // `--init` rehace la base del proyecto: sin motor explícito se asume PostgreSQL,
+  // porque el origen legado (Advantage) no se puede recrear desde este script.
+  if (options.init && !options.storeExplicit) options.store = STORE_POSTGRES;
+
   if (options.help) {
     printHelp();
     return;
@@ -2020,6 +2273,8 @@ async function main() {
   log("");
   log(c.blue("  CONTABDSI · entorno de desarrollo"));
   log(c.dim(`  raíz: ${ROOT}`));
+
+  if (options.init) await runInit(options);
 
   if (options.install) {
     ensureBackendEnvironment();
