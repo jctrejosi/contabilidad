@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import medios_revision_repository as repo
 from .medios_revision_export import export_revision
+from .access_session import session_user_code
 
 router = APIRouter(prefix='/api/medios/revision', tags=['Medios: revisión'])
 CIA = Query(pattern=r'^[0-9]{1,3}$')
@@ -17,6 +18,8 @@ FORM = Query(min_length=1, max_length=4)
 def _run(call: Callable[[], Any]) -> Any:
     try:
         return call()
+    except HTTPException:
+        raise
     except repo.RevisionConflict as exc:
         raise HTTPException(409, str(exc)) from exc
     except ValueError as exc:
@@ -55,12 +58,12 @@ def listar(cia: str = CIA, formato: str = FORM):
 
 @router.post('/registro')
 def guardar(payload: Registro, cia: str = CIA, formato: str = FORM):
-    return _run(lambda: repo.save_revision(cia, formato, payload.model_dump()))
+    return _run(lambda: repo.save_revision(cia, formato, payload.model_dump(), user=session_user_code()))
 
 
 @router.post('/eliminar')
 def eliminar(payload: Seleccion, cia: str = CIA, formato: str = FORM):
-    return _run(lambda: repo.delete_revision(cia, formato, payload.id, payload.revision))
+    return _run(lambda: repo.delete_revision(cia, formato, payload.id, payload.revision, user=session_user_code()))
 
 
 @router.get('/detalle')
@@ -70,7 +73,7 @@ def detalle(cia: str = CIA, formato: str = FORM, id: str = Query(min_length=1, m
 
 @router.post('/identificaciones')
 def reasignar(payload: Reasignacion, cia: str = CIA, formato: str = FORM):
-    return _run(lambda: repo.reassign_ids(cia, formato, payload.token))
+    return _run(lambda: repo.reassign_ids(cia, formato, payload.token, user=session_user_code()))
 
 
 @router.get('/exportar')

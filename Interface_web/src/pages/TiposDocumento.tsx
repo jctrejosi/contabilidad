@@ -1,17 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listarTiposDocumento, type TipoDocumentoReal } from '../api/tiposDocumento';
 
-type FiltroModulo = 'todos' | '1' | '2' | '3' | '9' | 'otros';
-
-const OPCIONES_MODULO: Array<{ valor: FiltroModulo; etiqueta: string }> = [
-  { valor: 'todos', etiqueta: 'Todos los módulos' },
-  { valor: '1', etiqueta: 'Cartera' },
-  { valor: '2', etiqueta: 'Inventarios' },
-  { valor: '3', etiqueta: 'Cuentas por pagar' },
-  { valor: '9', etiqueta: 'Contabilidad' },
-  { valor: 'otros', etiqueta: 'No reconocidos' },
-];
-
 function marca(value: boolean | null) {
   if (value === true) return <span className="font-semibold text-blue-600">✓</span>;
   if (value === null) return <span className="text-amber-500" title="El valor está vacío en VISDOCUM">?</span>;
@@ -48,7 +37,6 @@ function exportarCSV(tipos: TipoDocumentoReal[]) {
 export default function TiposDocumento() {
   const [tipos, setTipos] = useState<TipoDocumentoReal[]>([]);
   const [busqueda, setBusqueda] = useState('');
-  const [filtroModulo, setFiltroModulo] = useState<FiltroModulo>('todos');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
 
@@ -66,8 +54,6 @@ export default function TiposDocumento() {
   const filtrados = useMemo(() => {
     const termino = busqueda.trim().toLocaleLowerCase('es');
     return tipos.filter(tipo => {
-      if (filtroModulo === 'otros' && [1, 2, 3, 9].includes(tipo.modulo)) return false;
-      if (filtroModulo !== 'todos' && filtroModulo !== 'otros' && tipo.modulo !== Number(filtroModulo)) return false;
       if (!termino) return true;
       return tipo.codigo.toLocaleLowerCase('es').includes(termino)
         || tipo.nombre.toLocaleLowerCase('es').includes(termino)
@@ -75,7 +61,7 @@ export default function TiposDocumento() {
         || tipo.nombreModulo.toLocaleLowerCase('es').includes(termino)
         || tipo.comprobante.toLocaleLowerCase('es').includes(termino);
     });
-  }, [busqueda, filtroModulo, tipos]);
+  }, [busqueda, tipos]);
 
   return (
     <div className="max-w-screen-2xl space-y-4 p-4">
@@ -83,7 +69,7 @@ export default function TiposDocumento() {
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Tipos de documento</div>
           <h1 className="text-lg font-semibold text-gray-800">Tipos de documento</h1>
-          <p className="mt-1 text-xs text-gray-500">Reglas globales de Cartera, Inventarios, Cuentas por pagar y Contabilidad.</p>
+          <p className="mt-1 text-xs text-gray-500">Tipos de documento de todos los módulos disponibles para Contabilidad.</p>
         </div>
         <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">Advantage · Sucursal 1 · {tipos.length} tipos</span>
       </div>
@@ -95,10 +81,7 @@ export default function TiposDocumento() {
 
       <div className="flex flex-wrap items-center gap-3 rounded border border-gray-200 bg-white p-3">
         <input type="search" aria-label="Buscar tipos de documento" placeholder="Buscar código, nombre, tipo o comprobante..." value={busqueda} onChange={event => setBusqueda(event.target.value)} className="w-80 rounded border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1" />
-        <label htmlFor="filtro-modulo" className="sr-only">Filtrar por módulo</label>
-        <select id="filtro-modulo" value={filtroModulo} onChange={event => setFiltroModulo(event.target.value as FiltroModulo)} className="rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700">
-          {OPCIONES_MODULO.map(opcion => <option key={opcion.valor} value={opcion.valor}>{opcion.etiqueta}</option>)}
-        </select>
+        <span className="text-xs text-gray-500">Todos los módulos</span>
         <span className="text-xs text-gray-500">{filtrados.length} de {tipos.length}</span>
         <button type="button" disabled={!filtrados.length} onClick={() => exportarCSV(filtrados)} className="ml-auto rounded border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar CSV</button>
         <button type="button" disabled title="Se habilitará después de validar todas las reglas y dependencias de VISDOCUM." className="cursor-not-allowed rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white opacity-50">+ Crear tipo</button>

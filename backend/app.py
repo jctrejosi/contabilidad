@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import store
 from .captura_documento_origen_repository import buscar_documento_origen
-from .access_session import router as access_router
+from .access_session import router as access_router, SessionIdentityMiddleware, session_user_code, session_payload
 from .medios_revision_api import router as medios_revision_router
 from .medios_detalle_tercero_api import router as medios_detalle_tercero_router
 from .medios_formatos_repository import (
@@ -250,6 +250,7 @@ app = FastAPI(
     version="1.0.0",
 )
 app.include_router(access_router)
+app.add_middleware(SessionIdentityMiddleware)
 app.include_router(medios_revision_router)
 app.include_router(medios_detalle_tercero_router)
 
@@ -1155,6 +1156,8 @@ class CloseTransferRequest(BaseModel):
 
 def _service_error(exc: Exception) -> HTTPException:
     """Convierte errores de dominio/ADS en respuestas HTTP estables y seguras."""
+    if isinstance(exc, HTTPException):
+        return exc
     if isinstance(
         exc,
         (
@@ -1367,7 +1370,7 @@ def _config_catalog(table_postgres: str, table_ads: str) -> dict[str, object]:
 def create_company_endpoint(payload: CompanyCreate) -> dict[str, object]:
     """Crea la compañía en el motor activo; Advantage comparte tablas por CIA."""
     try:
-        item = store.create_company(payload.model_dump(), user=payload.usuario)
+        item = store.create_company(session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "companias" if store.is_postgres() else "CONEMP"}
@@ -1380,7 +1383,7 @@ def update_company_endpoint(
 ) -> dict[str, object]:
     """Modifica nombre, NIT, dígito y estado; el código llega por la ruta."""
     try:
-        item = store.update_company(codigo, payload.model_dump(), user=payload.usuario)
+        item = store.update_company(codigo, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "companias"}
@@ -1401,7 +1404,7 @@ def delete_company_endpoint(
 ) -> dict[str, object] | Response:
     """Retira la compañía del selector si no tiene documentos, lotes ni saldos."""
     try:
-        item = store.delete_company(codigo, reason=motivo, user=usuario, dry_run=dry_run)
+        item = store.delete_company(codigo, reason=motivo, user=session_user_code(), dry_run=dry_run)
     except Exception as exc:
         raise _service_error(exc) from exc
     if not dry_run:
@@ -1472,7 +1475,7 @@ def create_third(
 ) -> dict[str, object]:
     """Crea un tercero activo para usarlo inmediatamente en movimientos."""
     try:
-        item = store.create_third_party(payload.model_dump(), cia=cia)
+        item = store.create_third_party(session_payload(payload), cia=cia)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "FADCLI", "sharedAcrossCompanies": True}
@@ -1487,7 +1490,7 @@ def update_third(
 ) -> dict[str, object]:
     """Modifica la ficha del tercero: el NIT viaja en la ruta y es inmutable."""
     try:
-        item = store.update_third_party(nit, payload.model_dump(), cia=cia, user=usuario)
+        item = store.update_third_party(nit, session_payload(payload), cia=cia, user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "FADCLI", "sharedAcrossCompanies": True}
@@ -1504,7 +1507,7 @@ def delete_third(
     """Da de baja un tercero sin historia contable; con movimientos, 409."""
     try:
         item = store.delete_third_party(
-            nit, reason=motivo, user=usuario, cia=cia, dry_run=dry_run
+            nit, reason=motivo, user=session_user_code(), cia=cia, dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -1526,7 +1529,7 @@ def update_third_credit_limit(
     """Cambia sólo el cupo: la ventana de cupos encadena una llamada por tercero."""
     try:
         item = store.update_third_party_credit_limit(
-            nit, payload.model_dump(), cia=cia, user=usuario
+            nit, session_payload(payload), cia=cia, user=session_user_code()
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -1548,7 +1551,7 @@ def import_third_parties_endpoint(
     """Da de alta varias filas; el `dryRun` responde 200 con el mismo informe."""
     try:
         item = store.import_third_parties(
-            request.model_dump(), cia=cia, user=usuario, dry_run=dry_run
+            session_payload(request), cia=cia, user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -1582,7 +1585,7 @@ def create_cost_center_endpoint(
 ) -> dict[str, object]:
     """Crea un centro de la compañía activa; el padre, si viene, debe existir."""
     try:
-        item = store.create_cost_center(cia, payload.model_dump(), user=usuario)
+        item = store.create_cost_center(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONCECOS", "sharedAcrossCompanies": False}
@@ -1615,7 +1618,7 @@ def create_document_type_endpoint(
 ) -> dict[str, object]:
     """Crea un tipo; en ADS se comparte por compañía dentro de sucursal 1."""
     try:
-        item = store.create_document_type(cia, payload.model_dump(), user=usuario)
+        item = store.create_document_type(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {
@@ -1651,7 +1654,7 @@ def create_voucher_endpoint(
 ) -> dict[str, object]:
     """Crea un comprobante de la compañía activa; no crea consecutivo."""
     try:
-        item = store.create_voucher(cia, payload.model_dump(), user=usuario)
+        item = store.create_voucher(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONTICOM", "sharedAcrossCompanies": False}
@@ -1680,7 +1683,7 @@ def create_vat_rate(
 ) -> dict[str, object]:
     """Crea la tarifa; la cuenta, si viene, debe existir en el plan de la compañía."""
     try:
-        item = store.create_tarifa_iva(cia, payload.model_dump(), user=payload.usuario)
+        item = store.create_tarifa_iva(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, **_config_catalog("tarifas_iva", "CONTIIVA")}
@@ -1694,7 +1697,7 @@ def update_vat_rate(
 ) -> dict[str, object]:
     """Modifica la tarifa vigente sin reescribir lo contabilizado."""
     try:
-        item = store.update_tarifa_iva(cia, codigo, payload.model_dump(), user=payload.usuario)
+        item = store.update_tarifa_iva(cia, codigo, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, **_config_catalog("tarifas_iva", "CONTIIVA")}
@@ -1717,7 +1720,7 @@ def delete_vat_rate(
     """Da de baja la tarifa; con renglones contabilizados que la usan, 409."""
     try:
         item = store.delete_tarifa_iva(
-            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+            cia, codigo, reason=motivo, user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -1754,7 +1757,7 @@ def create_retention_concept(
 ) -> dict[str, object]:
     """Crea un tipo global en CONTIRET sin exigir cuenta ni base mínima."""
     try:
-        item = store.create_concepto_retencion(cia, payload.model_dump(), user=payload.usuario)
+        item = store.create_concepto_retencion(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, **_config_catalog("conceptos_retencion", "CONTIRET")}
@@ -1769,7 +1772,7 @@ def update_retention_concept(
     """Modifica el concepto; el cambio de tarifa aplica a lo que se capture."""
     try:
         item = store.update_concepto_retencion(
-            cia, codigo, payload.model_dump(), user=payload.usuario
+            cia, codigo, session_payload(payload), user=session_user_code()
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -1793,7 +1796,7 @@ def delete_retention_concept(
     """Da de baja el concepto; con acumulados o renglones que lo usan, 409."""
     try:
         item = store.delete_concepto_retencion(
-            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+            cia, codigo, reason=motivo, user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -1828,7 +1831,7 @@ def create_income_line(
 ) -> dict[str, object]:
     """Crea el renglón; la cuenta es obligatoria y debe existir en el plan."""
     try:
-        item = store.create_renglon_renta(cia, payload.model_dump(), user=payload.usuario)
+        item = store.create_renglon_renta(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, **_config_catalog("renglones_renta", "CONDECLA")}
@@ -1842,7 +1845,7 @@ def update_income_line(
 ) -> dict[str, object]:
     """Modifica el renglón vigente; no reescribe declaraciones anteriores."""
     try:
-        item = store.update_renglon_renta(cia, codigo, payload.model_dump(), user=payload.usuario)
+        item = store.update_renglon_renta(cia, codigo, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, **_config_catalog("renglones_renta", "CONDECLA")}
@@ -1865,7 +1868,7 @@ def delete_income_line(
     """Da de baja el renglón; si su cuenta tiene declaraciones, 409."""
     try:
         item = store.delete_renglon_renta(
-            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+            cia, codigo, reason=motivo, user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -1937,7 +1940,7 @@ def create_template(
 ) -> dict[str, object]:
     """Crea la plantilla; cada cuenta de cada pareja debe existir y ser afectable."""
     try:
-        item = store.create_plantilla_contable(cia, payload.model_dump(), user=payload.usuario)
+        item = store.create_plantilla_contable(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, **_config_catalog("plantillas_contables", "VISDOCUM")}
@@ -1952,7 +1955,7 @@ def update_template(
     """Modifica la plantilla y reemplaza sus parejas de cuentas en bloque."""
     try:
         item = store.update_plantilla_contable(
-            cia, codigo, payload.model_dump(), user=payload.usuario
+            cia, codigo, session_payload(payload), user=session_user_code()
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -1976,7 +1979,7 @@ def delete_template(
     """Da de baja la plantilla; sus líneas se conservan y los lotes no se tocan."""
     try:
         item = store.delete_plantilla_contable(
-            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+            cia, codigo, reason=motivo, user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -2013,7 +2016,7 @@ def create_document_format(
 ) -> dict[str, object]:
     """Crea el formato; el ``tipo`` debe ser una de las ocho clases del editor."""
     try:
-        item = store.create_formato_documental(cia, payload.model_dump(), user=payload.usuario)
+        item = store.create_formato_documental(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, **_config_catalog("formatos_documentales", "CONGENF")}
@@ -2028,7 +2031,7 @@ def update_document_format(
     """Modifica el formato y reemplaza sus elementos en bloque."""
     try:
         item = store.update_formato_documental(
-            cia, codigo, payload.model_dump(), user=payload.usuario
+            cia, codigo, session_payload(payload), user=session_user_code()
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -2052,7 +2055,7 @@ def delete_document_format(
     """Da de baja el formato; sus elementos se conservan para reimprimir."""
     try:
         item = store.delete_formato_documental(
-            cia, codigo, reason=motivo, user=usuario, dry_run=dry_run
+            cia, codigo, reason=motivo, user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -2093,7 +2096,7 @@ def save_operation_parameters(
 ) -> dict[str, object]:
     """Graba en CONCTR los mismos controles persistidos por DSIGRABA6."""
     try:
-        item = store.update_operation_parameters(cia, payload.model_dump())
+        item = store.update_operation_parameters(cia, session_payload(payload))
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONCTR"}
@@ -2394,7 +2397,7 @@ def annul_document_endpoint(
             voucher=request.comprobante,
             document_type=request.tipoDocumento,
             movement_date=request.fecha.isoformat(),
-            user=request.usuario,
+            user=session_user_code(),
             reason=request.motivo,
             dry_run=dry_run,
         )
@@ -2441,7 +2444,7 @@ def import_lot_endpoint(
 ) -> dict[str, object]:
     """Usa rollback al validar y conserva un Borrador únicamente al confirmar."""
     try:
-        result = store.import_lot(cia, request.model_dump(), dry_run=dry_run)
+        result = store.import_lot(cia, session_payload(request), dry_run=dry_run)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result, "dryRun": dry_run}
@@ -2469,7 +2472,7 @@ def create_lot_endpoint(
 ) -> dict[str, object]:
     """Crea en CONMOVI un lote vacío listo para capturar partidas."""
     try:
-        item = store.create_lot(cia, payload.model_dump())
+        item = store.create_lot(cia, session_payload(payload))
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONMOVI"}
@@ -2482,7 +2485,7 @@ def update_lot_endpoint(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
     try:
-        item = store.update_lot(cia, lote, payload.model_dump())
+        item = store.update_lot(cia, lote, session_payload(payload))
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONMOVI"}
@@ -2521,7 +2524,7 @@ def post_lot_endpoint(
     dry_run: bool = Query(False, alias="dryRun"),
 ) -> dict[str, object]:
     try:
-        result = store.post_lot(cia, lote, user=payload.usuario, dry_run=dry_run)
+        result = store.post_lot(cia, lote, user=session_user_code(), dry_run=dry_run)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result}
@@ -2538,7 +2541,7 @@ def create_lot_line_endpoint(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
     try:
-        item = store.save_lot_line(cia, lote, payload.model_dump())
+        item = store.save_lot_line(cia, lote, session_payload(payload))
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONLOTES"}
@@ -2552,7 +2555,7 @@ def update_lot_line_endpoint(
     cia: str = Query(description="Compañía activa.", pattern=r"^[0-9]{1,3}$"),
 ) -> dict[str, object]:
     try:
-        item = store.save_lot_line(cia, lote, payload.model_dump(), line_id=line_id)
+        item = store.save_lot_line(cia, lote, session_payload(payload), line_id=line_id)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": item, "source": "CONLOTES"}
@@ -2582,7 +2585,7 @@ def post_movement(
 ) -> dict[str, object]:
     """Graba VISDOCUM, MOV01, CONMAE, CONTERCE, COCENTRO y CONDOCUM atómicamente."""
     try:
-        result = store.post_direct_movement(movement.model_dump(), dry_run=dry_run)
+        result = store.post_direct_movement(session_payload(movement), dry_run=dry_run)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result, "source": "Advantage Data Server"}
@@ -2592,7 +2595,7 @@ def post_movement(
 def preview_extraction_endpoint(request: MovementExtractionRequest) -> dict[str, object]:
     """Selecciona partidas sin modificar la contabilidad."""
     try:
-        result = preview_extraction(request.model_dump())
+        result = preview_extraction(session_payload(request))
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result, "dryRun": True}
@@ -2602,8 +2605,8 @@ def preview_extraction_endpoint(request: MovementExtractionRequest) -> dict[str,
 def confirm_extraction_endpoint(request: MovementExtractionRequest) -> dict[str, object]:
     """Crea lote, retira movimiento y reconstruye saldos atómicamente."""
     try:
-        result = confirm_extraction(request.model_dump(), fingerprint=request.huella,
-                                    user=request.usuario, reason=request.motivo)
+        result = confirm_extraction(session_payload(request), fingerprint=request.huella,
+                                    user=session_user_code(), reason=request.motivo)
     except Exception as exc:
         raise _service_error(exc) from exc
     return {"item": result, "source": "Advantage Data Server"}
@@ -2647,7 +2650,7 @@ def execute_monthly_reprocess_endpoint(
                 request.anio,
                 request.mesDesde,
                 request.mesHasta,
-                user=request.usuario,
+                user=session_user_code(),
                 reason=request.motivo,
                 dry_run=dry_run,
             )
@@ -3354,7 +3357,7 @@ def medios_formatos_listar(cia: str = _CIA_QUERY) -> dict[str, object]:
           summary="Crear formato de medios magnéticos")
 def medios_formatos_crear(payload: MedioFormatoWrite, cia: str = _CIA_QUERY) -> dict[str, object]:
     try:
-        return save_medio_formato(cia, payload.model_dump(), user=payload.usuario)
+        return save_medio_formato(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -3363,8 +3366,8 @@ def medios_formatos_crear(payload: MedioFormatoWrite, cia: str = _CIA_QUERY) -> 
 def medios_formatos_modificar(payload: MedioFormatoWrite, codigo: str,
                              cia: str = _CIA_QUERY) -> dict[str, object]:
     try:
-        return save_medio_formato(cia, payload.model_dump(), original=codigo,
-                                  user=payload.usuario)
+        return save_medio_formato(cia, session_payload(payload), original=codigo,
+                                  user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -3374,7 +3377,7 @@ def medios_formatos_modificar(payload: MedioFormatoWrite, codigo: str,
 def medios_formatos_eliminar(codigo: str, cia: str = _CIA_QUERY,
                             usuario: str = Query("WEB", max_length=4)) -> Response:
     try:
-        delete_medio_formato(cia, codigo, user=usuario)
+        delete_medio_formato(cia, codigo, user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -3407,7 +3410,7 @@ def medios_conceptos_listar(formato: str, cia: str = _CIA_QUERY) -> dict[str, ob
 def medios_conceptos_crear(formato: str, payload: MedioConceptoWrite,
                           cia: str = _CIA_QUERY) -> dict[str, object]:
     try:
-        return save_medio_concepto(cia, formato, payload.model_dump(), user=payload.usuario)
+        return save_medio_concepto(cia, formato, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -3416,8 +3419,8 @@ def medios_conceptos_crear(formato: str, payload: MedioConceptoWrite,
 def medios_conceptos_modificar(formato: str, codigo: str, payload: MedioConceptoWrite,
                               cia: str = _CIA_QUERY) -> dict[str, object]:
     try:
-        return save_medio_concepto(cia, formato, payload.model_dump(), original=codigo,
-                                   user=payload.usuario)
+        return save_medio_concepto(cia, formato, session_payload(payload), original=codigo,
+                                   user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -3427,7 +3430,7 @@ def medios_conceptos_modificar(formato: str, codigo: str, payload: MedioConcepto
 def medios_conceptos_eliminar(formato: str, codigo: str, cia: str = _CIA_QUERY,
                              usuario: str = Query("WEB", max_length=4)) -> Response:
     try:
-        delete_medio_concepto(cia, formato, codigo, user=usuario)
+        delete_medio_concepto(cia, formato, codigo, user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -3608,7 +3611,7 @@ def impuestos_acumular_iva(
     """Recalcula el período indicado; ``dryRun`` devuelve el informe sin escribir (1.2)."""
     try:
         return store.acumular_iva(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3682,7 +3685,7 @@ def impuestos_acumular_retenciones(
     """Recalcula el período indicado dentro de una transacción (1.5)."""
     try:
         return store.acumular_retencion(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3754,7 +3757,7 @@ def impuestos_crear_formato(
 ) -> dict[str, object]:
     """Crea el formato; la unicidad es compañía, código y vigencia (2.2)."""
     try:
-        return store.create_formato(cia, payload.model_dump(), user=payload.usuario)
+        return store.create_formato(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -3769,7 +3772,7 @@ def impuestos_actualizar_formato(
     """Modifica nombre, estado o vigencia; la vigencia forma parte de la clave (2.3)."""
     try:
         return store.update_formato(
-            cia, codigo, vigencia, payload.model_dump(), user=payload.usuario
+            cia, codigo, vigencia, session_payload(payload), user=session_user_code()
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3793,7 +3796,7 @@ def impuestos_eliminar_formato(
     """Baja lógica; con una generación exportada responde 409 (2.4)."""
     try:
         item = store.delete_formato(
-            cia, codigo, vigencia, reason=motivo, user=usuario, dry_run=dry_run
+            cia, codigo, vigencia, reason=motivo, user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3817,7 +3820,7 @@ def impuestos_reemplazar_conceptos(
     """Reemplazo en bloque, con conteos de creados, actualizados y retirados (2.5)."""
     try:
         return store.replace_formato_conceptos(
-            cia, codigo, vigencia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, codigo, vigencia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3837,7 +3840,7 @@ def impuestos_reemplazar_asignaciones(
     """El árbol manda la lista completa, que evita interpretar altas y bajas (2.6)."""
     try:
         return store.replace_formato_asignaciones(
-            cia, codigo, vigencia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, codigo, vigencia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3852,7 +3855,7 @@ def impuestos_copiar_formatos(
     """Copia definiciones (no datos) traduciendo las cuentas por código (2.7)."""
     try:
         return store.copy_formatos(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3884,7 +3887,7 @@ def impuestos_generar_medio(
     """Genera las filas y el cuadre en una transacción (3.2)."""
     try:
         return store.create_medio(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3921,7 +3924,7 @@ def impuestos_ajustar_fila(
     """Solo se ajusta mientras la generación no esté exportada (3.4)."""
     try:
         return store.update_medio_fila(
-            cia, id, fila_id, payload.model_dump(), user=payload.usuario
+            cia, id, fila_id, session_payload(payload), user=session_user_code()
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -3951,7 +3954,7 @@ def impuestos_reemplazar_topes(
     """Reemplazo en bloque de los topes por formato y concepto (3.6)."""
     try:
         return store.replace_topes(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4006,7 +4009,7 @@ def crear_consolidacion(
 ) -> dict[str, object]:
     """Configura destino, orígenes y homologaciones en una transacción (2.2)."""
     try:
-        return store.create_consolidation(cia, payload.model_dump(), user=payload.usuario)
+        return store.create_consolidation(cia, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -4044,7 +4047,7 @@ def consolidacion_simular(
         )
     try:
         return store.simulate_consolidation(
-            cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, id, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4065,7 +4068,7 @@ def consolidacion_ejecutar(
     """
     try:
         return store.execute_consolidation(
-            cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, id, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4098,7 +4101,7 @@ def reemplazar_flujo_caja_renglones(
     """Reemplazo en bloque de la definición completa del flujo (§2)."""
     try:
         return store.replace_flujo_caja_renglones(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4126,7 +4129,7 @@ def reemplazar_rubros_niif(
     """Reemplazo en bloque de los rubros NIIF y sus asignaciones (§4)."""
     try:
         return store.replace_rubros_niif(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4160,7 +4163,7 @@ def abrir_cierre(
     """Abre el cierre con la foto del checklist; un año admite uno abierto (1.2)."""
     try:
         return store.create_cierre(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4176,7 +4179,7 @@ def cierre_lote(
     """Genera el lote de cierre desde los saldos del año, reutilizando Lotes (1.3)."""
     try:
         return store.generate_cierre_lot(
-            cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, id, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4192,7 +4195,7 @@ def cierre_traslado(
     """Persiste la matriz en ``cierre_traslados`` y crea los documentos del destino (1.4)."""
     try:
         return store.transfer_cierre(
-            cia, id, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, id, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4280,7 +4283,7 @@ def usuarios_listar(
 def usuario_crear(payload: UserWrite) -> dict[str, object]:
     """Alta de usuario con rol existente y al menos una compañía (1.2)."""
     try:
-        return store.create_user(payload.model_dump(), user=payload.usuario)
+        return store.create_user(session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -4289,7 +4292,7 @@ def usuario_crear(payload: UserWrite) -> dict[str, object]:
 def usuario_actualizar(payload: UserUpdate, id: int = Path(ge=1)) -> dict[str, object]:
     """Modifica nombre, correo, rol, iniciales o estado (1.3)."""
     try:
-        return store.update_user(id, payload.model_dump(), user=payload.usuario)
+        return store.update_user(id, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -4306,7 +4309,7 @@ def usuario_baja(
 ) -> None:
     """Baja lógica: la bitácora del usuario no se toca (1.4)."""
     try:
-        store.delete_user(id, user=usuario, motivo=motivo)
+        store.delete_user(id, user=session_user_code(), motivo=motivo)
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -4327,7 +4330,7 @@ def rol_permisos(
 ) -> dict[str, object]:
     """Reemplazo en bloque de los permisos del rol (1.6)."""
     try:
-        return store.replace_role_permissions(codigo, payload.model_dump(), user=payload.usuario)
+        return store.replace_role_permissions(codigo, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -4336,7 +4339,7 @@ def rol_permisos(
 def usuario_companias(payload: UserCompanyList, id: int = Path(ge=1)) -> dict[str, object]:
     """Aislamiento por empresa: reemplazo en bloque de `usuario_companias` (1.7)."""
     try:
-        return store.replace_user_companies(id, payload.model_dump(), user=payload.usuario)
+        return store.replace_user_companies(id, session_payload(payload), user=session_user_code())
     except Exception as exc:
         raise _service_error(exc) from exc
 
@@ -4411,7 +4414,7 @@ def integracion_actualizar(
     """Persiste estado, configuración y motivo; no prueba la conexión (3.2)."""
     try:
         return store.replace_integration(
-            cia, modulo, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, modulo, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4557,7 +4560,7 @@ def mantenimiento_iniciar(
     """Un solo mantenimiento abierto por compañía; exige respaldo (3.2)."""
     try:
         return store.start_maintenance(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4578,8 +4581,8 @@ def mantenimiento_cerrar(
     """Cierra el proceso de mantenimiento y deja de bloquear (3.3)."""
     try:
         store.stop_maintenance(
-            cia, {"proceso": proceso, "motivo": motivo, "usuario": usuario},
-            user=usuario, dry_run=dry_run,
+            cia, {"proceso": proceso, "motivo": motivo, "usuario": session_user_code()},
+            user=session_user_code(), dry_run=dry_run,
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4598,7 +4601,7 @@ def reorg_ejecutar(
     """Exige mantenimiento activo; una sola reorganización en curso (3.4)."""
     try:
         return store.start_reorganization(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4662,7 +4665,7 @@ def especiales_cuentas_cero_eliminar(
     """Revalida cada cuenta en el servidor y registra el motivo en la bitácora (4.2)."""
     try:
         return store.delete_zero_accounts(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4699,7 +4702,7 @@ def tercero_reasignar(
     """Reescribe el libro del NIT origen al destino, con informe de impacto (E1)."""
     try:
         return store.reassign_third_party(
-            cia, nit, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, nit, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4750,7 +4753,7 @@ def reembolsos_contables_confirmar(
 ) -> dict[str, object]:
     try:
         return {"item": confirmar_reembolso_ads(
-            cia, lote, str(payload.get("loteContable", "")), str(payload.get("usuario", "WEB")),
+            cia, lote, str(payload.get("loteContable", "")), session_user_code(),
             dry_run=dry_run,
         )}
     except Exception as exc:
@@ -4837,7 +4840,7 @@ def reembolso_crear(
     """Nace `Borrador`, exige cuadre y numero unico por compania y ano (2.2)."""
     try:
         return store.create_reimbursement(
-            cia, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4853,7 +4856,7 @@ def reembolso_actualizar(
     """Solo en `Borrador`; reemplaza las líneas en bloque (2.3)."""
     try:
         return store.update_reimbursement(
-            cia, numero, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, numero, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc
@@ -4869,7 +4872,7 @@ def reembolso_aplicar(
     """Crea el lote real con sus líneas y liga `lote_id`; idempotente (2.4)."""
     try:
         return store.apply_reimbursement(
-            cia, numero, payload.model_dump(), user=payload.usuario, dry_run=dry_run
+            cia, numero, session_payload(payload), user=session_user_code(), dry_run=dry_run
         )
     except Exception as exc:
         raise _service_error(exc) from exc

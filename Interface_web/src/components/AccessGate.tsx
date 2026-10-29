@@ -1,7 +1,8 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { ModuleUserContext, type ModuleUser } from './ModuleUser';
 
 type AccessResult =
-  | { authorized: true }
+  | { authorized: true; user: ModuleUser }
   | { authorized: false; message: string };
 
 let bootstrapPromise: Promise<AccessResult> | null = null;
@@ -41,12 +42,17 @@ async function responseMessage(response: Response, fallback: string): Promise<st
   }
 }
 
-async function verifySession(): Promise<boolean> {
+async function verifySession(): Promise<ModuleUser | null> {
   const response = await fetch('/api/access/session', {
     credentials: 'include',
     cache: 'no-store',
   });
-  return response.ok;
+  if (!response.ok) return null;
+  const body = await response.json() as { user?: ModuleUser };
+  const user = body.user;
+  return user && typeof user.code === 'string' && !!user.code.trim() && user.code.length <= 4
+    && typeof user.name === 'string' && !!user.name.trim()
+    && typeof user.administrator === 'boolean' ? user : null;
 }
 
 async function bootstrapAccess(): Promise<AccessResult> {
@@ -71,8 +77,9 @@ async function bootstrapAccess(): Promise<AccessResult> {
           message: await responseMessage(response, 'Fortuner no pudo autorizar el acceso a Contabilidad.'),
         };
       }
-      if (await verifySession()) {
-        if (authorizeCurrentTab()) return { authorized: true };
+      const user = await verifySession();
+      if (user) {
+        if (authorizeCurrentTab()) return { authorized: true, user };
         return {
           authorized: false,
           message: 'El navegador bloqueó el almacenamiento de sesión necesario para esta pestaña.',
@@ -98,7 +105,8 @@ async function bootstrapAccess(): Promise<AccessResult> {
   }
 
   try {
-    if (await verifySession()) return { authorized: true };
+    const user = await verifySession();
+    if (user) return { authorized: true, user };
     clearTabAuthorization();
   } catch {
     clearTabAuthorization();
@@ -125,12 +133,14 @@ export default function AccessGate({ children }: { children: ReactNode }) {
   const [showAdministrator, setShowAdministrator] = useState(false);
   const [administratorKey, setAdministratorKey] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [user, setUser] = useState<ModuleUser | null>(null);
 
   useEffect(() => {
     let active = true;
     void initialAccess().then(result => {
       if (!active) return;
       if (result.authorized) {
+        setUser(result.user);
         setStatus('authorized');
       } else {
         setMessage(result.message);
@@ -160,7 +170,8 @@ export default function AccessGate({ children }: { children: ReactNode }) {
         setMessage(await responseMessage(response, 'La clave administrativa no fue aceptada.'));
         return;
       }
-      if (!(await verifySession())) {
+      const authenticatedUser = await verifySession();
+      if (!authenticatedUser) {
         clearTabAuthorization();
         setMessage('El navegador bloqueó la cookie necesaria. Habilite las cookies para este sitio.');
         return;
@@ -169,6 +180,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
         setMessage('El navegador bloqueó el almacenamiento de sesión necesario para esta pestaña.');
         return;
       }
+      setUser(authenticatedUser);
       setStatus('authorized');
     } catch {
       setMessage('No fue posible comunicarse con el servicio de autorización.');
@@ -177,7 +189,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
     }
   }
 
-  if (status === 'authorized') return <>{children}</>;
+  if (status === 'authorized' && user) return <ModuleUserContext.Provider value={user}>{children}</ModuleUserContext.Provider>;
 
   if (status === 'checking') {
     return (

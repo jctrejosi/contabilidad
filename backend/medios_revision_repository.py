@@ -163,16 +163,16 @@ def _money(value: Any) -> Decimal:
     return result
 
 
-def _audit(company: int, formato: str, action: str) -> str:
+def _audit(company: int, formato: str, action: str, user: str = 'WEB') -> str:
     try:
-        register_master_update('WEB', 'CONMAGDT', formato, f'CIA {company}: {action}')
+        register_master_update(user, 'CONMAGDT', formato, f'CIA {company}: {action}')
         return ''
     except Exception:
         LOG.warning('Medios: escritura confirmada con auditoría pendiente', exc_info=True)
         return 'Operación guardada; el registro de auditoría está pendiente.'
 
 
-def save_revision(cia: str, formato: str, payload: dict[str, Any]) -> dict[str, Any]:
+def save_revision(cia: str, formato: str, payload: dict[str, Any], *, user: str = 'WEB') -> dict[str, Any]:
     concept = _code(payload.get('concepto', ''), 'El concepto')
     third = str(payload.get('tercero', '')).strip()
     digit = str(payload.get('digito', '')).strip()
@@ -204,10 +204,10 @@ def save_revision(cia: str, formato: str, payload: dict[str, Any]) -> dict[str, 
         except Exception:
             connection.RollbackTrans()
             raise
-    return {'mensaje': 'Registro guardado.', 'advertencia': _audit(company, code, 'Mantenimiento de liquidación de medios')}
+    return {'mensaje': 'Registro guardado.', 'advertencia': _audit(company, code, 'Mantenimiento de liquidación de medios', user)}
 
 
-def delete_revision(cia: str, formato: str, row_id: str, revision: str) -> dict[str, Any]:
+def delete_revision(cia: str, formato: str, row_id: str, revision: str, *, user: str = 'WEB') -> dict[str, Any]:
     with accounting_write_lock, ads_odbc_connection() as connection:
         company, form = _context(connection, cia, formato)
         code = _text(form['CODFORMA']).strip()
@@ -220,7 +220,7 @@ def delete_revision(cia: str, formato: str, row_id: str, revision: str) -> dict[
         except Exception:
             connection.RollbackTrans()
             raise
-    return {'mensaje': 'Registro eliminado.', 'advertencia': _audit(company, code, 'Eliminación manual de acumulado')}
+    return {'mensaje': 'Registro eliminado.', 'advertencia': _audit(company, code, 'Eliminación manual de acumulado', user)}
 
 
 def detail_revision(cia: str, formato: str, row_id: str, revision: str) -> dict[str, Any]:
@@ -239,7 +239,7 @@ def detail_revision(cia: str, formato: str, row_id: str, revision: str) -> dict[
             'items': [{k: str(v) if v is not None else '' for k, v in item.items()} for item in items]}
 
 
-def reassign_ids(cia: str, formato: str, confirmation: str = '') -> dict[str, Any]:
+def reassign_ids(cia: str, formato: str, confirmation: str = '', *, user: str = 'WEB') -> dict[str, Any]:
     """GENERAID: reemplaza TERCERO por FADCLI.CNIT; nunca toca CONMAGIT.
 
     La vista previa es obligatoria. Su hash incluye las filas y sus mapeos;
@@ -269,4 +269,4 @@ def reassign_ids(cia: str, formato: str, confirmation: str = '') -> dict[str, An
             raise
     return {'token': token, 'cantidad': len(changes),
             'cambios': [{'anterior': _text(row['TERCERO']).strip(), 'nuevo': nit, 'concepto': _text(row['CONCEPTO'])} for row, nit in changes],
-            'advertencia': _audit(company, code, 'Reasignación de identificaciones') if confirmation else ''}
+            'advertencia': _audit(company, code, 'Reasignación de identificaciones', user) if confirmation else ''}

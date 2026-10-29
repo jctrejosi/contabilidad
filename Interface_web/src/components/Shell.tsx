@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { PERIODO, USUARIO } from '../data/mock';
+import { PERIODO } from '../data/mock';
+import { useModuleUser } from './ModuleUser';
 import type { CompaniaSesion } from '../types';
 import BotChat from './BotChat';
 
@@ -186,6 +187,7 @@ interface ShellProps {
 }
 
 export default function Shell({ currentPage, onNavigate, compania, onChangeCompany, children, badgeAlerts = 0 }: ShellProps) {
+  const moduleUser = useModuleUser();
   // El panel lateral se muestra completo; sus grupos de opciones comienzan
   // cerrados y el usuario despliega únicamente el que necesita.
   const [collapsed, setCollapsed] = useState(false);
@@ -448,7 +450,7 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
           <BotChat
             compania={compania}
             periodo={`${PERIODO.anio} · ${periodoLabel}`}
-            usuario={USUARIO.nombre}
+            usuario={moduleUser.name}
           />
 
           {/* User */}
@@ -457,11 +459,11 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
               className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
               style={{ backgroundColor: '#0073C0' }}
             >
-              LG
+              {moduleUser.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase()}
             </div>
             <div className="hidden md:block">
-              <div className="text-xs font-medium text-gray-800 leading-tight">{USUARIO.nombre}</div>
-              <div className="text-xs text-gray-400">{USUARIO.rol}</div>
+              <div className="text-xs font-medium text-gray-800 leading-tight">{moduleUser.name}</div>
+              <div className="text-xs text-gray-400">{moduleUser.code}{moduleUser.administrator ? ' · Administrador' : ''}</div>
             </div>
           </div>
         </header>
