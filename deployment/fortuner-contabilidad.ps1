@@ -1,6 +1,5 @@
 # Adaptador instalado en Fortuner. No se ejecuta durante la instalacion.
-# Respeta el contrato npm ya admitido por modules.json; el script npm inicia
-# el ejecutable empaquetado. No depende de Python ni de fuentes contables.
+# Inicia el ejecutable instalado sin depender de Python, Node ni fuentes.
 param([string]$ConfigurationPath = "")
 if ($PSVersionTable.PSEdition -eq 'Desktop') { $env:PSModulePath = "$PSHOME\Modules;$env:ProgramFiles\WindowsPowerShell\Modules;$env:PSModulePath" }
 $ErrorActionPreference = "Stop"
@@ -11,7 +10,6 @@ $settings = Get-Content -LiteralPath $ConfigurationPath -Raw | ConvertFrom-Json
 $module = @($settings.modules | Where-Object { $_.id -eq 'contabilidad' -and $_.status -eq 'active' })
 if ($module.Count -ne 1) { return }
 $service = $module[0].services.frontend
-if ($service.npmScript -ne 'start:fortuner') { return }
 $projectsRoot = [string]$settings.defaults.projectsRoot
 if (-not [IO.Path]::IsPathRooted($projectsRoot)) { $projectsRoot = Join-Path $PSScriptRoot $projectsRoot }
 $working = [string]$service.workingDirectory
@@ -21,6 +19,11 @@ $manifestFile = Join-Path $working 'installation.json'
 if (-not (Test-Path -LiteralPath $manifestFile)) { throw 'La instalacion de Contabilidad esta incompleta.' }
 $installation = Get-Content -Raw -LiteralPath $manifestFile | ConvertFrom-Json
 if ($installation.product -ne 'CONTABDSI27') { throw 'El directorio configurado no corresponde a Contabilidad.' }
+$executable = [string]$installation.executable
+$configuration = [string]$installation.configuration
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf) -or -not (Test-Path -LiteralPath $configuration -PathType Leaf)) {
+    throw 'La instalacion de Contabilidad no contiene el ejecutable o su configuracion.'
+}
 $port = [int]$service.port
 $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
 if ($listener) {
@@ -29,10 +32,10 @@ if ($listener) {
     Write-Host "[ACTIVO] Contabilidad (puerto $port)" -ForegroundColor Green
     return
 }
-$npm = Get-Command npm.cmd -ErrorAction Stop
 $logRoot = Join-Path $working 'logs'
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
-Start-Process -FilePath $npm.Source -ArgumentList @('run', 'start:fortuner', '--', '--port', $port.ToString()) -WorkingDirectory $working -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logRoot 'fortuner.stdout.log') -RedirectStandardError (Join-Path $logRoot 'fortuner.stderr.log') | Out-Null
+$arguments = 'serve --config "' + $configuration + '" --port ' + $port.ToString()
+Start-Process -FilePath $executable -ArgumentList $arguments -WorkingDirectory $working -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logRoot 'fortuner.stdout.log') -RedirectStandardError (Join-Path $logRoot 'fortuner.stderr.log') | Out-Null
 $deadline = (Get-Date).AddSeconds(30)
 do {
     if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {

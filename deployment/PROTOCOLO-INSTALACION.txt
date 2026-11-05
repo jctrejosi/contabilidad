@@ -7,8 +7,9 @@ Windows, una tarea de arranque propia ni un acceso directo que la inicie.
 
 ANTES DE INSTALAR
 1. Servidor Windows de 64 bits. Preparar el paquete en Windows x64.
-2. Fortuner27 instalado con su iniciador portable start-fortuner.ps1,
-   Config/modules.json y Frontend. Node/npm ya debe funcionar para Fortuner.
+2. Fortuner27 instalado. Se admite tanto el modo portable de desarrollo con
+   start-fortuner.ps1 como la entrega compilada con backend/Fortuner27.exe,
+   INICIAR.ps1 y Config/modules.json. La entrega compilada no requiere Node.
 3. Advantage Data Server funcionando y conectores Advantage OLE DB y
    Advantage StreamlineSQL ODBC de 64 bits previamente instalados.
 4. Diccionario ADD, tablas, indices y catalogos reales disponibles.
@@ -35,8 +36,9 @@ El instalador realiza automaticamente:
 - Comprobacion de carga de la interfaz/API y lectura de tablas esenciales
   a traves de ADO/OLE DB y ADO/ODBC. Esta prueba no abre ningun puerto.
 - Registro del modulo contabilidad en la configuracion actual de Fortuner.
-- Incorporacion de un adaptador al iniciador portable de Fortuner.
-- Configuracion de la URL del modulo en el Frontend de Fortuner.
+- Incorporacion de un adaptador al iniciador portable o compilado de Fortuner.
+- Configuracion del puerto del modulo en Config/modules.json. El frontend
+  compilado obtiene esa URL dinamicamente y no requiere .env.local.
 - Regla de firewall del puerto web, solo en perfiles Privado/Dominio y
   para la subred local. No abre el puerto 8001 ni publica la base de datos.
 - Deshabilitacion de la tarea antigua de inicio autonomo de Contabilidad,
@@ -47,8 +49,9 @@ El instalador realiza automaticamente:
 Al finalizar debe mostrar: INSTALADO Y DETENIDO.
 
 INICIAR DESPUES DE INSTALAR
-Cuando corresponda, iniciar/reiniciar Fortuner con su entrada habitual
-Iniciar-Fortuner-Servidor.bat o su tarea que llama start-fortuner.ps1.
+Cuando corresponda, iniciar/reiniciar Fortuner con su entrada habitual:
+Iniciar-Fortuner-Servidor.bat en modo portable o ABRIR_APLICACION.cmd en la
+entrega compilada.
 Ese iniciador ejecutara el modulo instalado. La instalacion no lo ejecuta.
 No usar el antiguo Iniciar-servicios-DSI.bat como entrada del paquete:
 esa version de desarrollo contiene rutas fijas y arranques independientes.
@@ -108,3 +111,24 @@ Ejecutar deployment\Preparar-Instalador.bat. Compila React, empaqueta Python,
 verifica el ejecutable sin iniciarlo, excluye fuentes y genera un ZIP en
 release\. Se entrega al cliente solo ese ZIP, no el repositorio del proyecto.
 Documentacion del empaquetador: https://pyinstaller.org/en/stable/usage.html
+
+CAMBIAR LA CONEXION EN UNA INSTALACION EXISTENTE
+Cierre Fortuner27 y detenga el modulo. En la carpeta instalada ejecute
+Configurar-Conexion-Contabilidad27.bat. Solicita elevacion, ruta ADD, carpetas
+de referencia/VISAUDI y datos de acceso ocultos. Enter conserva cada valor.
+Prueba la conexion con el ejecutable instalado (OLE DB y ODBC), sin iniciar
+el servicio, antes de sustituir credentials.dpapi. Crea un respaldo protegido
+y restaura la configuracion anterior ante errores de activacion.
+No cambia puerto, host, firewall, modules.json ni la version del ejecutable.
+No copie credentials.dpapi a otro servidor: DPAPI esta ligado al equipo.
+
+Diagnostico sin cambios (desde la carpeta instalada):
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File configurar-conexion.ps1 -Plan
+
+Recuperacion desde el paquete:
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File instalar.ps1 -InstallRoot "C:\ProgramData\DSI\CONTABDSI27" -ReconfigureConnection
+En instalaciones existentes ejecuta solo la utilidad compartida. En una
+instalacion nueva se mantiene el asistente normal. No combinar con -Plan.
+Las instalaciones anteriores necesitan una actualizacion del paquete para
+incorporar ambos archivos. Despues no hace falta conservar el ZIP para cambiar
+la conexion. Probar primero en servidor de ensayo con respaldo verificable.

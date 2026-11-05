@@ -7,6 +7,7 @@ from starlette.requests import Request
 from backend.access_session import (
     COOKIE_NAME,
     AccessSessionStore,
+    ModuleUser,
     AdministratorRequest,
     FortunerCodeRequest,
     administrator_access,
@@ -26,7 +27,7 @@ class MutableClock:
 def test_session_is_opaque_and_expires() -> None:
     clock = MutableClock()
     store = AccessSessionStore(clock=clock)
-    token = store.issue("fortuner", ttl_seconds=300)
+    token = store.issue("fortuner", ModuleUser("ABCD", "Usuario", False), ttl_seconds=300)
 
     assert store.get(token) is not None
     assert store.get(token).method == "fortuner"
@@ -36,13 +37,13 @@ def test_session_is_opaque_and_expires() -> None:
 
 def test_session_can_be_revoked() -> None:
     store = AccessSessionStore()
-    token = store.issue("administrator")
+    token = store.issue("administrator", ModuleUser("Ha27", "Administrador", True))
 
     store.revoke(token)
     assert store.get(token) is None
 
 
-@patch("backend.access_session._post_to_fortuner", return_value={"authorized": True})
+@patch("backend.access_session._post_to_fortuner", return_value={"authorized": True, "moduleId": "contabilidad", "user": {"code": "ABCD", "name": "Usuario", "administrator": False}})
 def test_fortuner_code_creates_http_only_cookie(post_to_fortuner) -> None:
     response = Response()
 
@@ -59,7 +60,7 @@ def test_fortuner_code_creates_http_only_cookie(post_to_fortuner) -> None:
     )
 
 
-@patch("backend.access_session._post_to_fortuner", return_value={"authorized": True})
+@patch("backend.access_session._post_to_fortuner", return_value={"authorized": True, "moduleId": "contabilidad", "user": {"code": "Ha27", "name": "Administrador", "administrator": True}})
 def test_administrator_access_creates_session(post_to_fortuner) -> None:
     response = Response()
 

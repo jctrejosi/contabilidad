@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import { MOVIMIENTOS_FEB, USUARIO, fmtCOP } from '../data/mock';
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { USUARIO, fmtCOP } from '../data/mock';
 import { listarCuentas } from '../api/cuentas';
 import { listarCentros } from '../api/centros';
 import { listarTerceros } from '../api/terceros';
@@ -7,16 +7,16 @@ import { listarComprobantes, type ComprobanteReal } from '../api/comprobantes';
 import { listarTiposDocumento, type TipoDocumentoReal } from '../api/tiposDocumento';
 import { contabilizarCaptura, type ResultadoContabilizacion } from '../api/contabilizacion';
 import { consultarPeriodoOperacion } from '../api/periodoOperacion';
+import CargarDocumentoCaptura, { type PartidaOrigen } from '../components/CargarDocumentoCaptura';
 import CrearTerceroModal from '../components/CrearTerceroModal';
 import ConfirmarCrearTerceroModal from '../components/ConfirmarCrearTerceroModal';
 import type { CentroJerarquico } from '../data/configCentros';
-import type { Cuenta, Lote, LoteLinea, MovimientoLinea, Tercero } from '../types';
+import type { Cuenta, Lote, LoteLinea, Tercero } from '../types';
 
 const INPUT = 'min-w-0 w-full rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800 outline-none transition focus:border-petroleum-500 focus:ring-2 focus:ring-petroleum-100';
-const BUTTON_SECONDARY = 'rounded border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50';
-const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white hover:bg-petroleum-600';
 
 interface Linea {
+  documentoAfectado?: string;
   id: number;
   cuenta: string;
   nombreCuenta: string;
@@ -49,70 +49,6 @@ function fechaLocalActual(): string {
   return `${anio}-${mes}-${dia}`;
 }
 
-function Modal({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg mx-4 max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 shrink-0">
-          <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
-        </div>
-        <div className="p-5 overflow-y-auto">{children}</div>
-        {footer && <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-100 shrink-0">{footer}</div>}
-      </div>
-    </div>
-  );
-}
-
-interface PlantillaLinea {
-  cuenta: string;
-  tercero: string;
-  centro: string;
-  debito: string;
-  credito: string;
-  base: string;
-  concepto: string;
-}
-
-const PLANTILLAS: { id: string; nombre: string; descripcion: string; lineas: PlantillaLinea[] }[] = [
-  {
-    id: 'nomina',
-    nombre: 'Nómina mensual',
-    descripcion: 'Sueldo, obligación laboral y retención de nómina. Cuadrada: 4.500.000 = 4.500.000.',
-    lineas: [
-      { cuenta: '510506', tercero: 'García Moreno Juan Pablo', centro: 'ADM', debito: '4500000', credito: '', base: '', concepto: 'Sueldo febrero Administración' },
-      { cuenta: '250505', tercero: 'García Moreno Juan Pablo', centro: 'ADM', debito: '', credito: '3900000', base: '', concepto: 'Obligación nómina febrero' },
-      { cuenta: '236540', tercero: '', centro: '', debito: '', credito: '600000', base: '4500000', concepto: 'Retención aportes de nómina' },
-    ],
-  },
-  {
-    id: 'compra-iva',
-    nombre: 'Compra con IVA y retención',
-    descripcion: 'Gasto + IVA descontable − retención, pago neto por banco. Cuadrada: 1.190.000 = 1.190.000.',
-    lineas: [
-      { cuenta: '510506', tercero: 'Comercial XYZ Distribuciones Ltda.', centro: 'ADM', debito: '1000000', credito: '', base: '', concepto: 'Compra de servicios administrativos' },
-      { cuenta: '240805', tercero: 'Comercial XYZ Distribuciones Ltda.', centro: '', debito: '190000', credito: '', base: '1000000', concepto: 'IVA 19% descontable' },
-      { cuenta: '236540', tercero: 'Comercial XYZ Distribuciones Ltda.', centro: '', debito: '', credito: '25000', base: '1000000', concepto: 'Retención en la fuente 2,5%' },
-      { cuenta: '111005', tercero: '', centro: '', debito: '', credito: '1165000', base: '', concepto: 'Pago neto por banco' },
-    ],
-  },
-  {
-    id: 'pago-banco',
-    nombre: 'Pago por banco',
-    descripcion: 'Pago de obligación laboral con egreso bancario. Cuadrada: 1.500.000 = 1.500.000.',
-    lineas: [
-      { cuenta: '250505', tercero: 'López Vargas María Fernanda', centro: '', debito: '1500000', credito: '', base: '', concepto: 'Pago obligación laboral' },
-      { cuenta: '111005', tercero: '', centro: '', debito: '', credito: '1500000', base: '', concepto: 'Egreso bancario' },
-    ],
-  },
-];
-
-const FILAS_PORTAPAPELES: PlantillaLinea[] = [
-  { cuenta: '510506', tercero: 'López Vargas María Fernanda', centro: 'ADM', debito: '1200000', credito: '', base: '', concepto: 'Servicios administrativos' },
-  { cuenta: '510506', tercero: 'Martínez Rojas Ana Lucía', centro: 'VEN', debito: '800000', credito: '', base: '', concepto: 'Servicios ventas' },
-  { cuenta: '250505', tercero: 'López Vargas María Fernanda', centro: '', debito: '', credito: '2000000', base: '', concepto: 'Provisión servicios' },
-];
-
 let cdCounter = 1;
 
 export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCrearLote?: (l: Lote) => void }) {
@@ -144,8 +80,6 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
   const [tercerosError, setTercerosError] = useState('');
   const [crearTerceroParaLinea, setCrearTerceroParaLinea] = useState<{ lineId: number; termino: string } | null>(null);
   const [terceroNoEncontrado, setTerceroNoEncontrado] = useState<{ lineId: number; termino: string } | null>(null);
-  const [showPlantilla, setShowPlantilla] = useState(false);
-  const [showExcel, setShowExcel] = useState(false);
   const [showCargarDoc, setShowCargarDoc] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: 'success' | 'error'; texto: string } | null>(null);
   const capturaRef = useRef<HTMLDivElement>(null);
@@ -388,77 +322,25 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
     setLineas(prev => prev.map(linea => ({ ...linea, concepto: value })));
   }
 
-  function insertarPlantilla(pls: PlantillaLinea[]) {
-    const nuevas: Linea[] = pls.map(p => {
-      const cuenta = cuentasAfectables.find(c => c.codigo === p.cuenta);
-      const l = newLine(numDoc, concepto);
+  /** Copia solo partidas; nunca cambia los campos del encabezado actual. */
+  function cargarDocumento(partidas: PartidaOrigen[], documentoOrigen: string) {
+    setLineas(partidas.map(partida => {
+      const cuenta = cuentas.find(c => c.codigo === partida.cuenta);
       return {
-        ...l,
-        cuenta: p.cuenta,
-        nombreCuenta: cuenta?.nombre ?? '',
-        // Las plantillas de demostración no pueden certificar la existencia de
-        // un tercero en FADCLI; cuando sea requerido el usuario debe elegirlo.
-        tercero: '',
-        nit: '',
-        terceroValidado: false,
-        centro: cuenta?.requiereCentro && centros.some(c => c.codigo === p.centro) ? p.centro : '',
-        debito: p.debito,
-        credito: p.credito,
-        base: p.base,
-        documento: numDoc,
-        concepto,
-      };
-    });
-    setLineas(prev => [...prev, ...nuevas]);
-  }
-
-  function aplicarPlantilla(id: string) {
-    const plantilla = PLANTILLAS.find(p => p.id === id);
-    if (!plantilla) return;
-    insertarPlantilla(plantilla.lineas);
-    setShowPlantilla(false);
-    setAviso({ tipo: 'success', texto: `Plantilla «${plantilla.nombre}» aplicada (${plantilla.lineas.length} líneas).` });
-  }
-
-  function insertarPortapapeles() {
-    insertarPlantilla(FILAS_PORTAPAPELES);
-    setShowExcel(false);
-    setAviso({ tipo: 'success', texto: 'Se insertaron 3 líneas simuladas del portapapeles.' });
-  }
-
-  const documentos = Object.values(MOVIMIENTOS_FEB.reduce<Record<string, { documento: string; comprobante: string; fecha: string; concepto: string; lineas: MovimientoLinea[] }>>((acc, m) => {
-    acc[m.documento] = acc[m.documento] ?? { documento: m.documento, comprobante: m.comprobante, fecha: m.fecha, concepto: m.concepto, lineas: [] };
-    acc[m.documento].lineas.push(m);
-    return acc;
-  }, {}));
-
-  function cargarDocumento(doc: { documento: string; comprobante: string; fecha: string; concepto: string; lineas: MovimientoLinea[] }) {
-    const prim = doc.lineas[0];
-    setPeriodo(prim.periodo);
-    setFecha(prim.fecha);
-    setComprobante(prim.comprobante.split('-')[0] || 'CE');
-    setTipoDoc(prim.tipoDoc);
-    setNumDoc(prim.documento);
-    setConcepto(prim.concepto);
-    setLineas(doc.lineas.map(m => {
-      const l = newLine(prim.documento, prim.concepto);
-      return {
-        ...l,
-        cuenta: m.cuenta,
-        nombreCuenta: m.nombreCuenta,
-        nit: '',
-        tercero: '',
-        terceroValidado: false,
-        centro: cuentas.find(c => c.codigo === m.cuenta)?.requiereCentro && centros.some(c => c.codigo === m.centro) ? m.centro : '',
-        documento: prim.documento,
-        debito: m.debito ? String(m.debito) : '',
-        credito: m.credito ? String(m.credito) : '',
-        base: m.base ? String(m.base) : '',
-        concepto: prim.concepto,
+        ...newLine(numDoc), cuenta: partida.cuenta, nombreCuenta: cuenta?.nombre ?? '',
+        nit: cuenta && !cuenta.requiereTercero ? '' : partida.nit,
+        tercero: cuenta && !cuenta.requiereTercero ? '' : partida.tercero,
+        terceroValidado: partida.terceroValidado,
+        centro: cuenta && !cuenta.requiereCentro ? '' : partida.centro,
+        documento: numDoc, debito: partida.debito ? String(partida.debito) : '',
+        credito: partida.credito ? String(partida.credito) : '',
+        base: partida.base ? String(partida.base) : '', concepto: partida.concepto,
+        documentoAfectado: partida.documentoAfectado,
       };
     }));
+    setEditingId(null); setShowCuentaPicker(null); setShowTerceroPicker(null);
     setShowCargarDoc(false);
-    setAviso({ tipo: 'success', texto: `Documento ${doc.documento} cargado con ${doc.lineas.length} líneas.` });
+    setAviso({ tipo: 'success', texto: `Se cargaron ${partidas.length} partidas del documento ${documentoOrigen}. Se conservó el encabezado actual; revise el detalle antes de contabilizar.` });
   }
 
   function guardarBorrador() {
@@ -534,7 +416,8 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
             debito: parseCOP(linea.debito),
             credito: parseCOP(linea.credito),
             base: parseCOP(linea.base),
-            documentoAfectado: '',
+            documentoAfectado: linea.documentoAfectado ?? '',
+            concepto: linea.concepto,
           })),
       });
       setResultadoContabilizacion(resultado);
@@ -571,9 +454,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
         <span className="text-xs font-semibold text-gray-800">Captura directa</span>
         <div className="flex-1" />
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowPlantilla(true)} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">F5 Plantilla</button>
-          <button onClick={() => setShowExcel(true)} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">F6 Importar Excel</button>
-          <button onClick={() => setShowCargarDoc(true)} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Cargar documento existente</button>
+          <button disabled={posted || contabilizando || maestrosCargando || !!maestrosError} onClick={() => setShowCargarDoc(true)} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Cargar documento existente</button>
           {onCrearLote && (
             <button onClick={guardarBorrador} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Guardar borrador</button>
           )}
@@ -885,7 +766,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                         data-line-id={line.id}
                         data-line-field="concepto"
                         readOnly
-                        title="Heredado del concepto general de la cabecera"
+                        title="Concepto de la partida; al cargar un documento se conserva el detalle original"
                         className="w-full cursor-default bg-gray-50 text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1"
                         value={line.concepto}
                         onClick={e => e.stopPropagation()}
@@ -999,114 +880,10 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
         </div>
       )}
 
-      {/* Plantillas */}
-      {showPlantilla && (
-        <Modal title="Aplicar plantilla" onClose={() => setShowPlantilla(false)}>
-          <div className="space-y-3">
-            <p className="text-xs text-gray-500">Seleccione una plantilla de ejemplo. Las líneas se insertan al final de la captura y siempre quedan cuadradas.</p>
-            {PLANTILLAS.map(p => {
-              const deb = p.lineas.reduce((s, l) => s + parseCOP(l.debito), 0);
-              const cred = p.lineas.reduce((s, l) => s + parseCOP(l.credito), 0);
-              return (
-                <div key={p.id} className="rounded border border-gray-200 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="text-xs font-semibold text-gray-800">{p.nombre}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{p.descripcion}</div>
-                    </div>
-                    <span className="shrink-0 text-xs font-mono text-green-600">D {fmtCOP(deb)} = C {fmtCOP(cred)}</span>
-                  </div>
-                  <div className="mt-2 space-y-0.5">
-                    {p.lineas.map((l, i) => (
-                      <div key={i} className="flex gap-2 text-[11px] text-gray-500">
-                        <span className="font-mono w-14 shrink-0">{l.cuenta}</span>
-                        <span className="truncate">{l.concepto}</span>
-                        <span className="ml-auto shrink-0 font-mono">{l.debito ? fmtCOP(parseCOP(l.debito)) : `(${fmtCOP(parseCOP(l.credito))})`}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-2 flex justify-end">
-                    <button onClick={() => aplicarPlantilla(p.id)} className="text-xs px-3 py-1.5 rounded bg-petroleum-500 text-white font-medium hover:bg-petroleum-600">Aplicar</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Modal>
-      )}
-
-      {/* Pegar desde Excel */}
-      {showExcel && (
-        <Modal title="Pegar desde Excel" onClose={() => setShowExcel(false)}>
-          <div className="space-y-3">
-            <p className="text-xs text-gray-500">Simulación: se detectaron 3 filas en el portapapeles. Revise la vista previa antes de insertarlas.</p>
-            <div className="rounded border border-gray-200 overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Cuenta</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Tercero</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Centro</th>
-                    <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Débito</th>
-                    <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Crédito</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {FILAS_PORTAPAPELES.map((f, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-1.5 font-mono">{f.cuenta}</td>
-                      <td className="px-3 py-1.5 text-gray-600">{f.tercero || '—'}</td>
-                      <td className="px-3 py-1.5 text-gray-600">{f.centro || '—'}</td>
-                      <td className="px-3 py-1.5 text-right font-mono">{f.debito ? fmtCOP(parseCOP(f.debito)) : '—'}</td>
-                      <td className="px-3 py-1.5 text-right font-mono">{f.credito ? fmtCOP(parseCOP(f.credito)) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-100 shrink-0">
-            <button onClick={() => setShowExcel(false)} className={BUTTON_SECONDARY}>Cancelar</button>
-            <button onClick={insertarPortapapeles} className={BUTTON_PRIMARY}>Insertar 3 líneas</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Cargar documento existente */}
-      {showCargarDoc && (
-        <Modal title="Cargar documento existente" onClose={() => setShowCargarDoc(false)}>
-          <div className="space-y-3">
-            <p className="text-xs text-gray-500">Documentos contabilizados en el período 2026-02 (demostración). Al elegir uno se cargan sus líneas en la captura.</p>
-            <div className="rounded border border-gray-200 overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Documento</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Comprobante</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-gray-600">Fecha</th>
-                    <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Líneas</th>
-                    <th className="px-3 py-1.5 text-right font-semibold text-gray-600">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {documentos.map(d => (
-                    <tr key={d.documento} className="hoverable">
-                      <td className="px-3 py-1.5 font-mono text-gray-800">{d.documento}</td>
-                      <td className="px-3 py-1.5 font-mono text-gray-500">{d.comprobante}</td>
-                      <td className="px-3 py-1.5 font-mono text-gray-500">{d.fecha}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-gray-600">{d.lineas.length}</td>
-                      <td className="px-3 py-1.5 text-right">
-                        <button onClick={() => cargarDocumento(d)} className="text-xs px-2.5 py-1 rounded border border-gray-200 text-petroleum-600 hover:bg-petroleum-50">Cargar</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-xs text-gray-400">Las líneas cargadas conservan su cuenta, tercero, centro y valores originales.</p>
-          </div>
-        </Modal>
-      )}
+      {/* El buscador solo entrega partidas, no valores de encabezado. */}
+      {showCargarDoc && <CargarDocumentoCaptura key={cia} cia={cia} periodo={periodo}
+        tienePartidas={lineas.some(l => l.cuenta || l.nit || l.centro || l.debito || l.credito || l.base || (l.concepto && l.concepto !== concepto))}
+        onClose={() => setShowCargarDoc(false)} onLoad={cargarDocumento} />}
 
       {/* Close picker on outside click */}
       {(showCuentaPicker !== null || showTerceroPicker !== null) && (

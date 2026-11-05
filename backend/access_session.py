@@ -9,12 +9,16 @@ import secrets
 import threading
 import time
 from dataclasses import dataclass
+from dataclasses import asdict
+from contextvars import ContextVar
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+from starlette.types import ASGIApp, Scope, Receive, Send
+from starlette.responses import JSONResponse
 
 
 MODULE_ID = "contabilidad"
@@ -27,9 +31,17 @@ router = APIRouter(prefix="/api/access", tags=["access"])
 
 
 @dataclass(frozen=True)
+class ModuleUser:
+    code: str
+    name: str
+    administrator: bool
+
+
+@dataclass(frozen=True)
 class AccessSession:
     method: str
     expires_at: float
+    user: ModuleUser
 
 
 class AccessSessionStore:
@@ -44,7 +56,7 @@ class AccessSessionStore:
     def _digest(token: str) -> str:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
-    def issue(self, method: str, ttl_seconds: int = DEFAULT_SESSION_TTL_SECONDS) -> str:
+    def issue(self, method: str, user: ModuleUser, ttl_seconds: int = DEFAULT_SESSION_TTL_SECONDS) -> str:
         ttl = max(300, min(ttl_seconds, 24 * 60 * 60))
         token = secrets.token_urlsafe(48)
         with self._lock:
@@ -52,6 +64,7 @@ class AccessSessionStore:
             self._sessions[self._digest(token)] = AccessSession(
                 method=method,
                 expires_at=self._clock() + ttl,
+                user=user,
             )
         return token
 
@@ -76,10 +89,12 @@ class AccessSessionStore:
 
 
 class FortunerCodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     code: str = Field(min_length=20, max_length=200)
 
 
 class AdministratorRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     key: str = Field(min_length=1, max_length=512)
 
 
@@ -91,6 +106,77 @@ class FortunerAuthorizationError(RuntimeError):
 
 
 _SESSIONS = AccessSessionStore()
+_CURRENT_USER: ContextVar[ModuleUser | None] = ContextVar("contabilidad_user", default=None)
+
+
+def _validated_user(authorization: dict[str, Any]) -> ModuleUser:
+    raw = authorization.get("user")
+    if (not isinstance(raw, dict) or not isinstance(raw.get("code"), str)
+        or not raw["code"].strip() or len(raw["code"]) > 4
+        or not isinstance(raw.get("name"), str) or not raw["name"].strip()
+        or type(raw.get("administrator")) is not bool):
+        raise HTTPException(502, "Fortuner devolvió una identidad de usuario inválida. Actualice Fortuner y vuelva a ingresar.")
+    if authorization.get("moduleId") != MODULE_ID:
+        raise HTTPException(502, "Fortuner devolvió una autorización para otro módulo.")
+    return ModuleUser(raw["code"].strip(), raw["name"].strip(), raw["administrator"])
+
+
+def require_authenticated_user(request: Request) -> ModuleUser:
+    """Dependencia reutilizable: identidad exclusivamente de cookie opaca."""
+    session = _SESSIONS.get(request.cookies.get(COOKIE_NAME))
+    if session is None:
+        raise HTTPException(401, "Sesión vencida o inexistente. Ingrese nuevamente desde Fortuner.")
+    return session.user
+
+
+def session_user_code() -> str:
+    """Actor para APIs heredadas; nunca acepta sustituciones JSON/query/header.
+
+    Mantiene el código tal como Fortuner lo entregó (incluido Ha27). Cada
+    repositorio conserva su normalización histórica cuando la tabla la exige.
+    """
+    user = _CURRENT_USER.get()
+    if user is None:
+        raise HTTPException(401, "Sesión vencida o inexistente. Ingrese nuevamente desde Fortuner.")
+    return user.code
+
+
+def session_payload(model) -> dict[str, Any]:
+    """Compatibilidad: sustituir actor heredado también dentro de payloads.
+
+    Solo el campo actor `usuario`; no toca códigos del catálogo de usuarios ni
+    filtros de informes. Repositorios no reciben el actor elegido por navegador.
+    """
+    payload = model.model_dump()
+    if "usuario" in payload:
+        payload["usuario"] = session_user_code()
+    return payload
+
+
+class SessionIdentityMiddleware:
+    """Propaga identidad por petición, también a endpoints síncronos de AnyIO.
+
+    No autoriza por valores del cuerpo ni cambia las rutas públicas de acceso.
+    Las APIs auditadas llaman session_user_code, que exige sesión válida.
+    """
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        session = _SESSIONS.get(Request(scope).cookies.get(COOKIE_NAME))
+        if (scope.get("path", "").startswith("/api/")
+            and not scope["path"].startswith("/api/access/")
+            and scope.get("method") in {"POST", "PUT", "PATCH", "DELETE"}
+            and session is None):
+            return await JSONResponse({"detail": "Sesión vencida o inexistente. Ingrese nuevamente desde Fortuner."},
+                                      status_code=401)(scope, receive, send)
+        token = _CURRENT_USER.set(session.user if session else None)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            _CURRENT_USER.reset(token)
 
 
 def _session_ttl_seconds() -> int:
@@ -169,15 +255,16 @@ def _set_session_cookie(response: Response, token: str) -> None:
     )
 
 
-def _create_session(response: Response, method: str) -> dict[str, Any]:
+def _create_session(response: Response, method: str, user: ModuleUser) -> dict[str, Any]:
     ttl = _session_ttl_seconds()
-    token = _SESSIONS.issue(method, ttl)
+    token = _SESSIONS.issue(method, user, ttl)
     _set_session_cookie(response, token)
     return {
         "authorized": True,
         "moduleId": MODULE_ID,
         "method": method,
         "expiresIn": ttl,
+        "user": asdict(user),
     }
 
 
@@ -193,7 +280,7 @@ def exchange_fortuner_code(payload: FortunerCodeRequest, response: Response) -> 
 
     if authorization.get("authorized") is not True:
         raise HTTPException(status_code=401, detail="Fortuner no autorizó el acceso a Contabilidad.")
-    return _create_session(response, "fortuner")
+    return _create_session(response, "fortuner", _validated_user(authorization))
 
 
 @router.post("/administrator")
@@ -208,7 +295,10 @@ def administrator_access(payload: AdministratorRequest, response: Response) -> d
 
     if authorization.get("authorized") is not True:
         raise HTTPException(status_code=401, detail="Fortuner no autorizó el acceso administrativo.")
-    return _create_session(response, "administrator")
+    user = _validated_user(authorization)
+    if user.code != "Ha27" or not user.administrator:
+        raise HTTPException(502, "Fortuner devolvió una identidad administrativa inválida.")
+    return _create_session(response, "administrator", user)
 
 
 @router.get("/session")
@@ -216,7 +306,7 @@ def session_status(request: Request) -> dict[str, Any]:
     session = _SESSIONS.get(request.cookies.get(COOKIE_NAME))
     if session is None:
         raise HTTPException(status_code=401, detail="No existe una sesión válida de Contabilidad.")
-    return {"authorized": True, "moduleId": MODULE_ID, "method": session.method}
+    return {"authorized": True, "moduleId": MODULE_ID, "method": session.method, "user": asdict(session.user)}
 
 
 @router.post("/logout")

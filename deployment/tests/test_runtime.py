@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 
-from deployment.runtime import create_application, load_configuration, main
+from deployment.runtime import create_application, load_configuration, main, check_database, check_com_date_support
 
 
 class InstalledSiteTests(unittest.IsolatedAsyncioTestCase):
@@ -65,6 +65,33 @@ class InstalledSiteTests(unittest.IsolatedAsyncioTestCase):
 
 
 class InstalledConfigurationTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'Conversión COM requiere Windows')
+    def test_com_dates_and_both_build_configurations_include_timezone(self):
+        check_com_date_support()
+        project = Path(__file__).resolve().parents[2]
+        config = json.loads((project.parent / 'compilacion.json').read_text(encoding='utf-8-sig'))
+        self.assertIn('win32timezone', config['hidden_imports'])
+        builder = (project / 'deployment/build-release.ps1').read_text(encoding='utf-8-sig')
+        self.assertIn("'--hidden-import', 'win32timezone'", builder)
+
+    def test_check_probes_all_accounting_tables_using_both_drivers_read_only(self):
+        from unittest.mock import MagicMock
+        from contextlib import contextmanager
+        connections = [object(), object()]
+        def connect(index):
+            @contextmanager
+            def context():
+                yield connections[index]
+            return context
+        with patch('backend.ads_repository.ads_connection', connect(0)), \
+             patch('backend.ads_repository.ads_odbc_connection', connect(1)), \
+             patch('backend.ads_repository._open_recordset', return_value=MagicMock()) as query:
+            check_database()
+        calls = [(call.args[0], call.args[1]) for call in query.call_args_list]
+        expected = [(connection, f'SELECT TOP 0 * FROM {table}')
+                    for connection in connections for table in ('CONEMP', 'CONMAE', 'MOV01', 'FADCLI', 'CONCTR')]
+        self.assertEqual(calls, expected)
+
     @unittest.skipUnless(os.name == "nt", "DPAPI requiere Windows")
     def test_encrypted_configuration_overrides_development_and_never_stores_plain_password(self):
         import win32crypt
