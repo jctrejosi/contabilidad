@@ -1,0 +1,105 @@
+name: CI/CD
+
+# CI valida builds en dev y master. El despliegue automático lo hace el timer
+# `jcti-autodeploy` del VPS; el job `deploy` de aquí solo corre con un runner
+# self-hosted (variable de repositorio SELF_HOSTED_DEPLOY=true).
+on:
+  pull_request:
+    branches: [dev, master]
+  push:
+    branches: [dev, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ci:
+    name: Frontend (tipos + build) y backend (sintaxis)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: Interface_web/pnpm-lock.yaml
+
+      - name: Instalar dependencias del frontend
+        working-directory: Interface_web
+        run: pnpm install --frozen-lockfile
+
+      - name: Compilar frontend
+        working-directory: Interface_web
+        run: pnpm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validar sintaxis del backend y del ia-service
+        run: |
+          python -m compileall -q backend ia-service
+
+      - name: Verificar scripts de despliegue
+        run: bash -n deploy/deploy.sh
+
+  image:
+    name: Build de la imagen de producción
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Compila exactamente la imagen que se despliega. No publica.
+      - name: Construir imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Desplegar en el VPS
+    needs: [ci, image]
+    if: >-
+      vars.SELF_HOSTED_DEPLOY == 'true' &&
+      needs.ci.result == 'success' &&
+      needs.image.result == 'success' &&
+      github.ref == 'refs/heads/dev' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, linux, mercaldas]
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-contabilidad
+      cancel-in-progress: false
+    steps:
+      - name: Desplegar commit
+        env:
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/deploy/contabilidad' }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test -d "$DEPLOY_PATH" || {
+            echo "No existe DEPLOY_PATH=$DEPLOY_PATH" >&2
+            exit 1
+          }
+          bash "$DEPLOY_PATH/deploy/deploy.sh" "$TARGET_SHA"
