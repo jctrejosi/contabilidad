@@ -82,6 +82,24 @@ else
   "${COMPOSE[@]}" up -d db
 fi
 
+# El backend necesita la BD arriba desde el arranque (el initdb del volumen
+# vacío aplica el esquema y las funciones).
+log "Esperando healthcheck de $DB_CONTAINER…"
+DB_STATUS=""
+for _ in $(seq 1 60); do
+  DB_STATUS="$(docker inspect -f \
+    '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    "$DB_CONTAINER" 2>/dev/null || true)"
+  [[ "$DB_STATUS" == "healthy" ]] && break
+  if [[ "$DB_STATUS" == "unhealthy" || "$DB_STATUS" == "exited" || "$DB_STATUS" == "dead" ]]; then
+    docker logs --tail 100 "$DB_CONTAINER" 2>&1 || true
+    die "La base de datos quedó en estado '$DB_STATUS'."
+  fi
+  sleep 2
+done
+[[ "$DB_STATUS" == "healthy" ]] \
+  || die "La base de datos no llegó a healthy (último estado: '${DB_STATUS:-desconocido}')."
+
 # ── Aplicación ─────────────────────────────────────────────────────────────
 log "Construyendo imagen contabdsi/app:latest…"
 "${COMPOSE[@]}" build app
