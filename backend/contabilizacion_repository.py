@@ -399,8 +399,13 @@ def _account_prefixes(account: str) -> list[str]:
 
 
 def _update_account_balances(connection: Any, data: dict[str, Any], line: dict[str, Any]) -> None:
+    """Acumula apertura en MSALDO o movimiento mensual en la cuenta y sus padres.
+
+    Solo el lote de apertura establece mes=0; la captura directa conserva el
+    mes calendario. Los créditos se almacenan con signo negativo en ambos casos.
+    """
     month = data["mes"]
-    field = f"MACMDEB{month:02d}" if line["debito"] > 0 else f"MACMCRE{month:02d}"
+    field = "MSALDO" if month == 0 else (f"MACMDEB{month:02d}" if line["debito"] > 0 else f"MACMCRE{month:02d}")
     amount = line["debito"] if line["debito"] > 0 else -line["credito"]
     for account in _account_prefixes(line["cuenta"]):
         _execute(
@@ -467,7 +472,7 @@ def _update_third_party_balances(connection: Any, data: dict[str, Any], line: di
     """
     if not line["requiereTercero"]:
         return
-    field = f"MACMDEB{data['mes']:02d}" if line["debito"] > 0 else f"MACMCRE{data['mes']:02d}"
+    field = "MSALDO" if data["mes"] == 0 else (f"MACMDEB{data['mes']:02d}" if line["debito"] > 0 else f"MACMCRE{data['mes']:02d}")
     amount = line["debito"] if line["debito"] > 0 else -line["credito"]
     existing = _one(
         connection,

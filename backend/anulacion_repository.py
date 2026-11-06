@@ -88,13 +88,14 @@ def _recalculate_accounts(connection: Any, cia: int, year: int, month: int,
             connection, cia, year, month, "CODIGO LIKE ?",
             [(ADO_TYPE_VARCHAR, 13, account + "%")],
         )
+        assignments = "MSALDO = ?" if month == 0 else f"{debit_field} = ?, {credit_field} = ?"
+        amounts = (debit + credit,) if month == 0 else (debit, credit)
         _execute(
             connection,
-            f"UPDATE CONMAE SET {debit_field} = ?, {credit_field} = ? "
+            f"UPDATE CONMAE SET {assignments} "
             f"WHERE CIA = ? AND CODIGO = ? AND {CATALOG_ACCOUNT_FILTER}",
             [
-                (ADO_TYPE_DOUBLE, 0, debit),
-                (ADO_TYPE_DOUBLE, 0, credit),
+                *((ADO_TYPE_DOUBLE, 0, amount) for amount in amounts),
                 (ADO_TYPE_INTEGER, 0, cia),
                 (ADO_TYPE_VARCHAR, 12, account),
             ],
@@ -111,13 +112,14 @@ def _recalculate_third_parties(connection: Any, cia: int, year: int, month: int,
             connection, cia, year, month, "CODIGO = ? AND NIT = ?",
             [(ADO_TYPE_VARCHAR, 12, account), (ADO_TYPE_VARCHAR, 15, nit)],
         )
+        assignments = "MSALDO = ?" if month == 0 else f"{debit_field} = ?, {credit_field} = ?"
+        amounts = (debit + credit,) if month == 0 else (debit, credit)
         _execute(
             connection,
-            f"UPDATE CONTERCE SET {debit_field} = ?, {credit_field} = ? "
+            f"UPDATE CONTERCE SET {assignments} "
             "WHERE CIA = ? AND CODIGO = ? AND NIT = ?",
             [
-                (ADO_TYPE_DOUBLE, 0, debit),
-                (ADO_TYPE_DOUBLE, 0, credit),
+                *((ADO_TYPE_DOUBLE, 0, amount) for amount in amounts),
                 (ADO_TYPE_INTEGER, 0, cia),
                 (ADO_TYPE_VARCHAR, 12, account),
                 (ADO_TYPE_VARCHAR, 15, nit),
@@ -188,6 +190,22 @@ def annul_document(
             if company_row is None:
                 raise CompanyNotFound(f"No existe la compania {company:03d}.")
 
+            # El período 00 conserva una fecha calendario válida. El período
+            # contable se obtiene del movimiento, nunca se deduce de esa fecha.
+            periods = _query_rows(
+                connection,
+                "SELECT DISTINCT CONMES FROM MOV01 WHERE CONCIA = ? AND CONANO = ? "
+                "AND TDOCUM = ? AND TCOMPR = ? AND TIPODOC = ? AND TFECHA = ?",
+                [(ADO_TYPE_INTEGER, 0, company), (ADO_TYPE_INTEGER, 0, year),
+                 (ADO_TYPE_VARCHAR, 12, document), (ADO_TYPE_VARCHAR, 6, voucher),
+                 (ADO_TYPE_VARCHAR, 2, document_type), (ADO_TYPE_INTEGER, 0, numeric_date)],
+            )
+            if len(periods) > 1:
+                raise AnnulmentConflict("El documento pertenece a varios períodos; requiere revisión.")
+            if periods:
+                month = int(_number(periods[0].get("CONMES")))
+            if not 0 <= month <= 12:
+                raise AnnulmentValidationError("El período del documento no está soportado.")
             control = _one(connection, f"SELECT TOP 1 CTANO, CT{month:02d} FROM CONCTR", [])
             if control is None or int(_number(control.get("CTANO"))) != year:
                 raise AnnulmentValidationError(

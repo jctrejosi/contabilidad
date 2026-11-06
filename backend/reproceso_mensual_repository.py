@@ -266,11 +266,22 @@ def _one(
     return rows[0] if rows else None
 
 
+def _balance_fields(month: int) -> tuple[str, ...]:
+    """El período 00 tiene un único saldo neto; los meses conservan dos campos."""
+    return ("MSALDO",) if month == 0 else (f"MACMDEB{month:02d}", f"MACMCRE{month:02d}")
+
+
+def _balance_pair(row: dict, month: int) -> tuple[Decimal, Decimal]:
+    if month == 0:
+        return _money(row.get("MSALDO")), Decimal("0.00")
+    return _money(row.get(f"MACMDEB{month:02d}")), _money(row.get(f"MACMCRE{month:02d}"))
+
+
 def _validate_range(year: int, month_from: int, month_to: int) -> None:
     if not 1900 <= int(year) <= 2100:
         raise MonthlyReprocessValidationError("El año del reproceso no es válido.")
-    if not 1 <= int(month_from) <= 12 or not 1 <= int(month_to) <= 12:
-        raise MonthlyReprocessValidationError("Los meses deben estar entre enero y diciembre.")
+    if not 0 <= int(month_from) <= 12 or not 0 <= int(month_to) <= 12:
+        raise MonthlyReprocessValidationError("Los períodos deben estar entre 00 (saldos iniciales) y 12.")
     if int(month_from) > int(month_to):
         raise MonthlyReprocessValidationError(
             "El período inicial no puede ser posterior al período final."
@@ -301,7 +312,7 @@ def _load_context(
     fields = ", ".join(
         field
         for month in range(month_from, month_to + 1)
-        for field in (f"MACMDEB{month:02d}", f"MACMCRE{month:02d}")
+        for field in _balance_fields(month)
     )
     rows = _query_rows(
         connection,
@@ -320,10 +331,7 @@ def _load_context(
             requires_third=_boolean(row.get("MCTAPAGOS")),
             requires_cost_center=_boolean(row.get("MCOSTOS")),
             current={
-                month: (
-                    _money(row.get(f"MACMDEB{month:02d}")),
-                    _money(row.get(f"MACMCRE{month:02d}")),
-                )
+                month: _balance_pair(row, month)
                 for month in range(month_from, month_to + 1)
             },
         )
@@ -427,6 +435,12 @@ def _build_expected_values(
                 value[0] += aggregate.debit
                 value[1] += aggregate.credit
 
+    # MSALDO es neto firmado: nunca almacenar dos columnas mensuales ficticias 00.
+    for values in (account_values, third_values):
+        for key, amounts in values.items():
+            if key[0] == 0:
+                amounts[0] += amounts[1]
+                amounts[1] = Decimal("0.00")
     return account_values, third_values, sorted(warnings), sorted(errors)
 
 
@@ -448,15 +462,12 @@ def _load_third_context(
     fields = ", ".join(
         field
         for month in range(month_from, month_to + 1)
-        for field in (f"MACMDEB{month:02d}", f"MACMCRE{month:02d}")
+        for field in _balance_fields(month)
     )
     nonzero = " OR ".join(
         condition
         for month in range(month_from, month_to + 1)
-        for condition in (
-            f"COALESCE(MACMDEB{month:02d}, 0) <> 0",
-            f"COALESCE(MACMCRE{month:02d}, 0) <> 0",
-        )
+        for condition in (f"COALESCE({field}, 0) <> 0" for field in _balance_fields(month))
     )
     expected_keys = {(account, nit) for _, account, nit in third_values}
     expected_accounts = sorted({account for account, _ in expected_keys})
@@ -492,8 +503,7 @@ def _load_third_context(
             existing_ids[key] = min(existing_ids.get(key, row_id), row_id)
         row_values: dict[int, tuple[Decimal, Decimal]] = {}
         for month in range(month_from, month_to + 1):
-            row_debit = _money(row.get(f"MACMDEB{month:02d}"))
-            row_credit = _money(row.get(f"MACMCRE{month:02d}"))
+            row_debit, row_credit = _balance_pair(row, month)
             row_values[month] = (row_debit, row_credit)
             if row_debit != 0 or row_credit != 0:
                 nonzero_ids[month].append(row_id)
@@ -560,7 +570,7 @@ def _third_row_differences(rows, existing_ids, third_values, month_from, month_t
         for month in range(month_from, month_to + 1):
             expected = (third_values.get((month, code, nit), (Decimal("0"), Decimal("0")))
                         if existing_ids.get((code, nit)) == row_id else (Decimal("0"), Decimal("0")))
-            current = (_money(row.get(f"MACMDEB{month:02d}")), _money(row.get(f"MACMCRE{month:02d}")))
+            current = _balance_pair(row, month)
             if current != tuple(expected):
                 changes.setdefault(month, []).append((row_id, expected[0], expected[1]))
     return changes
@@ -621,9 +631,9 @@ def _build_plan(
         accounts, account_values, current_thirds, third_values, month_from, month_to
     )
     legacy_nonzero = " OR ".join(
-        f"COALESCE({field}{month:02d}, 0) <> 0"
+        f"COALESCE({field}, 0) <> 0"
         for month in range(month_from, month_to + 1)
-        for field in ("MACMDEB", "MACMCRE")
+        for field in _balance_fields(month)
     )
     if _one(connection, "SELECT TOP 1 CODIGO FROM CONMAE WHERE CIA = ? AND NOT "
             + CATALOG_ACCOUNT_FILTER + " AND (" + legacy_nonzero + ")",
@@ -723,14 +733,15 @@ def _replace_balances(connection: Any, plan: ReprocessPlan) -> None:
                 len(plan.account_values), len(plan.third_values),
                 len({(code, nit) for _, code, nit in plan.third_values} - set(plan.third_existing_ids)))
     for month in range(plan.month_from, plan.month_to + 1):
-        debit_field = f"MACMDEB{month:02d}"
-        credit_field = f"MACMCRE{month:02d}"
+        debit_field, *credit_fields = _balance_fields(month)
+        credit_field = credit_fields[0] if credit_fields else debit_field
+        clear_fields = ", ".join(f"{field} = 0" for field in _balance_fields(month))
         # Solo auxiliares heredados, no las cuentas del catálogo: sus valores
         # se comparan abajo. Se evita borrar para volver a escribir lo mismo.
         _write_step(
             f"Limpiar auxiliares heredados CONMAE mes {month:02d}", _execute,
             connection,
-            f"UPDATE CONMAE SET {debit_field} = 0, {credit_field} = 0 WHERE CIA = ? "
+            f"UPDATE CONMAE SET {clear_fields} WHERE CIA = ? "
             f"AND NOT {CATALOG_ACCOUNT_FILTER} AND "
             f"(COALESCE({debit_field}, 0) <> 0 OR COALESCE({credit_field}, 0) <> 0)",
             [(ADO_TYPE_INTEGER, 0, plan.company)],
@@ -746,14 +757,15 @@ def _replace_balances(connection: Any, plan: ReprocessPlan) -> None:
                 sum(map(len, plan.third_row_updates.values())))
     progress_stage("Actualizando cuentas", len(account_changes))
     for position, ((month, code), (debit, credit)) in enumerate(sorted(account_changes.items()), 1):
+        assignments = ", ".join(f"{field} = ?" for field in _balance_fields(month))
+        amounts = (debit,) if month == 0 else (debit, credit)
         _write_step(
             f"Actualizar CONMAE mes {month:02d} cuenta {position}/{len(account_changes)}", _execute,
             connection,
-            f"UPDATE CONMAE SET MACMDEB{month:02d} = ?, MACMCRE{month:02d} = ? "
+            f"UPDATE CONMAE SET {assignments} "
             "WHERE CIA = ? AND CODIGO = ? AND " + CATALOG_ACCOUNT_FILTER,
             [
-                (ADO_TYPE_DOUBLE, 0, float(debit)),
-                (ADO_TYPE_DOUBLE, 0, float(credit)),
+                *((ADO_TYPE_DOUBLE, 0, float(amount)) for amount in amounts),
                 (ADO_TYPE_INTEGER, 0, plan.company),
                 (ADO_TYPE_VARCHAR, 12, code),
             ],
@@ -787,7 +799,7 @@ def _update_existing_thirds(connection: Any, plan: ReprocessPlan) -> None:
     # antes. Una sola escritura pone cada fila modificada en su valor final.
     updates_by_month = plan.third_row_updates
     for month, updates in updates_by_month.items():
-        debit_field = f"MACMDEB{month:02d}"
+        debit_field = "MSALDO" if month == 0 else f"MACMDEB{month:02d}"
         credit_field = f"MACMCRE{month:02d}"
         for offset in range(0, len(updates), CONTERCE_UPDATE_CHUNK):
             build_at = perf_counter()
@@ -797,8 +809,10 @@ def _update_existing_thirds(connection: Any, plan: ReprocessPlan) -> None:
                 debit_field, [(identity, debit) for identity, debit, _ in chunk])
             credit_expression, credit_mode, credit_saved = _compact_balance_expression(
                 credit_field, [(identity, credit) for identity, _, credit in chunk])
-            sql = (f"UPDATE CONTERCE SET {debit_field} = {debit_expression}, "
-                   f"{credit_field} = {credit_expression} WHERE CIA = {plan.company} AND ID IN ({ids})")
+            assignments = f"{debit_field} = {debit_expression}"
+            if month != 0:
+                assignments += f", {credit_field} = {credit_expression}"
+            sql = f"UPDATE CONTERCE SET {assignments} WHERE CIA = {plan.company} AND ID IN ({ids})"
             built_at = perf_counter()
             _write_step(
                 f"Actualizar CONTERCE mes {month:02d} registros {offset + 1}-{min(offset + CONTERCE_UPDATE_CHUNK, len(updates))}/{len(updates)}",
@@ -841,7 +855,7 @@ def _insert_new_thirds(connection: Any, plan: ReprocessPlan) -> None:
                 if months not in sql_by_months:
                     fields = ["CIA", "CODIGO", "NIT", "MNOMBRE", "MCOSTOS"]
                     for month in months:
-                        fields.extend([f"MACMDEB{month:02d}", f"MACMCRE{month:02d}"])
+                        fields.extend(_balance_fields(month))
                     sql_by_months[months] = ("INSERT INTO CONTERCE (" + ", ".join(fields)
                                             + ") VALUES (" + ", ".join("?" for _ in fields) + ")")
                 parameters = [
@@ -853,8 +867,8 @@ def _insert_new_thirds(connection: Any, plan: ReprocessPlan) -> None:
                 ]
                 for month in months:
                     debit, credit = plan.third_values.get((month, code, nit), (Decimal("0"), Decimal("0")))
-                    parameters.extend([(ADO_TYPE_DOUBLE, 0, float(debit)),
-                                       (ADO_TYPE_DOUBLE, 0, float(credit))])
+                    amounts = (debit,) if month == 0 else (debit, credit)
+                    parameters.extend((ADO_TYPE_DOUBLE, 0, float(amount)) for amount in amounts)
                 try:
                     _execute(connection, sql_by_months[months], parameters)
                 except Exception:

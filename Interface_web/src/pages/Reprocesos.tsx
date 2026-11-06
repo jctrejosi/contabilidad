@@ -40,6 +40,7 @@ const PROCESOS: ProcessCard[] = [
 ];
 
 const MESES = [
+  "Saldos iniciales",
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
@@ -276,7 +277,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
 
             <div className="space-y-4 px-5 py-4">
               <div className="rounded border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-800">
-                Todos los períodos se leen de la tabla consolidada <strong>MOV01</strong>. El proceso reemplaza débitos y créditos del rango en las cuentas y sus padres de <strong>CONMAE</strong>; los auxiliares por cuenta y NIT se reconstruyen en <strong>CONTERCE</strong>.
+                El período 00 reconstruye los saldos iniciales a partir del movimiento de apertura registrado. Los períodos 01 a 12 reconstruyen los débitos y créditos mensuales de las cuentas y terceros. Solo se reemplazan los acumulados del rango seleccionado.
               </div>
 
               <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
@@ -291,13 +292,13 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
                 <div>
                   <label htmlFor="mes-desde" className="mb-1 block text-gray-500">Período desde</label>
                   <select id="mes-desde" value={mesDesde} disabled={cargandoPeriodo || step === "running"} onChange={event => changeRange(setMesDesde, event.target.value)} className="w-full rounded border border-gray-200 px-2 py-1.5 text-xs">
-                    {MESES.map((name, index) => <option key={name} value={index + 1}>{String(index + 1).padStart(2, "0")} — {name}{mesesHabilitados.includes(index + 1) ? " · habilitado" : ""}</option>)}
+                    {MESES.map((name, index) => <option key={name} value={index}>{String(index).padStart(2, "0")} — {name}{mesesHabilitados.includes(index) ? " · habilitado" : ""}</option>)}
                   </select>
                 </div>
                 <div>
                   <label htmlFor="mes-hasta" className="mb-1 block text-gray-500">Período hasta</label>
                   <select id="mes-hasta" value={mesHasta} disabled={cargandoPeriodo || step === "running"} onChange={event => changeRange(setMesHasta, event.target.value)} className="w-full rounded border border-gray-200 px-2 py-1.5 text-xs">
-                    {MESES.map((name, index) => <option key={name} value={index + 1}>{String(index + 1).padStart(2, "0")} — {name}{mesesHabilitados.includes(index + 1) ? " · habilitado" : ""}</option>)}
+                    {MESES.map((name, index) => <option key={name} value={index}>{String(index).padStart(2, "0")} — {name}{mesesHabilitados.includes(index) ? " · habilitado" : ""}</option>)}
                   </select>
                 </div>
               </div>

@@ -672,8 +672,8 @@ class MonthlyReprocessRequest(BaseModel):
 
     cia: str = Field(pattern=r"^[0-9]{1,3}$")
     anio: int = Field(ge=1900, le=2100)
-    mesDesde: int = Field(ge=1, le=12)
-    mesHasta: int = Field(ge=1, le=12)
+    mesDesde: int = Field(ge=0, le=12)
+    mesHasta: int = Field(ge=0, le=12)
     usuario: str = Field("WEB", min_length=1, max_length=4)
     motivo: str = Field("", max_length=180)
     seguimientoId: str | None = Field(None, pattern=r"^[a-f0-9]{32}$")

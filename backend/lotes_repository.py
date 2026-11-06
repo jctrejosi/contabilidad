@@ -218,7 +218,8 @@ def _validate_line_masters(
         raise LotValidationError(
             f"La fecha debe corresponder al mes {expected_month:02d} definido en el lote."
         )
-    month_field = f"CT{actual_month:02d}"
+    accounting_month = 0 if lot_month == "00" else actual_month
+    month_field = f"CT{accounting_month:02d}"
     control = _one(
         connection,
         f"SELECT TOP 1 CTANO, {month_field} AS HABILITADO FROM CONCTR",
@@ -229,7 +230,7 @@ def _validate_line_masters(
     if int(_number(control.get("CTANO"))) != data["fecha"].year:
         raise LotValidationError("La fecha no pertenece al ejercicio activo en CONCTR.")
     if not _boolean(control.get("HABILITADO")):
-        raise LotValidationError(f"El mes {actual_month:02d} no está habilitado en CONCTR.")
+        raise LotValidationError(f"El período {accounting_month:02d} no está habilitado en CONCTR.")
 
     account = _one(
         connection,
@@ -826,7 +827,7 @@ def _build_lot_verification(
 
     control = _one(
         connection,
-        "SELECT TOP 1 CTANO, CT01, CT02, CT03, CT04, CT05, CT06, CT07, CT08, "
+        "SELECT TOP 1 CTANO, CT00, CT01, CT02, CT03, CT04, CT05, CT06, CT07, CT08, "
         "CT09, CT10, CT11, CT12 FROM CONCTR",
         [],
     )
@@ -880,7 +881,7 @@ def _build_lot_verification(
         else:
             if line["fecha"].year != configured_year:
                 add_line_issue(raw, f"La fecha no pertenece al ejercicio {configured_year}.", "Fecha")
-            elif not _boolean(control.get(f"CT{line['fecha'].month:02d}")):
+            elif not _boolean(control.get(f"CT{0 if lot_month == 0 else line['fecha'].month:02d}")):
                 add_line_issue(raw, "El mes de la fecha no está habilitado.", "Fecha")
         if expected_month and line["fecha"].month != expected_month:
             add_line_issue(raw, f"La fecha debe pertenecer al mes {expected_month:02d} del lote.", "Fecha")
@@ -998,6 +999,7 @@ def _build_lot_verification(
 
     result = {
         "lote": lot,
+        "mes": str(lot_row.get("MES", "")).strip().zfill(2),
         "valido": not issues,
         "estado": "Verificado" if not issues else "Con errores",
         "items": len(raw_rows),
@@ -1151,6 +1153,10 @@ def post_lot(
                     ],
                 }
                 data = _normalize_payload(payload)
+                # El período de apertura pertenece al lote, no al mes calendario
+                # de su fecha. MOV01 conserva la fecha real y CONMES=0.
+                if verification.get("mes") == "00":
+                    data["mes"] = 0
                 data["lote"] = lot
                 _validate_company_and_period(connection, data)
                 _, validated_lines = _validate_masters(connection, data)

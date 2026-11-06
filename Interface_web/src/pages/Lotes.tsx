@@ -214,7 +214,7 @@ export default function LotesPage({ cia }: { cia: string }) {
       {crearAbierto && <Modal title="Crear lote contable" onClose={() => !guardando && setCrearAbierto(false)}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Campo label="Código del lote (4 caracteres)"><input autoFocus maxLength={4} value={nuevoLote.lote} onChange={e => setNuevoLote(v => ({ ...v, lote: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))} className="input-lote" /></Campo>
-          <Campo label="Mes"><select value={nuevoLote.mes} onChange={e => setNuevoLote(v => ({ ...v, mes: e.target.value }))} className="input-lote">{Array.from({ length: 19 }, (_, month) => <option key={month} value={String(month).padStart(2, '0')}>{String(month).padStart(2, '0')}{month === 0 ? ' — Multiperíodo' : ''}</option>)}</select></Campo>
+          <Campo label="Mes"><select value={nuevoLote.mes} onChange={e => setNuevoLote(v => ({ ...v, mes: e.target.value }))} className="input-lote">{Array.from({ length: 19 }, (_, month) => <option key={month} value={String(month).padStart(2, '0')}>{String(month).padStart(2, '0')}{month === 0 ? ' — Saldos iniciales' : ''}</option>)}</select></Campo>
           <div className="sm:col-span-2"><Campo label="Descripción"><input maxLength={25} value={nuevoLote.nombre} onChange={e => setNuevoLote(v => ({ ...v, nombre: e.target.value }))} className="input-lote" /></Campo></div>
           <Campo label="Usuario responsable"><input maxLength={4} value={nuevoLote.usuario} onChange={e => setNuevoLote(v => ({ ...v, usuario: e.target.value.toUpperCase() }))} className="input-lote" /></Campo>
         </div>
