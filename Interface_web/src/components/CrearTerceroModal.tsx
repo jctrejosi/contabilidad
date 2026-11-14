@@ -99,8 +99,8 @@ export default function CrearTerceroModal({ initialTerm, onClose, onCreated }: {
     }
   }
 
-  return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !guardando) onClose(); }}>
-    <div className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-2xl">
+  return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#002D49]/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget && !guardando) onClose(); }}>
+    <div className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-[20px] bg-white shadow-2xl">
       <div className="flex items-center justify-between border-b px-5 py-3">
         <div><h2 className="text-sm font-semibold text-gray-800">Crear tercero</h2><p className="mt-0.5 text-xs text-gray-400">Complete los datos básicos para usarlo en el movimiento.</p></div>
         <button type="button" disabled={guardando} onClick={onClose} className="text-xl text-gray-400 disabled:opacity-40">×</button>
@@ -129,7 +129,7 @@ export default function CrearTerceroModal({ initialTerm, onClose, onCreated }: {
           <label className="block"><span className="mb-1 block text-xs font-medium text-gray-600">Zona</span><input className={INPUT} maxLength={2} value={form.zona} onChange={event => set('zona', event.target.value.toUpperCase())} /></label>
           <label className="block"><span className="mb-1 block text-xs font-medium text-gray-600">Cupo de crédito</span><input type="number" min="0" step="0.01" className={`${INPUT} text-right font-mono`} value={form.cupo || ''} onChange={event => set('cupo', Number(event.target.value))} /></label>
         </div>
-        <div className="flex justify-end gap-2 border-t bg-gray-50 px-5 py-4"><button type="button" disabled={guardando} onClick={onClose} className="rounded border border-gray-300 bg-white px-4 py-2 text-xs text-gray-700 disabled:opacity-40">Cancelar</button><button type="submit" disabled={guardando || !valid} className="rounded bg-petroleum-500 px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">{guardando ? 'Guardando…' : 'Guardar tercero'}</button></div>
+        <div className="flex justify-end gap-2 border-t bg-gray-50 px-5 py-4"><button type="button" disabled={guardando} onClick={onClose} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs text-gray-700 disabled:opacity-40">Cancelar</button><button type="submit" disabled={guardando || !valid} className="rounded bg-petroleum-500 px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300 btn-fx">{guardando ? 'Guardando…' : 'Guardar tercero'}</button></div>
       </form>
     </div>
   </div>;

@@ -68,7 +68,7 @@ export default function TiposDocumento() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Tipos de documento</div>
-          <h1 className="text-lg font-semibold text-gray-800">Tipos de documento</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Tipos de documento</h1>
           <p className="mt-1 text-xs text-gray-500">Tipos de documento de todos los módulos disponibles para Contabilidad.</p>
         </div>
         <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">Advantage · Sucursal 1 · {tipos.length} tipos</span>
@@ -79,15 +79,15 @@ export default function TiposDocumento() {
       </div>
       {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="flex flex-wrap items-center gap-3 rounded border border-gray-200 bg-white p-3">
-        <input type="search" aria-label="Buscar tipos de documento" placeholder="Buscar código, nombre, tipo o comprobante..." value={busqueda} onChange={event => setBusqueda(event.target.value)} className="w-80 rounded border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1" />
+      <div className="flex flex-wrap items-center gap-3 rounded-[18px] border border-gray-200 bg-white p-3">
+        <input type="search" aria-label="Buscar tipos de documento" placeholder="Buscar código, nombre, tipo o comprobante..." value={busqueda} onChange={event => setBusqueda(event.target.value)} className="w-80 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1" />
         <span className="text-xs text-gray-500">Todos los módulos</span>
         <span className="text-xs text-gray-500">{filtrados.length} de {tipos.length}</span>
-        <button type="button" disabled={!filtrados.length} onClick={() => exportarCSV(filtrados)} className="ml-auto rounded border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar CSV</button>
-        <button type="button" disabled title="Se habilitará después de validar todas las reglas y dependencias de VISDOCUM." className="cursor-not-allowed rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white opacity-50">+ Crear tipo</button>
+        <button type="button" disabled={!filtrados.length} onClick={() => exportarCSV(filtrados)} className="ml-auto rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar CSV</button>
+        <button type="button" disabled title="Se habilitará después de validar todas las reglas y dependencias de VISDOCUM." className="cursor-not-allowed rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white opacity-50 btn-fx">+ Crear tipo</button>
       </div>
 
-      <div className="overflow-hidden rounded border border-gray-200 bg-white">
+      <div className="overflow-hidden rounded-[18px] border border-gray-200 bg-white">
         <div className="table-fixed-header overflow-x-auto">
           <table className="w-full min-w-[1100px] text-xs">
             <thead className="border-b border-gray-200 bg-gray-50"><tr>

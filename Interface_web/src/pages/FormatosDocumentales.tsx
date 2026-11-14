@@ -46,7 +46,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     return () => dialog?.close();
   }, []);
   return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-[20px] border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-[#002D49]/45">
       <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
         <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
@@ -72,7 +72,7 @@ function ElementoCanvas({ elemento, seleccionado, vistaPrevia, onSelect }: { ele
     textAlign: elemento.alineacion === 'izquierda' ? 'left' : elemento.alineacion === 'centro' ? 'center' : 'right',
     lineHeight: 1.2,
   };
-  const seleccionStyle = !vistaPrevia && seleccionado ? { outline: '1.5px dashed #0073C0', outlineOffset: 1 } : {};
+  const seleccionStyle = !vistaPrevia && seleccionado ? { outline: '1.5px dashed #0F70FC', outlineOffset: 1 } : {};
 
   if (elemento.tipo === 'linea') {
     return <div onClick={onSelect} className="cursor-pointer" style={{ ...style, ...seleccionStyle, backgroundColor: '#1f2937' }} aria-label="Línea" />;
@@ -192,7 +192,7 @@ export default function FormatosDocumentales() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Formatos documentales</div>
-          <h1 className="text-lg font-semibold text-gray-800">Formatos documentales</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Formatos documentales</h1>
           <p className="mt-1 text-xs text-gray-500">Editor visual de formatos de impresión: leyendas, campos dinámicos, imagen, rectángulos y líneas.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
@@ -203,7 +203,7 @@ export default function FormatosDocumentales() {
       <div className="flex gap-4 items-stretch">
         {/* Lista de formatos */}
         <div className="w-60 shrink-0 space-y-2">
-          <div className="bg-white rounded border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-2">
               <span className="text-xs font-semibold text-gray-700">Formatos</span>
               <button onClick={() => setModalNuevo(true)} className="text-xs text-petroleum-600 hover:underline">+ Nuevo</button>
@@ -219,12 +219,12 @@ export default function FormatosDocumentales() {
             </div>
           </div>
           {formato && (
-            <button onClick={() => setEliminar(formato)} className="w-full rounded border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50">Eliminar formato</button>
+            <button onClick={() => setEliminar(formato)} className="w-full rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50">Eliminar formato</button>
           )}
         </div>
 
         {/* Lienzo */}
-        <div className="flex-1 min-w-0 bg-white rounded border border-gray-200 p-4">
+        <div className="flex-1 min-w-0 bg-white rounded-[18px] border border-gray-200 p-4">
           <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs font-semibold text-gray-700">{formato ? `Lienzo — ${formato.nombre}` : 'Seleccione un formato'}</span>
             <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-700">
@@ -234,7 +234,7 @@ export default function FormatosDocumentales() {
           </div>
           {formato ? (
             <div className="flex justify-center">
-              <div className="relative w-full max-w-[595px] overflow-hidden rounded border border-gray-300 bg-white shadow-sm" style={{ aspectRatio: '595 / 842' }}
+              <div className="relative w-full max-w-[595px] overflow-hidden rounded-[18px] border border-gray-300 bg-white shadow-sm" style={{ aspectRatio: '595 / 842' }}
                 onClick={e => { if (e.target === e.currentTarget) setElementoId(null); }}>
                 {!vistaPrevia && <div className="pointer-events-none absolute inset-0 border-4 border-gray-100" aria-hidden="true" />}
                 {formato.elementos.map(el => (
@@ -260,19 +260,19 @@ export default function FormatosDocumentales() {
 
         {/* Panel de propiedades */}
         <div className="w-72 shrink-0 space-y-2">
-          <div className="bg-white rounded border border-gray-200 p-3">
+          <div className="bg-white rounded-[18px] border border-gray-200 p-3">
             <div className="text-xs font-semibold text-gray-700 mb-2">Agregar elemento</div>
             <div className="flex flex-wrap gap-1.5">
               {ELEMENTOS_DISPONIBLES.map(e => (
                 <button key={e.tipo} disabled={!formato} onClick={() => agregarElemento(e.tipo)}
-                  className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-petroleum-50 hover:border-petroleum-200 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200">
+                  className="text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-petroleum-50 hover:border-petroleum-200 disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200">
                   + {e.nombre}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="bg-white rounded border border-gray-200 p-3">
+          <div className="bg-white rounded-[18px] border border-gray-200 p-3">
             <div className="text-xs font-semibold text-gray-700 mb-2">Propiedades</div>
             {!elemento ? (
               <p className="text-xs text-gray-400">Seleccione un elemento del lienzo para editar sus propiedades.</p>
@@ -326,12 +326,12 @@ export default function FormatosDocumentales() {
                     <span>Negrita</span>
                   </label>
                 )}
-                <button onClick={() => quitarElemento(elemento.id)} className="w-full rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50">Quitar elemento</button>
+                <button onClick={() => quitarElemento(elemento.id)} className="w-full rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50">Quitar elemento</button>
               </div>
             )}
           </div>
 
-          <div className="bg-white rounded border border-gray-200 p-3 space-y-2">
+          <div className="bg-white rounded-[18px] border border-gray-200 p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-gray-700">Cambios</span>
               <span className={`text-xs ${dirty ? 'text-amber-600' : 'text-gray-400'}`}>{dirty ? '● Sin guardar' : 'Guardado'}</span>
@@ -364,7 +364,7 @@ export default function FormatosDocumentales() {
         <p className="p-5 text-sm text-gray-600">¿Está seguro de eliminar el formato <span className="font-semibold text-gray-800">"{eliminar.nombre}"</span>? Los documentos ya impresos no se modifican.</p>
         <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
           <button type="button" data-initial-focus onClick={() => setEliminar(null)} className={BUTTON_SECONDARY}>Cancelar</button>
-          <button type="button" onClick={confirmarEliminar} className="rounded bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">Eliminar</button>
+          <button type="button" onClick={confirmarEliminar} className="px-5 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 rounded-xl border border-[#B42318] bg-white text-[#B42318] hover:bg-[#FDECEC] font-medium">Eliminar</button>
         </div>
       </Modal>}
     </div>

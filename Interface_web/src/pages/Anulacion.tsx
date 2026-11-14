@@ -147,11 +147,11 @@ export default function Anulacion({ cia }: Props) {
   return <div className="max-w-screen-2xl space-y-4 p-4">
     <div>
       <div className="mb-1 text-xs text-gray-400">Movimientos / Anulación</div>
-      <h1 className="text-lg font-semibold text-gray-800">Anulación de documentos</h1>
+      <h1 className="text-2xl font-semibold text-[#002D49]">Anulación de documentos</h1>
       <p className="mt-1 text-xs text-gray-500">Consulte el documento, revise sus partidas y confirme el retiro del movimiento.</p>
     </div>
 
-    <div className="rounded border border-gray-200 bg-white p-3">
+    <div className="rounded-[18px] border border-gray-200 bg-white p-3">
       <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
         <legend className="px-2 text-xs font-semibold text-petroleum-800">Buscar documento</legend>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
@@ -160,7 +160,7 @@ export default function Anulacion({ cia }: Props) {
           <Filter label="Tipo de documento"><select value={filtros.tipoDocumento} onChange={event => cambiarFiltro('tipoDocumento', event.target.value)} className={INPUT}><option value="">Todos</option>{tiposDocumento.map(item => <option key={item.codigo} value={item.codigo}>{item.codigo} — {item.nombre}</option>)}</select></Filter>
           <Filter label="N.° documento"><input value={filtros.documento} onChange={event => cambiarFiltro('documento', event.target.value)} className={`${INPUT} font-mono`} /></Filter>
           <Filter label="Tercero"><input value={filtros.nit} onChange={event => cambiarFiltro('nit', event.target.value)} className={`${INPUT} font-mono`} /></Filter>
-          <div className="flex items-end"><button type="button" disabled={cargando || !hayFiltro} onClick={() => void consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
+          <div className="flex items-end"><button type="button" disabled={cargando || !hayFiltro} onClick={() => void consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 btn-fx">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
         </div>
       </fieldset>
     </div>
@@ -168,7 +168,7 @@ export default function Anulacion({ cia }: Props) {
     {mensaje && <div role="status" className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"><div className="font-medium">{mensaje}</div>{resumen && <div className="mt-1 text-xs">{resumen.partidasRetiradas} partidas retiradas · {resumen.cuentasRecalculadas} cuentas y {resumen.tercerosRecalculados} auxiliares de tercero recalculados.</div>}</div>}
     {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-    <div className="overflow-hidden rounded border border-gray-200 bg-white">
+    <div className="overflow-hidden rounded-[18px] border border-gray-200 bg-white">
       <table className="w-full text-xs">
         <thead className="border-b border-gray-200 bg-gray-50"><tr>{['Fecha', 'Comprobante', 'Tipo', 'Documento', 'Tercero', 'Detalle', 'Valor', 'Acción'].map((title, index) => <th key={title} className={`px-3 py-2.5 font-semibold text-gray-600 ${index === 6 ? 'text-right' : 'text-left'}`}>{title}</th>)}</tr></thead>
         <tbody className="divide-y divide-gray-50">
@@ -187,18 +187,18 @@ export default function Anulacion({ cia }: Props) {
           </tr>)}
         </tbody>
       </table>
-      {resultado && <div className="flex items-center gap-3 border-t border-gray-200 bg-gray-50 px-4 py-2.5"><span className="text-xs text-gray-500">{items.length} documentos · página {resultado.page}</span><div className="ml-auto flex gap-2"><button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => void consultar(resultado.page - 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button><button type="button" disabled={!resultado.hasMore || cargando} onClick={() => void consultar(resultado.page + 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button></div></div>}
+      {resultado && <div className="flex items-center gap-3 border-t border-gray-200 bg-gray-50 px-4 py-2.5"><span className="text-xs text-gray-500">{items.length} documentos · página {resultado.page}</span><div className="ml-auto flex gap-2"><button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => void consultar(resultado.page - 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button><button type="button" disabled={!resultado.hasMore || cargando} onClick={() => void consultar(resultado.page + 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button></div></div>}
     </div>
 
-    {detalleCargando && <div className="rounded border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Cargando partidas del documento…</div>}
-    {seleccionado && !detalleCargando && <div className="space-y-4 rounded border border-amber-200 bg-white p-4">
+    {detalleCargando && <div className="rounded-[18px] border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Cargando partidas del documento…</div>}
+    {seleccionado && !detalleCargando && <div className="space-y-4 rounded-[18px] border border-amber-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-semibold text-gray-800">Documento {seleccionado.documento}</h2><p className="mt-1 text-xs text-gray-500">Revise cuidadosamente las partidas. La anulación retirará el documento del movimiento contable.</p></div><button type="button" onClick={() => { setSeleccionado(null); setDetalle([]); }} className="text-xs text-gray-500 hover:text-gray-700">Cerrar</button></div>
       <div className="overflow-x-auto rounded border border-gray-200"><table className="w-full text-xs"><thead className="bg-gray-50"><tr>{['Cuenta', 'Nombre', 'Tercero', 'Centro', 'Concepto', 'Débito', 'Crédito'].map((title, index) => <th key={title} className={`px-3 py-2 font-semibold text-gray-600 ${index >= 5 ? 'text-right' : 'text-left'}`}>{title}</th>)}</tr></thead><tbody className="divide-y divide-gray-50">{detalle.map((line, index) => <tr key={`${line.id}-${index}`}><td className="px-3 py-2 font-mono text-gray-700">{line.cuenta}</td><td className="px-3 py-2 text-gray-600">{line.nombreCuenta}</td><td className="px-3 py-2 font-mono text-gray-600">{line.nit || '—'}</td><td className="px-3 py-2 text-gray-600">{line.centro || '—'}</td><td className="max-w-72 truncate px-3 py-2 text-gray-500">{line.concepto}</td><td className="px-3 py-2 text-right font-mono">{line.debito ? fmtCOP(line.debito) : '—'}</td><td className="px-3 py-2 text-right font-mono">{line.credito ? fmtCOP(line.credito) : '—'}</td></tr>)}</tbody><tfoot className="border-t bg-gray-50"><tr><td colSpan={5} className="px-3 py-2 text-right font-semibold text-gray-600">Totales</td><td className="px-3 py-2 text-right font-mono font-semibold">{fmtCOP(totalDebito)}</td><td className="px-3 py-2 text-right font-mono font-semibold">{fmtCOP(totalCredito)}</td></tr></tfoot></table></div>
       <div><label className="mb-1 block text-xs font-medium text-gray-700">Motivo de la anulación <span className="text-red-500">*</span></label><textarea value={motivo} maxLength={180} onChange={event => setMotivo(event.target.value)} rows={2} placeholder="Explique por qué se anula el documento" className={INPUT} /><div className="mt-1 text-right text-[11px] text-gray-400">{motivo.length}/180</div></div>
-      <div className="flex justify-end"><button type="button" disabled={anulando || motivo.trim().length < 5 || Math.abs(totalDebito - totalCredito) > 0.01} onClick={() => setConfirmar(true)} className="rounded bg-red-600 px-4 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40">Anular documento</button></div>
+      <div className="flex justify-end"><button type="button" disabled={anulando || motivo.trim().length < 5 || Math.abs(totalDebito - totalCredito) > 0.01} onClick={() => setConfirmar(true)} className="px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-40 rounded-xl border border-[#B42318] bg-white text-[#B42318] hover:bg-[#FDECEC] font-medium">Anular documento</button></div>
     </div>}
 
-    {confirmar && seleccionado && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="confirm-annulment-title"><div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"><h2 id="confirm-annulment-title" className="text-base font-semibold text-gray-900">Confirmar anulación</h2><p className="mt-2 text-sm text-gray-600">Se retirará definitivamente el documento <strong>{seleccionado.documento}</strong> y se recalcularán los saldos afectados. Esta operación no se puede deshacer desde esta pantalla.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setConfirmar(false)} className="rounded border border-gray-300 px-4 py-2 text-xs text-gray-700">Cancelar</button><button type="button" onClick={() => void ejecutarAnulacion()} className="rounded bg-red-600 px-4 py-2 text-xs font-medium text-white">Sí, anular documento</button></div></div></div>}
+    {confirmar && seleccionado && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45 p-4" role="dialog" aria-modal="true" aria-labelledby="confirm-annulment-title"><div className="w-full max-w-md rounded-[20px] bg-white p-5 shadow-xl"><h2 id="confirm-annulment-title" className="text-base font-semibold text-gray-900">Confirmar anulación</h2><p className="mt-2 text-sm text-gray-600">Se retirará definitivamente el documento <strong>{seleccionado.documento}</strong> y se recalcularán los saldos afectados. Esta operación no se puede deshacer desde esta pantalla.</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setConfirmar(false)} className="rounded-xl border border-gray-300 px-4 py-2 text-xs text-gray-700">Cancelar</button><button type="button" onClick={() => void ejecutarAnulacion()} className="px-4 py-2 text-xs rounded-xl border border-[#B42318] bg-white text-[#B42318] hover:bg-[#FDECEC] font-medium">Sí, anular documento</button></div></div></div>}
   </div>;
 }
 

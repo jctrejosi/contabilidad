@@ -70,7 +70,7 @@ export default function MediosDetalleTercero({ cia }: { cia: string }) {
     }
   }
   return <div className="space-y-4 p-4" onKeyDown={e => { if (e.key === 'F5' && result && !busy) { e.preventDefault(); void exportar('pdf'); } }}>
-    <header><p className="text-xs text-gray-500">Medios magnéticos</p><h1 className="text-lg font-semibold text-gray-800">6. Detalle por tercero</h1></header>
+    <header><p className="text-xs text-gray-500">Medios magnéticos</p><h1 className="text-2xl font-semibold text-[#002D49]">6. Detalle por tercero</h1></header>
     {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</p>}
     <form className="space-y-3 rounded border bg-white p-4" onSubmit={e => { e.preventDefault(); void consultar(); }}>
       <div className="flex flex-wrap items-end gap-3">
@@ -83,7 +83,7 @@ export default function MediosDetalleTercero({ cia }: { cia: string }) {
       {!!items.length && <div className="max-h-64 overflow-auto rounded border">{items.map((item, i) => <button type="button" key={item.nit} onClick={() => select(item)} className={`block w-full border-b px-3 py-2 text-left text-xs ${i === index ? 'bg-petroleum-50' : 'hover:bg-gray-50'}`}>{item.nit} — {item.nombre}</button>)}</div>}
       {third && <p className="text-xs text-gray-600">Tercero seleccionado: {third.nit} — {third.nombre}</p>}
     </form>
-    {result && <section className="space-y-3 rounded border bg-white p-3">
+    {result && <section className="space-y-3 rounded-[18px] border bg-white p-3">
       <div className="flex flex-wrap items-center justify-between gap-3"><div className="text-xs text-gray-700">{result.tercero} — {result.nombre}<br />{result.movimientos} partidas · Total valor: <strong>{money(result.totalValor)}</strong> · Total base: <strong>{money(result.totalBase)}</strong></div><div className="flex gap-2"><button disabled={busy || !result.movimientos} className={BUTTON} onClick={() => void exportar('pdf')}>F5 PDF / Imprimir</button><button disabled={busy || !result.movimientos} className={BUTTON} onClick={() => void exportar('xlsx')}>Excel</button></div></div>
       {!result.movimientos ? <p className="p-4 text-center text-xs text-gray-500">El tercero no tiene movimientos de medios en esta compañía.</p> : <>
         <div className="overflow-auto"><table className="w-full whitespace-nowrap text-xs"><thead className="bg-gray-50 text-gray-600"><tr>{result.columnas.map(label => <th key={label} className="px-3 py-2 text-left font-semibold">{label}</th>)}</tr></thead><tbody>{result.filas.map((row, i) => <tr key={i} className={`border-t ${result.tipos[i]?.startsWith('subtotal') || result.tipos[i] === 'total-general' ? 'bg-petroleum-50 font-semibold text-petroleum-800' : 'hover:bg-gray-50'}`}>{row.map((cell, index) => <td key={index} className={`px-3 py-2 ${typeof cell === 'number' ? 'text-right font-mono' : ''}`}>{typeof cell === 'number' ? money(cell) : cell}</td>)}</tr>)}</tbody></table></div>

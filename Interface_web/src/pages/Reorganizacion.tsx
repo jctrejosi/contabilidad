@@ -120,7 +120,7 @@ export default function Reorganizacion() {
     <div className="mx-auto max-w-6xl space-y-4 p-4">
       <div>
         <div className="mb-1 text-xs text-gray-400">Administración / Reorganización de datos</div>
-        <h1 className="text-lg font-semibold text-gray-800">Reorganización de índices</h1>
+        <h1 className="text-2xl font-semibold text-[#002D49]">Reorganización de índices</h1>
         <p className="mt-1 text-xs text-gray-500">
           Reconstruye los índices existentes de las tablas contables registradas en Advantage. No elimina registros ni cambia sus definiciones.
         </p>
@@ -149,10 +149,10 @@ export default function Reorganizacion() {
         </section>
       )}
 
-      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <section className="rounded-[18px] border border-gray-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-petroleum-900">Índices del diccionario actual</h2>
-          <button type="button" className="rounded border border-gray-300 px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-50" disabled={cargando || ejecutando} onClick={() => void actualizarPlan()}>
+          <button type="button" className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs hover:bg-gray-50 disabled:opacity-50" disabled={cargando || ejecutando} onClick={() => void actualizarPlan()}>
             Actualizar vista previa
           </button>
         </div>
@@ -184,7 +184,7 @@ export default function Reorganizacion() {
         )}
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <section className="rounded-[18px] border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-petroleum-900">Verificar y crear un índice nuevo</h2>
         <p className="mt-2 text-xs text-gray-600">
           Seleccione una tabla y los campos en el orden de búsqueda. Antes de crear, se comprobará si ya existe un índice equivalente en el diccionario compartido por todas las compañías.
@@ -193,35 +193,35 @@ export default function Reorganizacion() {
           <label className="text-xs text-gray-700">Tabla
             <select value={tablaIndice} disabled={ejecutando || cargando} onChange={event => {
               setTablaIndice(event.target.value); setCamposIndice([]); setCampoNuevo(''); setPlanIndice(null);
-            }} className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm">
+            }} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
               <option value="">Seleccione una tabla</option>
               {catalogo?.tablas.map(item => <option key={item.tabla} value={item.tabla}>{item.tabla}</option>)}
             </select>
           </label>
           <label className="text-xs text-gray-700">Nombre del índice
-            <input value={nombreIndice} disabled={ejecutando} maxLength={128} onChange={event => { setNombreIndice(event.target.value.toUpperCase()); setPlanIndice(null); }} placeholder="Ej. CONMAE7" className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm" />
+            <input value={nombreIndice} disabled={ejecutando} maxLength={128} onChange={event => { setNombreIndice(event.target.value.toUpperCase()); setPlanIndice(null); }} placeholder="Ej. CONMAE7" className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
           </label>
         </div>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <label className="min-w-56 flex-1 text-xs text-gray-700">Agregar campo
-            <select value={campoNuevo} disabled={!tablaIndice || ejecutando} onChange={event => setCampoNuevo(event.target.value)} className="mt-1 block w-full rounded border border-gray-300 px-3 py-2 text-sm">
+            <select value={campoNuevo} disabled={!tablaIndice || ejecutando} onChange={event => setCampoNuevo(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
               <option value="">Seleccione un campo</option>
               {camposDisponibles.filter(field => !camposIndice.includes(field)).map(field => <option key={field} value={field}>{field}</option>)}
             </select>
           </label>
           <button type="button" disabled={!campoNuevo || camposIndice.length >= 8 || ejecutando} onClick={() => {
             setCamposIndice(previous => [...previous, campoNuevo]); setCampoNuevo(''); setPlanIndice(null);
-          }} className="rounded border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50 disabled:opacity-50">Agregar campo</button>
+          }} className="rounded-xl border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50 disabled:opacity-50">Agregar campo</button>
         </div>
         {camposIndice.length > 0 && <div className="mt-3 space-y-1">
           {camposIndice.map((field, index) => <div key={field} className="flex items-center gap-2 text-xs text-gray-700">
             <span className="w-5 text-right">{index + 1}.</span><span className="min-w-28 font-medium">{field}</span>
-            <button type="button" disabled={index === 0 || ejecutando} onClick={() => cambiarCampo(index, -1)} aria-label={`Subir ${field}`} className="rounded border px-2 disabled:opacity-40">↑</button>
-            <button type="button" disabled={index === camposIndice.length - 1 || ejecutando} onClick={() => cambiarCampo(index, 1)} aria-label={`Bajar ${field}`} className="rounded border px-2 disabled:opacity-40">↓</button>
+            <button type="button" disabled={index === 0 || ejecutando} onClick={() => cambiarCampo(index, -1)} aria-label={`Subir ${field}`} className="rounded-lg border px-2 disabled:opacity-40">↑</button>
+            <button type="button" disabled={index === camposIndice.length - 1 || ejecutando} onClick={() => cambiarCampo(index, 1)} aria-label={`Bajar ${field}`} className="rounded-lg border px-2 disabled:opacity-40">↓</button>
             <button type="button" disabled={ejecutando} onClick={() => { setCamposIndice(previous => previous.filter(item => item !== field)); setPlanIndice(null); }} className="text-red-700 disabled:opacity-40">Quitar</button>
           </div>)}
         </div>}
-        <button type="button" disabled={!tablaIndice || !nombreIndice || !camposIndice.length || validandoIndice || ejecutando} onClick={() => void validarIndice()} className="mt-4 rounded border border-petroleum-500 px-3 py-2 text-xs text-petroleum-900 hover:bg-gray-50 disabled:opacity-50">
+        <button type="button" disabled={!tablaIndice || !nombreIndice || !camposIndice.length || validandoIndice || ejecutando} onClick={() => void validarIndice()} className="mt-4 rounded-xl border border-petroleum-500 px-3 py-2 text-xs text-petroleum-900 hover:bg-gray-50 disabled:opacity-50">
           {validandoIndice ? 'Verificando…' : 'Verificar índice'}
         </button>
         {planIndice && <div className={`mt-3 rounded border px-3 py-2 text-xs ${planIndice.estado === 'pendiente' ? 'border-amber-200 bg-amber-50 text-amber-900' : planIndice.estado === 'existente' ? 'border-green-200 bg-green-50 text-green-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
@@ -231,14 +231,14 @@ export default function Reorganizacion() {
         {planIndice?.estado === 'pendiente' && <div className="mt-3">
           <p className="text-xs text-gray-600">Para crear el índice, confirme el respaldo y la salida de los demás usuarios en la sección inferior.</p>
           <label htmlFor="confirmacion-indice" className="mt-2 block text-xs text-gray-600">Escriba CREAR INDICE para confirmar</label>
-          <input id="confirmacion-indice" value={confirmacionIndice} disabled={ejecutando} onChange={event => setConfirmacionIndice(event.target.value)} className="mt-1 w-full max-w-xs rounded border border-gray-300 px-3 py-2 text-sm" />
+          <input id="confirmacion-indice" value={confirmacionIndice} disabled={ejecutando} onChange={event => setConfirmacionIndice(event.target.value)} className="mt-1 w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm" />
           <div className="mt-3"><button type="button" className={BOTON} disabled={!respaldo || !sinUsuarios || confirmacionIndice !== 'CREAR INDICE' || ejecutando || creandoIndice} onClick={() => void iniciarIndice()}>
             {creandoIndice ? 'Iniciando…' : 'Crear índice'}
           </button></div>
         </div>}
       </section>
 
-      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <section className="rounded-[18px] border border-gray-200 bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-petroleum-900">Antes de iniciar</h2>
         <p className="mt-2 text-xs text-gray-600">
           Advantage necesita acceso exclusivo a cada tabla. Cierre el programa original y las demás sesiones que puedan mantener estas tablas abiertas. Si no obtiene exclusividad, el proceso se detendrá e indicará la tabla afectada.
@@ -248,7 +248,7 @@ export default function Reorganizacion() {
           <label className="flex items-start gap-2"><input type="checkbox" checked={sinUsuarios} onChange={event => setSinUsuarios(event.target.checked)} disabled={ejecutando} /> Confirmo que los demás usuarios han salido de la aplicación y de Advantage.</label>
         </div>
         <label htmlFor="confirmacion-reorganizacion" className="mt-4 block text-xs text-gray-600">Escriba REORGANIZAR para confirmar</label>
-        <input id="confirmacion-reorganizacion" value={confirmacion} onChange={event => setConfirmacion(event.target.value)} disabled={ejecutando} className="mt-1 w-full max-w-xs rounded border border-gray-300 px-3 py-2 text-sm" />
+        <input id="confirmacion-reorganizacion" value={confirmacion} onChange={event => setConfirmacion(event.target.value)} disabled={ejecutando} className="mt-1 w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm" />
         <div className="mt-4">
           <button type="button" className={BOTON} onClick={() => void iniciar()} disabled={!plan?.totalIndices || !!plan?.inaccesibles.some(item => !item.reconstruible) || !respaldo || !sinUsuarios || confirmacion !== 'REORGANIZAR' || ejecutando || iniciando || cargando}>
             {iniciando ? 'Iniciando…' : ejecutando ? 'Reorganización en curso' : 'Reindexar índices existentes'}

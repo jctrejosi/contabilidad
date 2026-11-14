@@ -135,13 +135,13 @@ export default function ConsultaDocumentos({ cia, onOpenDocumento }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Consultas / Documentos</div>
-          <h1 className="text-lg font-semibold text-gray-800">Consulta general de documentos</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Consulta general de documentos</h1>
           <p className="mt-1 text-xs text-gray-500">Cabeceras de CONDOCUM y detalle contable de MOV01 · compañía {cia}</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Advantage · CIA {cia}</span>
       </div>
 
-      <div className="rounded border border-gray-200 bg-white p-3">
+      <div className="rounded-[18px] border border-gray-200 bg-white p-3">
         <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
           <legend className="px-2 text-xs font-semibold text-petroleum-800">Filtros</legend>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
@@ -152,7 +152,7 @@ export default function ConsultaDocumentos({ cia, onOpenDocumento }: Props) {
             <Filter label="Documento"><input value={filtros.documento} onChange={event => cambiarFiltro('documento', event.target.value)} placeholder="DDOCUM" className={`${INPUT} font-mono`} /></Filter>
             <Filter label="Fecha desde"><input type="date" value={filtros.fechaDesde} onChange={event => cambiarFiltro('fechaDesde', event.target.value)} className={INPUT} /></Filter>
             <Filter label="Fecha hasta"><input type="date" value={filtros.fechaHasta} onChange={event => cambiarFiltro('fechaHasta', event.target.value)} className={INPUT} /></Filter>
-            <div className="flex items-end"><button type="button" disabled={cargando || !hayFiltro} onClick={() => consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
+            <div className="flex items-end"><button type="button" disabled={cargando || !hayFiltro} onClick={() => consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 btn-fx">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
           </div>
           <p className="mt-2 text-xs text-gray-400">No se consulta CONDOCUM al entrar. Seleccione al menos un criterio y pulse Consultar.</p>
         </fieldset>
@@ -161,7 +161,7 @@ export default function ConsultaDocumentos({ cia, onOpenDocumento }: Props) {
       {maestrosError && <div role="alert" className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{maestrosError}</div>}
       {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="overflow-hidden rounded border border-gray-200 bg-white">
+      <div className="overflow-hidden rounded-[18px] border border-gray-200 bg-white">
         <div className="table-fixed-header overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="border-b border-gray-200 bg-gray-50"><tr>
@@ -189,7 +189,7 @@ export default function ConsultaDocumentos({ cia, onOpenDocumento }: Props) {
         </div>
         <div className="flex items-center gap-3 border-t border-gray-200 bg-gray-50 px-4 py-2.5">
           <span className="text-xs text-gray-500">{resultado ? `${items.length} documentos · página ${resultado.page}` : 'Sin consulta'}</span>
-          {resultado && <div className="ml-auto flex gap-2"><button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => consultar(resultado.page - 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button><button type="button" disabled={!resultado.hasMore || cargando} onClick={() => consultar(resultado.page + 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button></div>}
+          {resultado && <div className="ml-auto flex gap-2"><button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => consultar(resultado.page - 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button><button type="button" disabled={!resultado.hasMore || cargando} onClick={() => consultar(resultado.page + 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button></div>}
         </div>
       </div>
     </div>
@@ -219,10 +219,10 @@ function DocumentoConDetalle({ documento, abierto, cargando, lineas, error, onTo
       <td className="whitespace-nowrap px-3 py-2"><button type="button" onClick={onToggle} className="text-xs text-petroleum-600 hover:underline">{abierto ? 'Ocultar detalle' : 'Ver detalle'}</button>{onOpenDocumento && <button type="button" onClick={() => onOpenDocumento(documento)} className="ml-3 text-xs text-petroleum-600 hover:underline">Documento oficial</button>}</td>
     </tr>
     {abierto && <tr><td colSpan={8} className="bg-gray-50/70 px-3 py-3">
-      {cargando && <div className="rounded border border-gray-200 bg-white p-6 text-center text-xs text-gray-500">Consultando las partidas del documento en MOV01…</div>}
+      {cargando && <div className="rounded-[18px] border border-gray-200 bg-white p-6 text-center text-xs text-gray-500">Consultando las partidas del documento en MOV01…</div>}
       {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</div>}
       {!cargando && !error && lineas && lineas.length === 0 && <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">La cabecera existe en CONDOCUM, pero no se encontraron partidas relacionadas en MOV01.</div>}
-      {!cargando && !error && lineas && lineas.length > 0 && <div className="overflow-hidden rounded border border-gray-200 bg-white">
+      {!cargando && !error && lineas && lineas.length > 0 && <div className="overflow-hidden rounded-[18px] border border-gray-200 bg-white">
         <table className="w-full text-xs"><thead className="border-b border-gray-200 bg-gray-50"><tr>{['Cuenta', 'Nombre cuenta', 'NIT', 'Centro', 'Documento afectado', 'Débito', 'Crédito', 'Base', 'Concepto'].map((titulo, index) => <th key={titulo} className={`px-3 py-2 font-semibold text-gray-600 ${index >= 5 && index <= 7 ? 'text-right' : 'text-left'}`}>{titulo}</th>)}</tr></thead>
           <tbody className="divide-y divide-gray-50">{lineas.map((linea, index) => <tr key={`${linea.id}-${index}`}><td className="px-3 py-1.5 font-mono text-gray-700">{linea.cuenta}</td><td className="px-3 py-1.5 text-gray-600">{linea.nombreCuenta || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-600">{linea.nit || '—'}</td><td className="px-3 py-1.5 text-gray-600">{linea.centro || '—'}</td><td className="px-3 py-1.5 font-mono text-gray-600">{linea.documentoAfectado || '—'}</td><td className="px-3 py-1.5 text-right font-mono text-gray-800">{linea.debito ? fmtCOP(linea.debito) : '—'}</td><td className="px-3 py-1.5 text-right font-mono text-gray-600">{linea.credito ? fmtCOP(linea.credito) : '—'}</td><td className="px-3 py-1.5 text-right font-mono text-gray-600">{linea.base ? fmtCOP(linea.base) : '—'}</td><td title={linea.concepto} className="max-w-72 truncate px-3 py-1.5 text-gray-500">{linea.concepto || '—'}</td></tr>)}</tbody>
           <tfoot className="border-t border-gray-200 bg-gray-50"><tr><td colSpan={5} className="px-3 py-2 text-right font-semibold text-gray-600">Totales</td><td className="px-3 py-2 text-right font-mono font-semibold text-gray-800">{fmtCOP(totalDebito)}</td><td className="px-3 py-2 text-right font-mono font-semibold text-gray-800">{fmtCOP(totalCredito)}</td><td colSpan={2} className={`px-3 py-2 text-xs font-medium ${Math.abs(totalDebito - totalCredito) < 0.01 ? 'text-green-700' : 'text-red-700'}`}>{Math.abs(totalDebito - totalCredito) < 0.01 ? 'Documento cuadrado' : `Diferencia ${fmtCOP(Math.abs(totalDebito - totalCredito))}`}</td></tr></tfoot>

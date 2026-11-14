@@ -209,7 +209,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
   return (
     <div className="max-w-screen-2xl space-y-4 p-4">
       <div>
-        <h1 className="text-base font-semibold text-gray-800">Reprocesos y auditoría</h1>
+        <h1 className="text-2xl font-semibold text-[#002D49]">Reprocesos y auditoría</h1>
         <p className="text-xs text-gray-500">Verificaciones, correcciones y recálculos del libro contable</p>
       </div>
 
@@ -217,7 +217,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
         ⚠ Los reprocesos modifican acumulados contables. La revisión previa es opcional; al ejecutar siempre se valida antes de guardar.
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="inline-flex items-center gap-1 rounded-xl border border-[#E6E9EC] bg-white p-1">
         {[
           { k: "todos", label: "Todos los procesos" },
           { k: "auditoria", label: "Solo auditorías" },
@@ -227,8 +227,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
             key={item.k}
             type="button"
             onClick={() => setFilter(item.k as typeof filter)}
-            className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${filter === item.k ? "text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-            style={filter === item.k ? { backgroundColor: "#0073C0" } : {}}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${filter === item.k ? "bg-[#003760] text-white" : "text-[#5B6B7A] hover:bg-[#F7F7F7]"}`}
           >
             {item.label}
           </button>
@@ -239,13 +238,13 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
         {filtered.map(proc => (
           <div
             key={proc.id}
-            className={`rounded border bg-white p-4 ${proc.disponible ? "cursor-pointer hover:border-sky-300 hover:shadow-sm" : "opacity-60"}`}
+            className={`rounded-[18px] border border-[#E6E9EC] bg-white p-4 transition ${proc.disponible ? "cursor-pointer hover:-translate-y-[3px] hover:border-[#0F70FC]/45 hover:shadow-[0_20px_36px_-22px_rgba(0,45,73,.5)]" : "opacity-60"}`}
             onClick={() => openProcess(proc)}
           >
             <div className="mb-2 flex items-start justify-between">
               <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-100 font-mono text-sm text-gray-700">{proc.icono}</div>
               <div className="flex items-center gap-2">
-                <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${proc.tipo === "auditoria" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>{proc.tipo === "auditoria" ? "Auditar" : "Corregir"}</span>
+                <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${proc.tipo === "auditoria" ? "bg-[#0F70FC]/10 text-[#0A55C4]" : "bg-[#33B1FF]/15 text-[#0B63E0]"}`}>{proc.tipo === "auditoria" ? "Auditar" : "Corregir"}</span>
                 <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${proc.riesgo === "Medio" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>{proc.riesgo}</span>
               </div>
             </div>
@@ -254,8 +253,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
             <button
               type="button"
               disabled={!proc.disponible}
-              className="mt-3 w-full rounded px-3 py-1.5 text-xs font-medium text-white disabled:bg-gray-300"
-              style={proc.disponible ? { backgroundColor: "#0073C0" } : {}}
+              className="btn-fx mt-3 w-full px-3 py-2 text-xs"
             >
               {proc.disponible ? "Iniciar proceso" : "Pendiente de integración"}
             </button>
@@ -265,8 +263,8 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
 
       {selected?.id === "docs-vs-mov" && <AuditoriaDocumentosMovimiento compania={compania} onClose={() => setSelected(null)} />}
       {selected?.id === "rep-mensual" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="mx-4 max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45">
+          <div className="mx-4 max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-[20px] bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
               <div>
                 <h3 className="text-sm font-semibold text-gray-800">{selected.nombre}</h3>
@@ -291,13 +289,13 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
                 </div>
                 <div>
                   <label htmlFor="mes-desde" className="mb-1 block text-gray-500">Período desde</label>
-                  <select id="mes-desde" value={mesDesde} disabled={cargandoPeriodo || step === "running"} onChange={event => changeRange(setMesDesde, event.target.value)} className="w-full rounded border border-gray-200 px-2 py-1.5 text-xs">
+                  <select id="mes-desde" value={mesDesde} disabled={cargandoPeriodo || step === "running"} onChange={event => changeRange(setMesDesde, event.target.value)} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs">
                     {MESES.map((name, index) => <option key={name} value={index}>{String(index).padStart(2, "0")} — {name}{mesesHabilitados.includes(index) ? " · habilitado" : ""}</option>)}
                   </select>
                 </div>
                 <div>
                   <label htmlFor="mes-hasta" className="mb-1 block text-gray-500">Período hasta</label>
-                  <select id="mes-hasta" value={mesHasta} disabled={cargandoPeriodo || step === "running"} onChange={event => changeRange(setMesHasta, event.target.value)} className="w-full rounded border border-gray-200 px-2 py-1.5 text-xs">
+                  <select id="mes-hasta" value={mesHasta} disabled={cargandoPeriodo || step === "running"} onChange={event => changeRange(setMesHasta, event.target.value)} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-xs">
                     {MESES.map((name, index) => <option key={name} value={index}>{String(index).padStart(2, "0")} — {name}{mesesHabilitados.includes(index) ? " · habilitado" : ""}</option>)}
                   </select>
                 </div>
@@ -310,7 +308,7 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
                 <div className="space-y-2 py-2">
                   <div aria-live="polite" className="text-xs font-medium text-gray-700">{progress?.etapa ?? (step === "simulating" ? "Preparando revisión…" : "Preparando reproceso…")}</div>
                   <div role="progressbar" aria-label="Avance de la etapa actual" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress?.total ? Math.min(100, Math.floor(progress.procesados * 100 / progress.total)) : undefined} className="h-3 overflow-hidden rounded-full bg-gray-100">
-                    <div className={`h-full rounded-full bg-[#0073C0] transition-[width] duration-300 ${progress?.total ? "" : "w-1/3 animate-pulse"}`} style={progress?.total ? { width: `${Math.min(100, progress.procesados * 100 / progress.total)}%` } : undefined} />
+                    <div className={`h-full rounded-full bg-[#0F70FC] transition-[width] duration-300 ${progress?.total ? "" : "w-1/3 animate-pulse"}`} style={progress?.total ? { width: `${Math.min(100, progress.procesados * 100 / progress.total)}%` } : undefined} />
                   </div>
                   {progress?.total != null && progress.total > 0 && <div className="text-xs text-gray-600">Avance de esta etapa: {progress.procesados.toLocaleString("es-CO")} de {progress.total.toLocaleString("es-CO")} ({Math.min(100, Math.floor(progress.procesados * 100 / progress.total))} %). Pendiente de confirmación final.</div>}
                   <div role="status" className="text-xs text-gray-500">Tiempo transcurrido: {formatDuration(elapsed)}. Esperando respuesta del servidor; no cierre ni repita la operación.</div>
@@ -342,10 +340,10 @@ export default function Reprocesos({ compania }: ReprocesosProps) {
               )}
             </div>
 
-            {(step === "idle" || step === "sim" || step === "done") && <div className="px-5 pb-4"><label htmlFor="motivo-reproceso-directo" className="mb-1 block text-xs font-medium text-gray-600">Motivo del reproceso (obligatorio para ejecutar)</label><input id="motivo-reproceso-directo" value={motivo} maxLength={180} onChange={event => setMotivo(event.target.value)} className="w-full rounded border border-gray-200 px-2.5 py-2 text-xs" /><p className="mt-2 text-xs text-gray-500">Revisar compara sin guardar. Puede ejecutar directamente para evitar calcular dos veces. Confirme que dispone de respaldo y que no hay otras operaciones contables en curso.</p></div>}
+            {(step === "idle" || step === "sim" || step === "done") && <div className="px-5 pb-4"><label htmlFor="motivo-reproceso-directo" className="mb-1 block text-xs font-medium text-gray-600">Motivo del reproceso (obligatorio para ejecutar)</label><input id="motivo-reproceso-directo" value={motivo} maxLength={180} onChange={event => setMotivo(event.target.value)} className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-xs" /><p className="mt-2 text-xs text-gray-500">Revisar compara sin guardar. Puede ejecutar directamente para evitar calcular dos veces. Confirme que dispone de respaldo y que no hay otras operaciones contables en curso.</p></div>}
             <div className="flex justify-end gap-3 border-t border-gray-100 px-5 py-4">
-              <button type="button" onClick={() => setSelected(null)} disabled={step === "running" || step === "simulating"} className="rounded border border-gray-200 px-4 py-2 text-xs text-gray-600 disabled:opacity-40">{step === "done" ? "Cerrar" : "Cancelar"}</button>
-              {(step === "idle" || step === "sim" || step === "done") && <><button type="button" onClick={() => void simulate()} disabled={cargandoPeriodo || anio === null || rangoInvalido} className="rounded bg-[#0073C0] px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">Revisar sin guardar (opcional)</button><button type="button" onClick={() => void execute()} disabled={cargandoPeriodo || anio === null || rangoInvalido || !motivo.trim() || (step === "sim" && !resultado?.puedeEjecutar)} className="rounded bg-red-600 px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">Confirmar y ejecutar</button></>}
+              <button type="button" onClick={() => setSelected(null)} disabled={step === "running" || step === "simulating"} className="rounded-xl border border-gray-200 px-4 py-2 text-xs text-gray-600 disabled:opacity-40">{step === "done" ? "Cerrar" : "Cancelar"}</button>
+              {(step === "idle" || step === "sim" || step === "done") && <><button type="button" onClick={() => void simulate()} disabled={cargandoPeriodo || anio === null || rangoInvalido} className="px-4 py-2 text-xs font-medium text-white btn-fx">Revisar sin guardar (opcional)</button><button type="button" onClick={() => void execute()} disabled={cargandoPeriodo || anio === null || rangoInvalido || !motivo.trim() || (step === "sim" && !resultado?.puedeEjecutar)} className="px-4 py-2 text-xs rounded-xl border border-[#B42318] bg-white text-[#B42318] hover:bg-[#FDECEC] font-medium">Confirmar y ejecutar</button></>}
             </div>
           </div>
         </div>

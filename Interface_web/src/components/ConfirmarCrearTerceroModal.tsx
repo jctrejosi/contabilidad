@@ -18,10 +18,10 @@ export default function ConfirmarCrearTerceroModal({ termino, onCancel, onConfir
     role="dialog"
     aria-modal="true"
     aria-labelledby="confirmar-tercero-titulo"
-    className="fixed inset-0 z-[75] flex items-center justify-center bg-black/45 p-4"
+    className="fixed inset-0 z-[75] flex items-center justify-center bg-[#002D49]/45 p-4"
     onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}
   >
-    <div className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-2xl">
+    <div className="w-full max-w-md overflow-hidden rounded-[20px] bg-white shadow-2xl">
       <div className="flex gap-3 px-5 pb-3 pt-5">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xl text-amber-700">!</div>
         <div>
@@ -33,8 +33,8 @@ export default function ConfirmarCrearTerceroModal({ termino, onCancel, onConfir
         </div>
       </div>
       <div className="flex justify-end gap-2 border-t bg-gray-50 px-5 py-4">
-        <button type="button" onClick={onCancel} className="rounded border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Volver a buscar</button>
-        <button autoFocus type="button" onClick={onConfirm} className="rounded bg-petroleum-500 px-4 py-2 text-sm font-medium text-white hover:bg-petroleum-600">Crear tercero</button>
+        <button type="button" onClick={onCancel} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Volver a buscar</button>
+        <button autoFocus type="button" onClick={onConfirm} className="rounded bg-petroleum-500 px-4 py-2 text-sm font-medium text-white btn-fx">Crear tercero</button>
       </div>
     </div>
   </div>;

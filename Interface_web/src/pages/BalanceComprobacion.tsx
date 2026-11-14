@@ -99,14 +99,14 @@ export default function BalanceComprobacion({ cia }: Props) {
     <div className="p-4 space-y-4 max-w-screen-2xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-base font-semibold text-gray-800">Balance de comprobación</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Balance de comprobación</h1>
           <p className="text-xs text-gray-500">Estado de resultados y balance acumulado por cuenta y rango de meses.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => exportar('pdf')}
             disabled={!balance || cargando}
-            className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Imprimir
           </button>
@@ -114,13 +114,12 @@ export default function BalanceComprobacion({ cia }: Props) {
             <button
               onClick={() => setShowExport(v => !v)}
               disabled={!balance || cargando}
-              className="text-xs px-3 py-1.5 rounded text-white font-medium flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ backgroundColor: '#0073C0' }}
+              className="text-xs px-3 py-1.5 text-white font-medium flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-60 btn-fx"
             >
               Exportar
             </button>
             {showExport && (
-              <div className="absolute right-0 top-9 bg-white rounded border border-gray-200 shadow-lg z-20 py-1 w-36">
+              <div className="absolute right-0 top-9 bg-white rounded-[18px] border border-gray-200 shadow-lg z-20 py-1 w-36">
                 {(['pdf', 'xlsx'] as const).map(formato => (
                   <button
                     key={formato}
@@ -140,7 +139,7 @@ export default function BalanceComprobacion({ cia }: Props) {
 
       {/* Parameters */}
       {formulario && (
-        <div className="bg-white rounded border border-gray-200 p-4">
+        <div className="bg-white rounded-[18px] border border-gray-200 p-4">
           <h2 className="text-xs font-semibold text-gray-700 mb-3">Parámetros del informe</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
@@ -148,7 +147,7 @@ export default function BalanceComprobacion({ cia }: Props) {
               <select
                 value={formulario.mesDesde}
                 onChange={e => setFormulario({ ...formulario, mesDesde: Number(e.target.value) })}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
+                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1"
               >
                 {PERIODOS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
@@ -158,7 +157,7 @@ export default function BalanceComprobacion({ cia }: Props) {
               <select
                 value={formulario.mesHasta}
                 onChange={e => setFormulario({ ...formulario, mesHasta: Number(e.target.value) })}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
+                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1"
               >
                 {PERIODOS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
               </select>
@@ -168,7 +167,7 @@ export default function BalanceComprobacion({ cia }: Props) {
               <select
                 value={formulario.nivel}
                 onChange={e => setFormulario({ ...formulario, nivel: Number(e.target.value) as 4 | 6 | 9 | 12 })}
-                className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1"
+                className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1"
               >
                 <option value={4}>Cuenta</option>
                 <option value={6}>Subcuenta</option>
@@ -193,8 +192,8 @@ export default function BalanceComprobacion({ cia }: Props) {
             <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={formulario.incluirCentros} onChange={e => setFormulario({ ...formulario, incluirCentros: e.target.checked })} />Incluir centros de costo</label>
           </div>
           {(formulario.incluirTerceros || formulario.incluirCentros) && <div className="flex gap-3 mt-3">
-            <input aria-label="Detalle: cuenta desde" placeholder="Detalle: cuenta desde" value={formulario.detalleCuentaDesde} onChange={e => setFormulario({ ...formulario, detalleCuentaDesde: e.target.value })} className="border rounded px-2 py-1 text-xs" />
-            <input aria-label="Detalle: cuenta hasta" placeholder="Detalle: cuenta hasta" value={formulario.detalleCuentaHasta} onChange={e => setFormulario({ ...formulario, detalleCuentaHasta: e.target.value })} className="border rounded px-2 py-1 text-xs" />
+            <input aria-label="Detalle: cuenta desde" placeholder="Detalle: cuenta desde" value={formulario.detalleCuentaDesde} onChange={e => setFormulario({ ...formulario, detalleCuentaDesde: e.target.value })} className="border rounded-lg px-2 py-1 text-xs" />
+            <input aria-label="Detalle: cuenta hasta" placeholder="Detalle: cuenta hasta" value={formulario.detalleCuentaHasta} onChange={e => setFormulario({ ...formulario, detalleCuentaHasta: e.target.value })} className="border rounded-lg px-2 py-1 text-xs" />
           </div>}
           <div className="mt-3">
             <button
@@ -218,8 +217,7 @@ export default function BalanceComprobacion({ cia }: Props) {
                 });
               }}
               disabled={cargando || anioOperacion === null}
-              className="text-xs px-3 py-1.5 rounded text-white font-medium disabled:cursor-wait disabled:opacity-60"
-              style={{ backgroundColor: '#0073C0' }}
+              className="text-xs px-3 py-1.5 text-white font-medium disabled:cursor-wait disabled:opacity-60 btn-fx"
             >
               {cargando ? 'Consultando…' : 'Generar'}
             </button>
@@ -228,7 +226,7 @@ export default function BalanceComprobacion({ cia }: Props) {
       )}
 
       {/* Report */}
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
           <div className="text-center space-y-0.5">
             <div className="text-sm font-bold text-gray-800">BALANCE DE COMPROBACIÓN ACUMULADO</div>

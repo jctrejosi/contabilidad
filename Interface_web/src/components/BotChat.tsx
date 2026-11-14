@@ -368,13 +368,13 @@ export default function BotChat({ compania, periodo, usuario }: BotChatProps) {
                     onChange={event => setInput(event.target.value)}
                     placeholder="Escribe tu pregunta contable..."
                     className="flex-1 text-sm px-3.5 py-2.5 rounded-xl bg-gray-100 focus:outline-none focus:ring-2"
-                    style={{ '--tw-ring-color': '#0073C0' } as React.CSSProperties}
+                    style={{ '--tw-ring-color': '#0F70FC' } as React.CSSProperties}
                   />
                   <button
                     type="submit"
                     disabled={loading || !input.trim()}
                     aria-label="Enviar"
-                    className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-40 transition-colors shrink-0 bg-petroleum-500 text-white"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center disabled:opacity-40 transition-colors shrink-0 bg-petroleum-500 text-white btn-fx"
                   >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M3.4 20.4l17.45-7.48a1 1 0 0 0 0-1.84L3.4 3.6a.993.993 0 0 0-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z" />

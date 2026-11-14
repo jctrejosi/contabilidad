@@ -689,9 +689,9 @@ function VistaPrevia({ preview, onClose }: { preview: PreviewState; onClose: () 
           </div>
           {datos.nota && <div className="text-xs text-gray-400">{datos.nota}</div>}
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setPagina(p => Math.max(0, p - 1))} disabled={pagina === 0} className="text-xs px-2.5 py-1 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-40">‹ Anterior</button>
+            <button type="button" onClick={() => setPagina(p => Math.max(0, p - 1))} disabled={pagina === 0} className="text-xs px-2.5 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40">‹ Anterior</button>
             <span className="text-xs text-gray-600 font-mono">Página {pagina + 1} de {paginas}</span>
-            <button type="button" onClick={() => setPagina(p => Math.min(paginas - 1, p + 1))} disabled={pagina >= paginas - 1} className="text-xs px-2.5 py-1 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-40">Siguiente ›</button>
+            <button type="button" onClick={() => setPagina(p => Math.min(paginas - 1, p + 1))} disabled={pagina >= paginas - 1} className="text-xs px-2.5 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-40">Siguiente ›</button>
           </div>
         </div>
       </div>
@@ -1052,7 +1052,7 @@ export default function Informes({ onNavigate, cia }: Props) {
   // parámetros. La estrella sigue siendo una acción independiente del informe.
   function etiquetaInforme(informe: Informe, nombre: string, numero?: string): ReactNode {
     return (
-      <div key={informe.id} className="flex h-20 w-full min-w-0 items-center rounded-md border border-gray-200 bg-white transition hover:border-petroleum-300 hover:bg-petroleum-50/60">
+      <div key={informe.id} className="flex h-20 w-full min-w-0 items-center rounded-[18px] border border-gray-200 bg-white transition hover:border-petroleum-300 hover:bg-petroleum-50/60">
         <button type="button" disabled={generando} onClick={() => abrirInforme(informe)} title={`${nombre} — ${informe.desc}`} className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-4 py-2 text-left text-sm font-medium text-gray-700 hover:text-petroleum-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 disabled:opacity-50">
           {numero && <span className="shrink-0 font-mono font-semibold text-petroleum-700">{numero}-</span>}
           <span className="line-clamp-3 break-words leading-5">{nombre}</span>
@@ -1088,7 +1088,7 @@ export default function Informes({ onNavigate, cia }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Informes / Centro de informes</div>
-          <h1 className="text-lg font-semibold text-gray-800">Centro de informes</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Centro de informes</h1>
           <p className="mt-1 text-xs text-gray-500">Seleccione una etiqueta para abrir el informe o desplegar sus opciones.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Informes contables</span>
@@ -1105,7 +1105,7 @@ export default function Informes({ onNavigate, cia }: Props) {
       {showRetAnalisis && anioOperacion !== null && <RetencionesAnalisis cia={cia} anio={anioOperacion} onClose={() => setShowRetAnalisis(false)} />}
 
       {/* Búsqueda transversal y accesos frecuentes */}
-      {!showIvaAnalisis && !showRetAnalisis && <div className="bg-white rounded border border-gray-200 p-3 space-y-2.5">
+      {!showIvaAnalisis && !showRetAnalisis && <div className="bg-white rounded-[18px] border border-gray-200 p-3 space-y-2.5">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 max-w-lg">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400">⌕</span>
@@ -1114,7 +1114,7 @@ export default function Informes({ onNavigate, cia }: Props) {
               onChange={e => setSearchInforme(e.target.value)}
               placeholder="Buscar informe por nombre o número..."
               aria-label="Buscar informe"
-              className="w-full pl-7 pr-3 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-petroleum-500"
+              className="w-full pl-7 pr-3 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-petroleum-500"
             />
           </div>
           <span className="text-xs text-gray-500">{MENU_INFORMES.length} opciones principales · {allInformes.length} informes disponibles</span>
@@ -1150,7 +1150,7 @@ export default function Informes({ onNavigate, cia }: Props) {
 
       {/* Resultados de búsqueda */}
       {!showFlowDefinitions && !showIvaAnalisis && !showRetAnalisis && searchInforme && (
-        <div className="bg-white rounded border border-gray-200">
+        <div className="bg-white rounded-[18px] border border-gray-200">
           <div className="px-4 py-2.5 border-b border-gray-100 text-xs text-gray-500">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</div>
           <div className={`${REPORT_TAG_GRID} p-4`}>{filtered.map(inf => etiquetaInforme(inf, `${inf.ruta} · ${inf.nombre}`))}</div>
           {filtered.length === 0 && <div className="px-4 py-6 text-center text-xs text-gray-400">Sin resultados para la búsqueda.</div>}
@@ -1159,7 +1159,7 @@ export default function Informes({ onNavigate, cia }: Props) {
 
       {/* Numeración y jerarquía literal del menú Harbour MENU_INFOR. */}
       {!showFlowDefinitions && !showIvaAnalisis && !showRetAnalisis && !searchInforme && (
-        <section className="space-y-4 rounded border border-gray-200 bg-white p-4" aria-label="Informes del 1 al R">
+        <section className="space-y-4 rounded-[18px] border border-gray-200 bg-white p-4" aria-label="Informes del 1 al R">
           <div className={REPORT_TAG_GRID}>
             {entradasVisibles.map(entry => entry.opciones ? (
               <button key={entry.numero} type="button" title={entry.nombre} aria-expanded={submenuInforme === entry.numero} aria-controls="submenu-informes" onClick={() => setSubmenuInforme(previous => previous === entry.numero ? null : entry.numero)} className={`flex h-20 w-full min-w-0 items-center gap-2 rounded-md border px-4 py-2 text-left text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-petroleum-500 ${submenuInforme === entry.numero ? 'border-petroleum-500 bg-petroleum-500 text-white' : 'border-petroleum-100 bg-petroleum-50 text-petroleum-700 hover:border-petroleum-300 hover:bg-petroleum-100'}`}>

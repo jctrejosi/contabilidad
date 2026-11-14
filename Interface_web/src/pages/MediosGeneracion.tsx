@@ -103,7 +103,7 @@ export default function MediosGeneracion({ cia }: { cia: string }) {
     <div className="max-w-4xl space-y-5 p-4">
       <header>
         <p className="text-xs text-gray-500">Medios magnéticos / Generación</p>
-        <h1 className="text-lg font-semibold text-gray-800">Generar medios</h1>
+        <h1 className="text-2xl font-semibold text-[#002D49]">Generar medios</h1>
         <p className="mt-1 text-sm text-slate-600">
           Medios anuales de la compañía seleccionada.
         </p>
@@ -118,22 +118,22 @@ export default function MediosGeneracion({ cia }: { cia: string }) {
       )}
       {estado && (
         <div className="grid gap-3 sm:grid-cols-4">
-          <div className="rounded border border-gray-200 bg-white p-3 text-sm">
+          <div className="rounded-[18px] border border-gray-200 bg-white p-3 text-sm">
             Año activo
             <br />
             <strong className="text-lg">{estado.anio}</strong>
           </div>
-          <div className="rounded border border-gray-200 bg-white p-3 text-sm">
+          <div className="rounded-[18px] border border-gray-200 bg-white p-3 text-sm">
             Asignaciones
             <br />
             <strong className="text-lg">{estado.asignaciones}</strong>
           </div>
-          <div className="rounded border border-gray-200 bg-white p-3 text-sm">
+          <div className="rounded-[18px] border border-gray-200 bg-white p-3 text-sm">
             Partidas actuales
             <br />
             <strong className="text-lg">{estado.partidas}</strong>
           </div>
-          <div className="rounded border border-gray-200 bg-white p-3 text-sm">
+          <div className="rounded-[18px] border border-gray-200 bg-white p-3 text-sm">
             Acumulados actuales
             <br />
             <strong className="text-lg">{estado.acumulados}</strong>
@@ -156,7 +156,7 @@ export default function MediosGeneracion({ cia }: { cia: string }) {
             <select
               autoFocus
               disabled={ocupado}
-              className="mt-1 block rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-petroleum-500"
+              className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-petroleum-500"
               value={inicial}
               onChange={(e) => setInicial(Number(e.target.value))}
             >
@@ -171,7 +171,7 @@ export default function MediosGeneracion({ cia }: { cia: string }) {
             Mes final
             <select
               disabled={ocupado}
-              className="mt-1 block rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-petroleum-500"
+              className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-petroleum-500"
               value={final}
               onChange={(e) => setFinal(Number(e.target.value))}
             >
@@ -191,7 +191,7 @@ export default function MediosGeneracion({ cia }: { cia: string }) {
         <button
           type="submit"
           disabled={ocupado || !estado || !estado.asignaciones}
-          className="mt-5 rounded bg-petroleum-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="mt-5 rounded bg-petroleum-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 btn-fx"
         >
           {ocupado ? "Generando…" : "Generar medios"}
         </button>
@@ -214,9 +214,9 @@ export default function MediosGeneracion({ cia }: { cia: string }) {
           onKeyDown={(event) => {
             if (event.key === "Escape") setConfirmar(false)
           }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45 p-4"
         >
-          <div className="max-w-md rounded bg-white p-6 shadow-xl">
+          <div className="max-w-md rounded-[20px] bg-white p-6 shadow-xl">
             <h2 className="text-base font-semibold">Confirmar generación</h2>
             <p className="mt-2 text-sm">
               Se reemplazarán los resultados actuales de la compañía {cia} por
@@ -228,13 +228,13 @@ export default function MediosGeneracion({ cia }: { cia: string }) {
               <button
                 autoFocus
                 onClick={() => setConfirmar(false)}
-                className="rounded border border-gray-300 px-4 py-2 text-sm"
+                className="rounded-xl border border-gray-300 px-4 py-2 text-sm"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => void generar()}
-                className="rounded bg-petroleum-500 px-4 py-2 text-sm text-white"
+                className="rounded bg-petroleum-500 px-4 py-2 text-sm text-white btn-fx"
               >
                 Sí, generar
               </button>

@@ -19,7 +19,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     return () => dialog?.close();
   }, []);
   return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-[20px] border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-[#002D49]/45">
       <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
         <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
@@ -157,7 +157,7 @@ export default function ParametrosOperacion({ cia, onExit }: { cia: string; onEx
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Parámetros</div>
-          <h1 className="text-lg font-semibold text-gray-800">Parámetros de operación</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Parámetros de operación</h1>
         </div>
       </div>
 
@@ -186,7 +186,7 @@ export default function ParametrosOperacion({ cia, onExit }: { cia: string; onEx
                 <div className="flex items-start gap-2">
                   <input id="param-directorioContabilidad" className={`${INPUT} font-mono`} value={form.directorioContabilidad} onChange={e => update('directorioContabilidad', e.target.value)}
                     aria-invalid={!!errores.directorioContabilidad} aria-describedby="directory-help" />
-                  <button type="button" title="Seleccionar directorio" aria-label="Seleccionar directorio" onClick={() => { setRuta(form.directorioContabilidad); setErrorRuta(''); setShowDirectory(true); }} className="shrink-0 rounded border border-gray-300 p-1.5 text-petroleum-600 hover:bg-petroleum-50">
+                  <button type="button" title="Seleccionar directorio" aria-label="Seleccionar directorio" onClick={() => { setRuta(form.directorioContabilidad); setErrorRuta(''); setShowDirectory(true); }} className="shrink-0 rounded-lg border border-gray-300 p-1.5 text-petroleum-600 hover:bg-petroleum-50">
                     <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v2M3 7h16a2 2 0 0 1 2 2l-2 10H3L1 9a2 2 0 0 1 2-2Z" /></svg>
                   </button>
                 </div>

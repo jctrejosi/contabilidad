@@ -6,7 +6,7 @@ import { confirmarExtraccion, previsualizarExtraccion, type ModoExtraccion, type
 import type { CompaniaSesion } from '../types';
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-const INPUT = 'w-full rounded border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-800 outline-none focus:border-[#0073C0]';
+const INPUT = 'w-full rounded border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-800 outline-none focus:border-[#0F70FC]';
 
 export default function ExtraerMovimiento({ compania, onClose }: { compania: CompaniaSesion; onClose: () => void }) {
   const [anio, setAnio] = useState<number | null>(null);
@@ -71,8 +71,8 @@ export default function ExtraerMovimiento({ compania, onClose }: { compania: Com
   const money = (value: number) => value.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45 p-3">
+      <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-y-auto rounded-[20px] bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-gray-200 px-5 py-4">
           <div><h2 className="text-sm font-semibold text-gray-800">Extractar movimiento</h2><p className="mt-1 text-xs text-gray-500">Traslada partidas contabilizadas a un lote nuevo para revisión o corrección.</p></div>
           <button type="button" onClick={onClose} disabled={cargando} className="text-lg text-gray-400 disabled:opacity-40">×</button>
@@ -101,9 +101,9 @@ export default function ExtraerMovimiento({ compania, onClose }: { compania: Com
           </div>}
         </div>
         <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
-          <button type="button" onClick={onClose} disabled={cargando} className="rounded border border-gray-200 px-4 py-2 text-xs disabled:opacity-40">Cerrar</button>
-          {!completado && <button type="button" onClick={() => void preview()} disabled={cargando || anio === null || lote.trim().length !== 4} className="rounded bg-[#0073C0] px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">{cargando ? 'Procesando…' : 'Vista previa'}</button>}
-          {resumen && !completado && <button type="button" onClick={() => void confirm()} disabled={cargando || confirmacion !== 'EXTRACTAR' || motivo.trim().length < 5} className="rounded bg-red-600 px-4 py-2 text-xs font-medium text-white disabled:bg-gray-300">Confirmar extracción</button>}
+          <button type="button" onClick={onClose} disabled={cargando} className="rounded-xl border border-gray-200 px-4 py-2 text-xs disabled:opacity-40">Cerrar</button>
+          {!completado && <button type="button" onClick={() => void preview()} disabled={cargando || anio === null || lote.trim().length !== 4} className="px-4 py-2 text-xs font-medium text-white btn-fx">{cargando ? 'Procesando…' : 'Vista previa'}</button>}
+          {resumen && !completado && <button type="button" onClick={() => void confirm()} disabled={cargando || confirmacion !== 'EXTRACTAR' || motivo.trim().length < 5} className="px-4 py-2 text-xs rounded-xl border border-[#B42318] bg-white text-[#B42318] hover:bg-[#FDECEC] font-medium">Confirmar extracción</button>}
         </div>
       </div>
     </div>

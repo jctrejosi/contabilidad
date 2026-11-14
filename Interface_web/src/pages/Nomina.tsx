@@ -66,7 +66,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     return () => dialog?.close();
   }, []);
   return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-[20px] border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-[#002D49]/45">
       <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
         <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
@@ -143,7 +143,7 @@ export default function Nomina({ onNavigate, onCrearLote }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Movimientos / Nómina</div>
-          <h1 className="text-lg font-semibold text-gray-800">Integración de nómina</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Integración de nómina</h1>
           <p className="mt-1 text-xs text-gray-500">Nómina, aportes y provisiones con flujo separado por tipo y generación de lote para validación.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
@@ -165,7 +165,7 @@ export default function Nomina({ onNavigate, onCrearLote }: Props) {
         ))}
       </div>
 
-      <div className="bg-white rounded border border-gray-200 p-4">
+      <div className="bg-white rounded-[18px] border border-gray-200 p-4">
         <fieldset className="rounded-md border border-gray-200 px-3 pb-3">
           <legend className="px-2 text-xs font-semibold text-petroleum-800">Parámetros del flujo {TAB_META[tab].label}</legend>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -205,7 +205,7 @@ export default function Nomina({ onNavigate, onCrearLote }: Props) {
         </fieldset>
       </div>
 
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <div className="text-xs font-semibold text-gray-700">Líneas de ejemplo — {TAB_META[tab].label} ({documento})</div>
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${totalDeb === totalCred ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

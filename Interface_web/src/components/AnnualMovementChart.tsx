@@ -32,12 +32,12 @@ export default function AnnualMovementChart({ id, label, year, months, filterLab
         <div className="overflow-x-auto"><svg viewBox="0 0 960 250" className="min-w-[640px] w-full" role="img" aria-label="Evolución mensual del saldo acumulado">
           {[0, 0.25, 0.5, 0.75, 1].map(fraction => {
             const value = minimum + span * fraction;
-            return <g key={fraction}><line x1="55" x2="920" y1={y(value)} y2={y(value)} stroke="#e5e7eb" strokeWidth="1" /><text x="50" y={y(value) + 4} textAnchor="end" fill="#6b7280" fontSize="11">{compact.format(value)}</text></g>;
+            return <g key={fraction}><line x1="55" x2="920" y1={y(value)} y2={y(value)} stroke="#E6E9EC" strokeWidth="1" /><text x="50" y={y(value) + 4} textAnchor="end" fill="#8A97A3" fontSize="11">{compact.format(value)}</text></g>;
           })}
-          <path d={line} fill="none" stroke="#0073C0" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={line} fill="none" stroke="#0F70FC" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
           {months.map((month, index) => <g key={month.mes}>
-            <circle cx={x(index)} cy={y(month.saldoAcumulado)} r="5" fill="#0073C0"><title>{`${MONTHS[month.mes - 1]}: ${money(month.saldoAcumulado)}`}</title></circle>
-            <text x={x(index)} y="239" textAnchor="middle" fill="#4b5563" fontSize="11">{MONTHS[month.mes - 1].slice(0, 3)}</text>
+            <circle cx={x(index)} cy={y(month.saldoAcumulado)} r="5" fill="#0F70FC"><title>{`${MONTHS[month.mes - 1]}: ${money(month.saldoAcumulado)}`}</title></circle>
+            <text x={x(index)} y="239" textAnchor="middle" fill="#8A97A3" fontSize="11">{MONTHS[month.mes - 1].slice(0, 3)}</text>
           </g>)}
         </svg></div>
       </div>
@@ -45,18 +45,18 @@ export default function AnnualMovementChart({ id, label, year, months, filterLab
       <div className="min-w-0 rounded border border-gray-200 p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-xs font-semibold text-gray-700">Débitos y créditos por mes</h3>
-          <div className="flex gap-3 text-xs text-gray-600"><span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-petroleum-500" />Débitos</span><span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-[#00B0F2]" />Créditos</span></div>
+          <div className="flex gap-3 text-xs text-gray-600"><span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-petroleum-500" />Débitos</span><span><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-[#33B1FF]" />Créditos</span></div>
         </div>
         {hasMovement ? <div className="overflow-x-auto"><svg viewBox="0 0 960 250" className="min-w-[640px] w-full" role="img" aria-label="Comparación mensual de débitos y créditos">
-          {[0, 0.25, 0.5, 0.75, 1].map(fraction => <g key={fraction}><line x1="55" x2="920" y1={210 - fraction * 170} y2={210 - fraction * 170} stroke="#e5e7eb" strokeWidth="1" /><text x="50" y={214 - fraction * 170} textAnchor="end" fill="#6b7280" fontSize="11">{compact.format(maxMovement * fraction)}</text></g>)}
+          {[0, 0.25, 0.5, 0.75, 1].map(fraction => <g key={fraction}><line x1="55" x2="920" y1={210 - fraction * 170} y2={210 - fraction * 170} stroke="#E6E9EC" strokeWidth="1" /><text x="50" y={214 - fraction * 170} textAnchor="end" fill="#8A97A3" fontSize="11">{compact.format(maxMovement * fraction)}</text></g>)}
           {months.map((month, index) => {
             const center = x(index);
             const debitHeight = month.debito / maxMovement * 170;
             const creditHeight = month.credito / maxMovement * 170;
             return <g key={month.mes}>
-              <rect x={center - 22} y={210 - debitHeight} width="19" height={debitHeight} rx="2" fill="#0073C0"><title>{`${MONTHS[month.mes - 1]} · Débitos: ${money(month.debito)}`}</title></rect>
-              <rect x={center + 3} y={210 - creditHeight} width="19" height={creditHeight} rx="2" fill="#00B0F2"><title>{`${MONTHS[month.mes - 1]} · Créditos: ${money(month.credito)}`}</title></rect>
-              <text x={center} y="239" textAnchor="middle" fill="#4b5563" fontSize="11">{MONTHS[month.mes - 1].slice(0, 3)}</text>
+              <rect x={center - 22} y={210 - debitHeight} width="19" height={debitHeight} rx="2" fill="#0F70FC"><title>{`${MONTHS[month.mes - 1]} · Débitos: ${money(month.debito)}`}</title></rect>
+              <rect x={center + 3} y={210 - creditHeight} width="19" height={creditHeight} rx="2" fill="#33B1FF"><title>{`${MONTHS[month.mes - 1]} · Créditos: ${money(month.credito)}`}</title></rect>
+              <text x={center} y="239" textAnchor="middle" fill="#8A97A3" fontSize="11">{MONTHS[month.mes - 1].slice(0, 3)}</text>
             </g>;
           })}
         </svg></div> : <p className="py-8 text-center text-xs text-gray-500">La cuenta no tiene débitos ni créditos en este ejercicio.</p>}

@@ -69,14 +69,14 @@ export default function Bitacora() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Administración / Bitácora</div>
-          <h1 className="text-lg font-semibold text-gray-800">Bitácora de auditoría</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Bitácora de auditoría</h1>
           <p className="mt-1 text-xs text-gray-500">Registro inmutable de las acciones del sistema — usuario, módulo, detalle y resultado.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded border border-gray-200 p-3 space-y-3">
+      <div className="bg-white rounded-[18px] border border-gray-200 p-3 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">⌕</span>
@@ -84,18 +84,18 @@ export default function Bitacora() {
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
               placeholder="Buscar en acción o detalle..."
-              className="w-64 pl-7 pr-3 text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-petroleum-500"
+              className="w-64 pl-7 pr-3 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-petroleum-500"
             />
           </div>
-          <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none">
+          <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none">
             <option value="">Todos los usuarios</option>
             {usuarios.map(u => <option key={u} value={u}>{u}</option>)}
           </select>
-          <select value={filtroModulo} onChange={e => setFiltroModulo(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none">
+          <select value={filtroModulo} onChange={e => setFiltroModulo(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none">
             <option value="">Todos los módulos</option>
             {modulos.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
-          <select value={filtroResultado} onChange={e => setFiltroResultado(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none">
+          <select value={filtroResultado} onChange={e => setFiltroResultado(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none">
             <option value="">Todos los resultados</option>
             <option value="EXITO">EXITO</option>
             <option value="FALLO">FALLO</option>
@@ -106,7 +106,7 @@ export default function Bitacora() {
             type="button"
             onClick={exportarXLSX}
             disabled={exportando}
-            className="text-xs px-3 py-1.5 rounded bg-petroleum-500 text-white font-medium hover:bg-petroleum-600 disabled:opacity-60"
+            className="text-xs px-3 py-1.5 rounded bg-petroleum-500 text-white font-medium disabled:opacity-60 btn-fx"
           >
             {exportando ? '⏳ Generando…' : '↓ Exportar XLSX'}
           </button>
@@ -117,7 +117,7 @@ export default function Bitacora() {
       {mensaje && <div role="status" className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{mensaje}</div>}
 
       {/* Grilla */}
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
         <div className="table-fixed-header overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-gray-50 border-b border-gray-200">

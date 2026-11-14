@@ -176,8 +176,8 @@ export default function TerceroMantenimiento({ nit, onClose, onSaved }: Props) {
     </label>;
   }
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3" role="dialog" aria-modal="true" aria-label={nit ? 'Modificar tercero' : 'Crear tercero'}>
-    <div className="flex max-h-[94vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-2xl">
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45 p-3" role="dialog" aria-modal="true" aria-label={nit ? 'Modificar tercero' : 'Crear tercero'}>
+    <div className="flex max-h-[94vh] w-full max-w-5xl flex-col rounded-[20px] bg-white shadow-2xl">
       <header className="flex items-center justify-between border-b px-5 py-4"><div><h2 className="text-base font-semibold text-gray-800">{nit ? `Modificar tercero ${nit}` : 'Crear tercero'}</h2><p className="text-xs text-gray-500">Ficha completa del tercero</p></div><button onClick={onClose} className="text-xl text-gray-400" aria-label="Cerrar">×</button></header>
       {error && <div role="alert" className="mx-5 mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>}
       {!form ? <div className="p-8 text-center text-sm text-gray-500">Cargando ficha…</div> : <>

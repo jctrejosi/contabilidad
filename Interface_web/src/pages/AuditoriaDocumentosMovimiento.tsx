@@ -59,8 +59,8 @@ export default function AuditoriaDocumentosMovimiento({ compania, onClose }: { c
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-      <div className="flex max-h-[94vh] w-full max-w-6xl flex-col rounded-lg bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45 p-3">
+      <div className="flex max-h-[94vh] w-full max-w-6xl flex-col rounded-[20px] bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-gray-200 px-5 py-4">
           <div>
             <h2 className="text-sm font-semibold text-gray-800">Análisis de documentos y movimiento mensual</h2>
@@ -72,14 +72,14 @@ export default function AuditoriaDocumentosMovimiento({ compania, onClose }: { c
           <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-4">
             <div><span className="block text-gray-500">Compañía</span><strong>{compania.codigo} — {compania.nombre}</strong></div>
             <label className="block text-gray-600">Año
-              <input type="number" min="1900" max="2100" value={anio ?? ''} onChange={event => { setAnio(Number(event.target.value)); setResultado(null); }} className="mt-1 w-full rounded border border-gray-200 px-2 py-1.5" />
+              <input type="number" min="1900" max="2100" value={anio ?? ''} onChange={event => { setAnio(Number(event.target.value)); setResultado(null); }} className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5" />
             </label>
             <label className="block text-gray-600">Mes
-              <select value={mes} onChange={event => { setMes(Number(event.target.value)); setResultado(null); }} className="mt-1 w-full rounded border border-gray-200 px-2 py-1.5">
+              <select value={mes} onChange={event => { setMes(Number(event.target.value)); setResultado(null); }} className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5">
                 {MESES.map((name, index) => <option key={name} value={index + 1}>{String(index + 1).padStart(2, '0')} — {name}</option>)}
               </select>
             </label>
-            <div className="flex items-end"><button type="button" onClick={() => void consultar()} disabled={cargando || anio === null || anio < 1900 || anio > 2100} className="w-full rounded bg-[#0073C0] px-3 py-2 font-medium text-white disabled:bg-gray-300">{cargando ? 'Analizando…' : 'Consultar'}</button></div>
+            <div className="flex items-end"><button type="button" onClick={() => void consultar()} disabled={cargando || anio === null || anio < 1900 || anio > 2100} className="w-full px-3 py-2 font-medium text-white btn-fx">{cargando ? 'Analizando…' : 'Consultar'}</button></div>
           </div>
           {error && <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">{error}</p>}
           {resultado && <>
@@ -91,13 +91,13 @@ export default function AuditoriaDocumentosMovimiento({ compania, onClose }: { c
             </div>
             <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
               <label>Tipo de incidencia
-                <select value={tipo} onChange={event => setTipo(event.target.value)} className="mt-1 w-full rounded border border-gray-200 px-2 py-1.5">
+                <select value={tipo} onChange={event => setTipo(event.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5">
                   <option value="todos">Todas</option>
                   {Object.entries(TIPOS).map(([key, label]) => <option key={key} value={key}>{label} ({resultado.conteos[key] ?? 0})</option>)}
                 </select>
               </label>
               <label>Buscar en el resultado
-                <input value={busqueda} onChange={event => setBusqueda(event.target.value)} placeholder="Documento, cuenta, tercero, centro…" className="mt-1 w-full rounded border border-gray-200 px-2 py-1.5" />
+                <input value={busqueda} onChange={event => setBusqueda(event.target.value)} placeholder="Documento, cuenta, tercero, centro…" className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5" />
               </label>
             </div>
             {incidencias.length === 0 ? <p className="rounded bg-green-50 p-4 text-sm text-green-800">No se encontraron incidencias con estos filtros.</p> :
@@ -115,7 +115,7 @@ export default function AuditoriaDocumentosMovimiento({ compania, onClose }: { c
               </div>}
           </>}
         </div>
-        <div className="flex justify-end border-t border-gray-100 px-5 py-3"><button type="button" onClick={onClose} disabled={cargando} className="rounded border border-gray-200 px-4 py-2 text-xs text-gray-700 disabled:opacity-40">Cerrar</button></div>
+        <div className="flex justify-end border-t border-gray-100 px-5 py-3"><button type="button" onClick={onClose} disabled={cargando} className="rounded-xl border border-gray-200 px-4 py-2 text-xs text-gray-700 disabled:opacity-40">Cerrar</button></div>
       </div>
     </div>
   );

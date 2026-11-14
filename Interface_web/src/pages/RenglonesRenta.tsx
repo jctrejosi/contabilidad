@@ -39,7 +39,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     return () => dialog?.close();
   }, []);
   return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-[20px] border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-[#002D49]/45">
       <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
         <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
@@ -151,7 +151,7 @@ export default function RenglonesRenta() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Renglones de renta</div>
-          <h1 className="text-lg font-semibold text-gray-800">Renglones de renta</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Renglones de renta</h1>
           <p className="mt-1 text-xs text-gray-500">Catálogo de renglones para la declaración de renta y generador con totales por cuenta, orden y vista previa.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
@@ -169,13 +169,13 @@ export default function RenglonesRenta() {
 
       {tab === 'catalogo' && (
         <>
-          <div className="bg-white rounded border border-gray-200 p-3 flex items-center gap-3 flex-wrap">
-            <input type="text" placeholder="Buscar por código, nombre o cuenta..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 w-64" />
-            <button onClick={() => exportarCSV(filtrados)} className="ml-auto text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">↓ Exportar CSV</button>
+          <div className="bg-white rounded-[18px] border border-gray-200 p-3 flex items-center gap-3 flex-wrap">
+            <input type="text" placeholder="Buscar por código, nombre o cuenta..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 w-64" />
+            <button onClick={() => exportarCSV(filtrados)} className="ml-auto text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">↓ Exportar CSV</button>
             <button onClick={abrirCrear} className={BUTTON_PRIMARY}>+ Crear renglón</button>
           </div>
 
-          <div className="bg-white rounded border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
             <div className="table-fixed-header overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 border-b border-gray-200">
@@ -223,12 +223,12 @@ export default function RenglonesRenta() {
       {tab === 'generador' && (
         <div className="flex gap-4 items-start">
           <div className="flex-1 min-w-0 space-y-3">
-            <div className="bg-white rounded border border-gray-200 p-3">
+            <div className="bg-white rounded-[18px] border border-gray-200 p-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-sm font-semibold text-petroleum-900">Selección y orden de renglones</span>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => setSeleccion(renglones.map(r => r.codigo))} className="text-xs px-2.5 py-1 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Seleccionar todos</button>
-                  <button onClick={() => setSeleccion([])} className="text-xs px-2.5 py-1 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Quitar todos</button>
+                  <button onClick={() => setSeleccion(renglones.map(r => r.codigo))} className="text-xs px-2.5 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Seleccionar todos</button>
+                  <button onClick={() => setSeleccion([])} className="text-xs px-2.5 py-1 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Quitar todos</button>
                 </div>
               </div>
               <div className="mt-2 divide-y divide-gray-50">
@@ -247,8 +247,8 @@ export default function RenglonesRenta() {
                       </div>
                       <span className="font-mono text-xs text-gray-600 shrink-0">{fmtCOP(totalCuentaRenta(r.cuenta))}</span>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => mover(posicion, -1)} disabled={!activo || posicion === 0} className="px-1.5 py-0.5 text-xs border border-gray-200 rounded text-gray-600 disabled:opacity-40 hover:bg-gray-50" aria-label="Subir">↑</button>
-                        <button onClick={() => mover(posicion, 1)} disabled={!activo || posicion === seleccion.length - 1} className="px-1.5 py-0.5 text-xs border border-gray-200 rounded text-gray-600 disabled:opacity-40 hover:bg-gray-50" aria-label="Bajar">↓</button>
+                        <button onClick={() => mover(posicion, -1)} disabled={!activo || posicion === 0} className="px-1.5 py-0.5 text-xs border border-gray-200 rounded-lg text-gray-600 disabled:opacity-40 hover:bg-gray-50" aria-label="Subir">↑</button>
+                        <button onClick={() => mover(posicion, 1)} disabled={!activo || posicion === seleccion.length - 1} className="px-1.5 py-0.5 text-xs border border-gray-200 rounded-lg text-gray-600 disabled:opacity-40 hover:bg-gray-50" aria-label="Bajar">↓</button>
                       </div>
                     </div>
                   );
@@ -258,7 +258,7 @@ export default function RenglonesRenta() {
           </div>
 
           <div className="w-96 shrink-0 space-y-3">
-            <div className="bg-white rounded border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
                 <div className="text-center space-y-0.5">
                   <div className="text-xs font-bold text-gray-800">VISTA PREVIA — RENGLONES DE RENTA</div>
@@ -381,7 +381,7 @@ export default function RenglonesRenta() {
         <p className="p-5 text-sm text-gray-600">¿Está seguro de eliminar el renglón <span className="font-mono font-semibold text-gray-800">{eliminar.codigo}</span> — {eliminar.nombre}? También se quitará de la selección del generador.</p>
         <div className="flex justify-end gap-2 border-t border-gray-200 p-4">
           <button type="button" data-initial-focus onClick={() => setEliminar(null)} className={BUTTON_SECONDARY}>Cancelar</button>
-          <button type="button" onClick={confirmarEliminar} className="rounded bg-red-600 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">Eliminar</button>
+          <button type="button" onClick={confirmarEliminar} className="px-5 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 rounded-xl border border-[#B42318] bg-white text-[#B42318] hover:bg-[#FDECEC] font-medium">Eliminar</button>
         </div>
       </Modal>}
     </div>

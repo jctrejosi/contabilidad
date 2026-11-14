@@ -113,7 +113,7 @@ export default function RetencionesAnalisis({ cia, anio, onClose }: Props) {
   }
   const periods = certFilters.periodicidad === 'mensual' ? 12 : certFilters.periodicidad === 'bimestral' ? 6 : 1;
 
-  return <section className="rounded border border-gray-200 bg-white p-4 space-y-4" aria-label="Análisis acumulados y certificados de retenciones">
+  return <section className="rounded-[18px] border border-gray-200 bg-white p-4 space-y-4" aria-label="Análisis acumulados y certificados de retenciones">
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-3">
       <div><h2 className="text-base font-semibold text-gray-800">Análisis acumulados y certificados de retenciones</h2>
         <p className="text-xs text-gray-500">Compañía {cia} · Ejercicio {anio}</p></div>

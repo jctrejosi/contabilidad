@@ -244,7 +244,7 @@ export default function Reclasificaciones({ onNavigate, onCrearLote }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Reclasificaciones</div>
-          <h1 className="text-lg font-semibold text-gray-800">Reclasificaciones</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Reclasificaciones</h1>
           <p className="mt-1 text-xs text-gray-500">Reasignación de cuentas, centros y terceros con simulación y generación de lote borrador cuadrado.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
@@ -395,7 +395,7 @@ export default function Reclasificaciones({ onNavigate, onCrearLote }: Props) {
         <div className="flex-1 min-w-0">
           {resultado ? (
             <div className="space-y-3">
-              <div className="bg-white rounded border border-gray-200 p-4">
+              <div className="bg-white rounded-[18px] border border-gray-200 p-4">
                 <div className="text-sm font-semibold text-gray-800">{resultado.nombre}</div>
                 <p className="mt-0.5 text-xs text-gray-500">{resultado.descripcion}</p>
                 <div className="mt-2 flex items-center gap-4 text-xs text-gray-600">
@@ -408,7 +408,7 @@ export default function Reclasificaciones({ onNavigate, onCrearLote }: Props) {
                   )}
                 </div>
               </div>
-              <div className="bg-white rounded border border-gray-200 overflow-hidden">
+              <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
                 <div className="table-fixed-header overflow-x-auto max-h-96">
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 border-b border-gray-200">

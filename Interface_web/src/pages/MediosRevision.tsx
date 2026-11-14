@@ -22,8 +22,8 @@ function avanzar(event: KeyboardEvent<HTMLFormElement>) {
   fields[fields.indexOf(event.target) + (event.shiftKey ? -1 : 1)]?.focus();
 }
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') onClose(); }}>
-    <section role="dialog" aria-modal="true" aria-label={title} className="mx-4 flex max-h-[90vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-xl">
+  return <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#002D49]/45" onKeyDown={e => { e.stopPropagation(); if (e.key === 'Escape') onClose(); }}>
+    <section role="dialog" aria-modal="true" aria-label={title} className="mx-4 flex max-h-[90vh] w-full max-w-5xl flex-col rounded-[20px] bg-white shadow-xl">
       <header className="flex items-center justify-between border-b px-5 py-3"><h2 className="text-sm font-semibold text-gray-800">{title}</h2><button type="button" onClick={onClose} aria-label="Cerrar">×</button></header>
       <div className="space-y-4 overflow-auto p-5">{children}</div>
     </section>
@@ -120,7 +120,7 @@ export default function MediosRevision({ cia }: { cia: string }) {
     if (event.key === 'F5') setReport(true);
     if (event.key === 'F6') setDelivery(true);
   }}>
-    <header><p className="text-xs text-gray-500">Medios magnéticos</p><h1 className="text-lg font-semibold text-gray-800">5. Revisión de medios</h1></header>
+    <header><p className="text-xs text-gray-500">Medios magnéticos</p><h1 className="text-2xl font-semibold text-[#002D49]">5. Revisión de medios</h1></header>
     {!open && errorBox}
     {notice && <p role="status" className="rounded border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">{notice}</p>}
     <form onSubmit={e => { e.preventDefault(); void cargar(); }} onKeyDown={avanzar} className="flex flex-wrap items-end gap-3 rounded border bg-white p-4">
@@ -128,7 +128,7 @@ export default function MediosRevision({ cia }: { cia: string }) {
       <button type="submit" disabled={busy || !formato} className={PRIMARY}>{busy ? 'Procesando…' : 'Consultar'}</button>
       {result && <div className="ml-auto text-right text-xs text-gray-600">{result.items.length} registros<br /><span className="font-semibold">Total Valor 1: {money(result.totalValor1)}</span></div>}
     </form>
-    {result && <section className="space-y-3 rounded border bg-white p-3">
+    {result && <section className="space-y-3 rounded-[18px] border bg-white p-3">
       <div className="flex flex-wrap gap-2">
         <button disabled={busy} className={BUTTON} onClick={() => editar()}>F2 Nuevo</button>
         <button disabled={busy || !selected} className={BUTTON} onClick={() => selected && editar(selected)}>F3 Modificar</button>

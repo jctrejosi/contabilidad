@@ -41,7 +41,7 @@ export default function DocumentoOficial({ cia, compania, clave, onNavigate }: P
   if (!clave) {
     return (
       <div className="p-4 max-w-4xl mx-auto">
-        <div className="bg-white rounded border border-gray-200 p-8 text-center text-xs text-gray-500">
+        <div className="bg-white rounded-[18px] border border-gray-200 p-8 text-center text-xs text-gray-500">
           No hay un documento seleccionado. Abra el documento oficial desde una consulta de documentos.
         </div>
       </div>
@@ -58,14 +58,14 @@ export default function DocumentoOficial({ cia, compania, clave, onNavigate }: P
       </div>
 
       {/* Document header */}
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 flex items-start justify-between border-b border-gray-200" style={{ backgroundColor: '#EFFAFF' }}>
+      <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 flex items-start justify-between border-b border-gray-200" style={{ backgroundColor: '#EEF6FF' }}>
           <div>
             <div className="text-base font-bold text-gray-800">DOCUMENTO CONTABLE OFICIAL</div>
             <div className="text-xs text-gray-600 mt-0.5">{compania.nombre} — NIT {compania.nit}</div>
           </div>
           <div className="text-right">
-            <div className="text-lg font-bold font-mono" style={{ color: '#001F4C' }}>{clave.comprobante}</div>
+            <div className="text-lg font-bold font-mono" style={{ color: '#002D49' }}>{clave.comprobante}</div>
             <div className="text-xs text-gray-500 mt-0.5">{clave.documento}</div>
           </div>
         </div>
@@ -157,13 +157,13 @@ export default function DocumentoOficial({ cia, compania, clave, onNavigate }: P
       </div>
 
       <div className="flex items-center gap-3">
-        <button onClick={() => onNavigate('consultas/mensual')} className="text-xs px-4 py-2 rounded font-medium text-white" style={{ backgroundColor: '#0073C0' }}>
+        <button onClick={() => onNavigate('consultas/mensual')} className="text-xs px-4 py-2 font-medium text-white btn-fx">
           Ir a consulta mensual
         </button>
-        <button onClick={() => onNavigate('informes/estados')} className="text-xs px-4 py-2 rounded border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium">
+        <button onClick={() => onNavigate('informes/estados')} className="text-xs px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 font-medium">
           Balance de comprobación
         </button>
-        <button onClick={() => window.print()} className="text-xs px-4 py-2 rounded border border-gray-200 text-gray-600 hover:bg-gray-50">
+        <button onClick={() => window.print()} className="text-xs px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">
           Imprimir documento
         </button>
       </div>

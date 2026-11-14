@@ -180,17 +180,17 @@ export default function Dashboard({ cia, compania, onNavigate }: DashboardProps)
       <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-petroleum-100 bg-petroleum-50 px-4 py-3">
         <div>
           <div className="text-xs text-petroleum-700">Panel de inicio · Compañía {compania.codigo}</div>
-          <h1 className="text-lg font-semibold text-petroleum-900">{compania.nombre}</h1>
+          <h1 className="text-2xl font-semibold text-petroleum-900">{compania.nombre}</h1>
           <div className="mt-0.5 text-xs text-petroleum-700">Resumen operativo de {periodoTexto}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {periodo && <label className="flex items-center gap-2 text-xs text-gray-700">
             Mes
-            <select aria-label="Mes del panel" value={mes} onChange={event => setMes(Number(event.target.value))} className="rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800">
+            <select aria-label="Mes del panel" value={mes} onChange={event => setMes(Number(event.target.value))} className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-800">
               {MESES.map((nombre, index) => <option key={nombre} value={index + 1}>{nombre}</option>)}
             </select>
           </label>}
-          <button type="button" onClick={() => setRecarga(value => value + 1)} className="rounded border border-petroleum-200 bg-white px-3 py-1.5 text-xs font-medium text-petroleum-700 hover:bg-petroleum-100">
+          <button type="button" onClick={() => setRecarga(value => value + 1)} className="rounded-lg border border-petroleum-200 bg-white px-3 py-1.5 text-xs font-medium text-petroleum-700 hover:bg-petroleum-100">
             Actualizar datos
           </button>
         </div>
@@ -210,11 +210,11 @@ export default function Dashboard({ cia, compania, onNavigate }: DashboardProps)
         <TarjetaIndicador titulo="Lotes con problemas" valor={lotes ? `${conProblema.length}${lotes.hasMore ? '+' : ''}` : '—'} detalle={cargandoLotes ? 'Consultando…' : 'Con errores o descuadrados'} estado={conProblema.length ? 'alerta' : 'positivo'} onClick={() => onNavigate('movimientos/lotes')} />
       </div>
 
-      {!tieneDatos && (cargandoPeriodo || cargandoLotes) && <div className="rounded border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">Preparando el resumen de la compañía…</div>}
+      {!tieneDatos && (cargandoPeriodo || cargandoLotes) && <div className="rounded-[18px] border border-gray-200 bg-white px-4 py-6 text-center text-sm text-gray-500">Preparando el resumen de la compañía…</div>}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <section className="rounded border border-gray-200 bg-white">
+          <section className="rounded-[18px] border border-gray-200 bg-white">
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <div><h2 className="text-sm font-semibold text-gray-800">Lotes que requieren atención</h2><p className="text-xs text-gray-500">Primero los que tienen errores o diferencias</p></div>
               <button type="button" onClick={() => onNavigate('movimientos/lotes')} className="text-xs font-medium text-petroleum-600 hover:underline">Ver lotes</button>
@@ -225,7 +225,7 @@ export default function Dashboard({ cia, compania, onNavigate }: DashboardProps)
             {lotes?.hasMore && <div className="border-t border-gray-100 px-4 py-2 text-xs text-amber-700">Hay más lotes. Los indicadores muestran al menos los primeros 100; abra Lotes para revisar el resto.</div>}
           </section>
 
-          <section className="rounded border border-gray-200 bg-white">
+          <section className="rounded-[18px] border border-gray-200 bg-white">
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <div><h2 className="text-sm font-semibold text-gray-800">Documentos recientes del mes</h2><p className="text-xs text-gray-500">Últimos documentos contabilizados en {periodoTexto.toLowerCase()}</p></div>
               <button type="button" onClick={() => onNavigate('consultas/documentos')} className="text-xs font-medium text-petroleum-600 hover:underline">Consultar documentos</button>
@@ -239,19 +239,19 @@ export default function Dashboard({ cia, compania, onNavigate }: DashboardProps)
         </div>
 
         <div className="space-y-4">
-          <section className="rounded border border-gray-200 bg-white">
+          <section className="rounded-[18px] border border-gray-200 bg-white">
             <div className="border-b border-gray-100 px-4 py-3"><h2 className="text-sm font-semibold text-gray-800">Qué revisar hoy</h2></div>
             <div className="space-y-2 p-3">
-              {conProblema.length > 0 && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className="w-full rounded border border-red-100 bg-red-50 px-3 py-2 text-left text-xs text-red-800 hover:bg-red-100">Revisar {conProblema.length} lote(s) con errores o diferencia</button>}
-              {verificados.length > 0 && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className="w-full rounded border border-blue-100 bg-blue-50 px-3 py-2 text-left text-xs text-blue-800 hover:bg-blue-100">Actualizar {verificados.length} lote(s) verificados</button>}
-              {borradores.length > 0 && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className="w-full rounded border border-amber-100 bg-amber-50 px-3 py-2 text-left text-xs text-amber-800 hover:bg-amber-100">Continuar o verificar {borradores.length} lote(s) en captura</button>}
-              {diferenciaMes !== null && diferenciaMes > 0.005 && <button type="button" onClick={() => onNavigate('consultas/mensual')} className="w-full rounded border border-amber-100 bg-amber-50 px-3 py-2 text-left text-xs text-amber-800 hover:bg-amber-100">Revisar diferencia de {fmtCOP(diferenciaMes)} en el movimiento del mes</button>}
+              {conProblema.length > 0 && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className="w-full rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-left text-xs text-red-800 hover:bg-red-100">Revisar {conProblema.length} lote(s) con errores o diferencia</button>}
+              {verificados.length > 0 && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className="w-full rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-left text-xs text-blue-800 hover:bg-blue-100">Actualizar {verificados.length} lote(s) verificados</button>}
+              {borradores.length > 0 && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className="w-full rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-left text-xs text-amber-800 hover:bg-amber-100">Continuar o verificar {borradores.length} lote(s) en captura</button>}
+              {diferenciaMes !== null && diferenciaMes > 0.005 && <button type="button" onClick={() => onNavigate('consultas/mensual')} className="w-full rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-left text-xs text-amber-800 hover:bg-amber-100">Revisar diferencia de {fmtCOP(diferenciaMes)} en el movimiento del mes</button>}
               {!cargandoLotes && !cargandoMes && !errorLotes && !errorMovimiento && conProblema.length === 0 && verificados.length === 0 && borradores.length === 0 && (diferenciaMes === null || diferenciaMes <= 0.005) && <div className="px-2 py-4 text-center text-xs text-gray-500">No se detectaron pendientes en los datos consultados.</div>}
               {(cargandoLotes || cargandoMes) && <div className="px-2 py-3 text-center text-xs text-gray-500">Revisando pendientes…</div>}
             </div>
           </section>
 
-          <section className="rounded border border-gray-200 bg-white">
+          <section className="rounded-[18px] border border-gray-200 bg-white">
             <div className="border-b border-gray-100 px-4 py-3"><h2 className="text-sm font-semibold text-gray-800">Accesos frecuentes</h2></div>
             <div className="grid grid-cols-2 gap-2 p-3">
               {([
@@ -261,7 +261,7 @@ export default function Dashboard({ cia, compania, onNavigate }: DashboardProps)
                 ['Movimiento mensual', 'consultas/mensual'],
                 ['Plan de cuentas', 'config/plan-cuentas'],
                 ['Informes', 'informes/documentos'],
-              ] as Array<[string, NavPage]>).map(([titulo, destino]) => <button key={destino} type="button" onClick={() => onNavigate(destino)} className="rounded border border-gray-200 px-3 py-2.5 text-left text-xs font-medium text-gray-700 hover:border-petroleum-300 hover:bg-petroleum-50">{titulo}</button>)}
+              ] as Array<[string, NavPage]>).map(([titulo, destino]) => <button key={destino} type="button" onClick={() => onNavigate(destino)} className="rounded-xl border border-gray-200 px-3 py-2.5 text-left text-xs font-medium text-gray-700 hover:border-petroleum-300 hover:bg-petroleum-50">{titulo}</button>)}
             </div>
           </section>
         </div>

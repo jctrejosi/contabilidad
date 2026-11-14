@@ -10,8 +10,8 @@ const BUTTON_PRIMARY = 'rounded bg-petroleum-500 px-5 py-2 text-sm font-medium t
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-2xl w-full max-w-xl mx-4 max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45">
+      <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-xl mx-4 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 shrink-0">
           <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
@@ -299,7 +299,7 @@ export default function TercerosPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Terceros</div>
-          <h1 className="text-lg font-semibold text-gray-800">Terceros</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Terceros</h1>
           <p className="mt-1 text-xs text-gray-500">Directorio de personas naturales y jurídicas vinculadas a la contabilidad</p>
         </div>
         <div className="flex items-center gap-2">
@@ -312,7 +312,7 @@ export default function TercerosPage() {
           <button
             disabled
             title="Requiere actualizar todas las referencias contables del tercero"
-            className="cursor-not-allowed rounded border border-amber-200 bg-white px-4 py-2 text-sm font-medium text-amber-400 opacity-60"
+            className="cursor-not-allowed rounded-xl border border-amber-200 bg-white px-4 py-2 text-sm font-medium text-amber-400 opacity-60"
           >
             ⚠ Reasignar NIT
           </button>
@@ -351,13 +351,13 @@ export default function TercerosPage() {
       {tab === 'directorio' ? (
         <>
           {/* Filters */}
-          <div className="bg-white rounded border border-gray-200 p-3 flex items-center gap-3 flex-wrap">
+          <div className="bg-white rounded-[18px] border border-gray-200 p-3 flex items-center gap-3 flex-wrap">
             <input
               type="text"
               placeholder="Buscar por NIT, nombre o ciudad..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 w-64"
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 w-64"
             />
             {(['todos', 'Activo', 'Bloqueado'] as const).map(e => (
               <button
@@ -368,13 +368,13 @@ export default function TercerosPage() {
                 {e === 'todos' ? 'Todos' : e}
               </button>
             ))}
-            <button onClick={() => window.print()} className="ml-auto text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">⎙ Imprimir</button>
+            <button onClick={() => window.print()} className="ml-auto text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">⎙ Imprimir</button>
           </div>
 
           <div className="flex gap-4">
             {/* Table */}
             <div className="flex-1 min-w-0">
-              <div className="bg-white rounded border border-gray-200 overflow-hidden">
+              <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
                 <div className="table-fixed-header overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 border-b border-gray-200">
@@ -444,8 +444,8 @@ export default function TercerosPage() {
                 <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2 text-xs text-gray-500">
                   <span>Página {pagina} de {totalPaginas} · {filtered.length} de {total.toLocaleString('es-CO')} terceros</span>
                   <div className="flex gap-1">
-                    <button type="button" disabled={cargando || pagina <= 1} onClick={() => setPagina(value => Math.max(1, value - 1))} className="rounded border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
-                    <button type="button" disabled={cargando || pagina >= totalPaginas} onClick={() => setPagina(value => Math.min(totalPaginas, value + 1))} className="rounded border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Siguiente</button>
+                    <button type="button" disabled={cargando || pagina <= 1} onClick={() => setPagina(value => Math.max(1, value - 1))} className="rounded-lg border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
+                    <button type="button" disabled={cargando || pagina >= totalPaginas} onClick={() => setPagina(value => Math.min(totalPaginas, value + 1))} className="rounded-lg border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Siguiente</button>
                   </div>
                 </div>
               </div>
@@ -454,7 +454,7 @@ export default function TercerosPage() {
             {/* Detail */}
             {selected && (
               <div className="w-72 shrink-0">
-                <div className="bg-white rounded border border-gray-200 p-4 space-y-3">
+                <div className="bg-white rounded-[18px] border border-gray-200 p-4 space-y-3">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="font-medium text-gray-800 text-sm">{selected.nombre}</div>
@@ -509,12 +509,12 @@ export default function TercerosPage() {
               </button>
             ))}
             <div className="ml-auto flex items-center gap-2">
-              <button onClick={() => window.print()} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">⎙ Imprimir</button>
-              <button onClick={exportarCSV} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">↓ Exportar XLSX</button>
+              <button onClick={() => window.print()} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">⎙ Imprimir</button>
+              <button onClick={exportarCSV} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">↓ Exportar XLSX</button>
             </div>
           </div>
 
-          <div className="bg-white rounded border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
             <div className="table-fixed-header overflow-x-auto">
               <table className="w-full text-xs">
                 {informe === 'general' && (
@@ -802,7 +802,7 @@ export default function TercerosPage() {
           </p>
           <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-100">
             <button onClick={() => setShowEliminar(false)} className={BUTTON_SECONDARY}>Cancelar</button>
-            <button onClick={confirmarEliminar} className="rounded bg-red-500 px-5 py-2 text-sm font-medium text-white hover:bg-red-600">Eliminar</button>
+            <button onClick={confirmarEliminar} className="px-5 py-2 text-sm rounded-xl border border-[#B42318] bg-white text-[#B42318] hover:bg-[#FDECEC] font-medium">Eliminar</button>
           </div>
         </Modal>
       )}
@@ -880,8 +880,8 @@ export default function TercerosPage() {
 
       {/* NIT Reassignment wizard */}
       {showReasign && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-2xl mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45">
+          <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-2xl mx-4">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200" style={{ backgroundColor: '#FEF3C7' }}>
               <div>
                 <h3 className="text-sm font-semibold text-amber-800">Asistente de reasignación de NIT</h3>
@@ -895,7 +895,7 @@ export default function TercerosPage() {
               {REASIGN_STEPS.map((s, i) => (
                 <div key={s} className="flex items-center shrink-0">
                   <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded ${i === reasignStep ? 'font-semibold text-white' : i < reasignStep ? 'text-green-600' : 'text-gray-400'}`}
-                    style={i === reasignStep ? { backgroundColor: '#0073C0' } : {}}>
+                    style={i === reasignStep ? { backgroundColor: '#0F70FC' } : {}}>
                     <span className={`w-4 h-4 rounded-full flex items-center justify-center ${i < reasignStep ? 'bg-green-100 text-green-700' : i === reasignStep ? 'bg-white/30 text-white' : 'bg-gray-100 text-gray-400'}`}>
                       {i < reasignStep ? '✓' : i + 1}
                     </span>
@@ -911,11 +911,11 @@ export default function TercerosPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">NIT actual</label>
-                    <input value={nitActual} onChange={e => setNitActual(e.target.value)} className="w-full font-mono text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1" />
+                    <input value={nitActual} onChange={e => setNitActual(e.target.value)} className="w-full font-mono text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">NIT nuevo</label>
-                    <input value={nitNuevo} onChange={e => setNitNuevo(e.target.value)} placeholder="NIT de destino" className="w-full font-mono text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1" />
+                    <input value={nitNuevo} onChange={e => setNitNuevo(e.target.value)} placeholder="NIT de destino" className="w-full font-mono text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1" />
                   </div>
                 </div>
               )}
@@ -947,11 +947,11 @@ export default function TercerosPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Motivo de la reasignación (obligatorio)</label>
-                    <input placeholder="Corrección de NIT erróneo registrado en..." className="w-full text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1" />
+                    <input placeholder="Corrección de NIT erróneo registrado en..." className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Escriba REASIGNAR para confirmar</label>
-                    <input placeholder="REASIGNAR" className="w-full font-mono text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1" />
+                    <input placeholder="REASIGNAR" className="w-full font-mono text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1" />
                   </div>
                 </div>
               )}
@@ -960,7 +960,7 @@ export default function TercerosPage() {
                   <div className="text-2xl animate-spin">⟳</div>
                   <div className="text-xs text-gray-600">Procesando reasignación... 847 / 1,847 registros</div>
                   <div className="w-full h-2 bg-gray-100 rounded-full">
-                    <div className="h-full rounded-full" style={{ width: '46%', backgroundColor: '#0073C0' }} />
+                    <div className="h-full rounded-full" style={{ width: '46%', backgroundColor: '#0F70FC' }} />
                   </div>
                 </div>
               )}
@@ -982,15 +982,15 @@ export default function TercerosPage() {
 
             <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-100">
               {reasignStep > 0 && reasignStep < 4 && (
-                <button onClick={() => setReasignStep(s => s - 1)} className="text-xs px-4 py-2 border border-gray-200 rounded text-gray-600">← Atrás</button>
+                <button onClick={() => setReasignStep(s => s - 1)} className="text-xs px-4 py-2 border border-gray-200 rounded-xl text-gray-600">← Atrás</button>
               )}
               {reasignStep < REASIGN_STEPS.length - 1 && (
-                <button onClick={() => setReasignStep(s => s + 1)} className="text-xs px-4 py-2 rounded text-white font-medium" style={{ backgroundColor: '#0073C0' }}>
+                <button onClick={() => setReasignStep(s => s + 1)} className="text-xs px-4 py-2 text-white font-medium btn-fx">
                   {reasignStep === 3 ? 'Ejecutar reasignación' : 'Siguiente →'}
                 </button>
               )}
               {reasignStep === REASIGN_STEPS.length - 1 && (
-                <button onClick={finalizarReasign} className="text-xs px-4 py-2 rounded text-white font-medium" style={{ backgroundColor: '#0073C0' }}>Cerrar</button>
+                <button onClick={finalizarReasign} className="text-xs px-4 py-2 text-white font-medium btn-fx">Cerrar</button>
               )}
             </div>
           </div>

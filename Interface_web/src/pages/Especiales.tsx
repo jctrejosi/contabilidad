@@ -48,9 +48,9 @@ function Opcion({ opcion, hija = false, onExtract }: { opcion: OpcionEspecial; h
   const disponible = opcion.numero === '4–6';
   return (
     <div className={`flex items-center gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0 ${hija ? 'bg-gray-50 pl-10' : ''}`}>
-      <span className="flex h-7 min-w-7 items-center justify-center rounded bg-sky-50 px-1 font-mono text-xs font-semibold text-[#0073C0]">{opcion.numero}</span>
+      <span className="flex h-7 min-w-7 items-center justify-center rounded bg-sky-50 px-1 font-mono text-xs font-semibold text-[#0F70FC]">{opcion.numero}</span>
       <span className="min-w-0 flex-1 text-sm text-gray-800">{opcion.nombre}</span>
-      {disponible ? <button type="button" onClick={onExtract} className="shrink-0 rounded bg-[#0073C0] px-3 py-1.5 text-xs font-medium text-white">Abrir</button>
+      {disponible ? <button type="button" onClick={onExtract} className="shrink-0 px-3 py-1.5 text-xs font-medium text-white btn-fx">Abrir</button>
         : <span className="shrink-0 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-500">Pendiente</span>}
     </div>
   );
@@ -62,10 +62,10 @@ export default function Especiales({ compania }: { compania: CompaniaSesion }) {
     <div className="max-w-screen-xl space-y-4 p-4">
       <div>
         <p className="mb-1 text-xs text-gray-400">Definiciones / Especiales</p>
-        <h1 className="text-lg font-semibold text-gray-800">Especiales</h1>
+        <h1 className="text-2xl font-semibold text-[#002D49]">Especiales</h1>
         <p className="mt-1 text-xs text-gray-500">Opciones del programa original. La extracción reúne comprobante, documentos y movimiento completo.</p>
       </div>
-      <div className="overflow-hidden rounded border border-gray-200 bg-white">
+      <div className="overflow-hidden rounded-[18px] border border-gray-200 bg-white">
         {OPCIONES.map(opcion => (
           <div key={opcion.numero}>
             <Opcion opcion={opcion} onExtract={() => setMostrarExtraccion(true)} />

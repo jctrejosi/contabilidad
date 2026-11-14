@@ -131,7 +131,7 @@ export default function Integraciones() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Administración / Integraciones</div>
-          <h1 className="text-lg font-semibold text-gray-800">Integraciones</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Integraciones</h1>
           <p className="mt-1 text-xs text-gray-500">Conexiones con módulos externos, estado de sincronización y funciones compartidas de referencia.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Datos de demostración</span>
@@ -158,7 +158,7 @@ export default function Integraciones() {
           const probando = busy === `${m.id}:probar`;
           const sincronizando = busy === `${m.id}:sincronizar`;
           return (
-            <div key={m.id} className="bg-white rounded border border-gray-200 p-4 flex flex-col gap-3">
+            <div key={m.id} className="bg-white rounded-[18px] border border-gray-200 p-4 flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2.5">
                   <span className="text-lg">{m.icono}</span>
@@ -181,7 +181,7 @@ export default function Integraciones() {
                   type="button"
                   onClick={() => ejecutar(m, 'probar')}
                   disabled={!!busy}
-                  className="text-xs px-3 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                  className="text-xs px-3 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 disabled:opacity-60"
                 >
                   {probando ? '⏳ Probando…' : 'Probar conexión'}
                 </button>
@@ -189,7 +189,7 @@ export default function Integraciones() {
                   type="button"
                   onClick={() => ejecutar(m, 'sincronizar')}
                   disabled={!!busy || m.estado === 'Bloqueado'}
-                  className="text-xs px-3 py-1.5 rounded bg-petroleum-500 text-white font-medium hover:bg-petroleum-600 disabled:opacity-50"
+                  className="text-xs px-3 py-1.5 rounded bg-petroleum-500 text-white font-medium disabled:opacity-50 btn-fx"
                 >
                   {sincronizando ? '⏳ Sincronizando…' : 'Sincronizar'}
                 </button>
@@ -200,7 +200,7 @@ export default function Integraciones() {
       </div>
 
       {/* Funciones compartidas */}
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
         <button
           type="button"
           onClick={() => setShowCompartidas(v => !v)}

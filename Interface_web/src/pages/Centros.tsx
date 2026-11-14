@@ -99,7 +99,7 @@ export default function Centros({ cia }: CentrosProps) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Centros de costo</div>
-          <h1 className="text-lg font-semibold text-gray-800">Centros de costo</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Centros de costo</h1>
           <p className="mt-1 text-xs text-gray-500">Catálogo CONCECOS de la compañía {cia}. La jerarquía se muestra completa y no se puede contraer.</p>
         </div>
         <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">
@@ -109,14 +109,14 @@ export default function Centros({ cia }: CentrosProps) {
 
       {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="flex flex-wrap items-center gap-3 rounded border border-gray-200 bg-white p-3">
-        <input type="search" aria-label="Buscar centros de costo" placeholder="Buscar por código, nombre o carpeta..." value={busqueda} onChange={event => setBusqueda(event.target.value)} className="w-72 rounded border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1" />
+      <div className="flex flex-wrap items-center gap-3 rounded-[18px] border border-gray-200 bg-white p-3">
+        <input type="search" aria-label="Buscar centros de costo" placeholder="Buscar por código, nombre o carpeta..." value={busqueda} onChange={event => setBusqueda(event.target.value)} className="w-72 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1" />
         <span className="text-xs text-gray-500">{centros.length} centros · {raices} raíces</span>
-        <button type="button" disabled={!centros.length} onClick={() => exportarCSV(ordenados, cia)} className="ml-auto rounded border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar CSV</button>
-        <button type="button" disabled title="Se habilitará después de validar las reglas de escritura en Advantage." className="cursor-not-allowed rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white opacity-50">+ Crear centro</button>
+        <button type="button" disabled={!centros.length} onClick={() => exportarCSV(ordenados, cia)} className="ml-auto rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar CSV</button>
+        <button type="button" disabled title="Se habilitará después de validar las reglas de escritura en Advantage." className="cursor-not-allowed rounded bg-petroleum-500 px-5 py-2 text-sm font-medium text-white opacity-50 btn-fx">+ Crear centro</button>
       </div>
 
-      <div className="overflow-hidden rounded border border-gray-200 bg-white">
+      <div className="overflow-hidden rounded-[18px] border border-gray-200 bg-white">
         <div className="table-fixed-header overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="border-b border-gray-200 bg-gray-50"><tr>

@@ -454,15 +454,14 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
         <span className="text-xs font-semibold text-gray-800">Captura directa</span>
         <div className="flex-1" />
         <div className="flex items-center gap-2">
-          <button disabled={posted || contabilizando || maestrosCargando || !!maestrosError} onClick={() => setShowCargarDoc(true)} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Cargar documento existente</button>
+          <button disabled={posted || contabilizando || maestrosCargando || !!maestrosError} onClick={() => setShowCargarDoc(true)} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Cargar documento existente</button>
           {onCrearLote && (
-            <button onClick={guardarBorrador} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded text-gray-600 hover:bg-gray-50">Guardar borrador</button>
+            <button onClick={guardarBorrador} className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Guardar borrador</button>
           )}
           <button
             disabled={!puedePostear}
             onClick={() => setShowConfirm(true)}
-            className={`text-xs px-3 py-1.5 rounded font-medium text-white transition-colors ${puedePostear ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
-            style={{ backgroundColor: '#0073C0' }}
+            className={`btn-fx text-xs px-3 py-1.5 transition-colors ${puedePostear ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
           >
             F2 Validar / Contabilizar
           </button>
@@ -485,20 +484,20 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Período <span className="font-normal text-gray-400">(CONCTR)</span></label>
             <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
+              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
             <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
               autoFocus data-capture-nav="true"
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1" />
+              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Comprobante <span className="font-normal text-gray-400">(CONTICOM)</span></label>
             <select value={comprobante} onChange={e => setComprobante(e.target.value)}
               data-capture-nav="true"
               disabled={maestrosCargando || comprobantes.length === 0}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1">
+              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1">
               <option value="">{maestrosCargando ? 'Cargando…' : 'Seleccione…'}</option>
               {comprobantes.map(c => (
                 <option key={c.codigo} value={c.codigo}>{c.codigo} — {c.nombre}</option>
@@ -516,7 +515,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
             }}
               data-capture-nav="true"
               disabled={maestrosCargando || tiposDocumento.length === 0}
-              className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1">
+              className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1">
               <option value="">{maestrosCargando ? 'Cargando…' : 'Seleccione…'}</option>
               {tiposDocumento.map(tipo => (
                 <option key={tipo.codigo} value={tipo.codigo}>
@@ -531,14 +530,14 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
               placeholder={tipoDocumentoSeleccionado?.permiteModificarConsecutivo === true ? 'Digite el número' : 'Se asigna al contabilizar'}
               disabled={tipoDocumentoSeleccionado?.permiteModificarConsecutivo !== true}
               data-capture-nav="true"
-              className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 disabled:bg-gray-100 disabled:text-gray-500" />
+              className="w-full font-mono text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 disabled:bg-gray-100 disabled:text-gray-500" />
           </div>
         </div>
         <div className="mt-2">
           <label className="block text-xs font-medium text-gray-600 mb-1">Concepto general</label>
           <input value={concepto} onChange={e => cambiarConceptoGeneral(e.target.value)} placeholder="Descripción del comprobante..."
             data-capture-nav="true"
-            className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 max-w-xl" />
+            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 max-w-xl" />
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
           <span><kbd className="rounded border bg-gray-50 px-1">Enter</kbd> siguiente campo</span>
@@ -594,7 +593,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                           placeholder="código"
                         />
                         {showCuentaPicker === line.id && (
-                          <div className="absolute top-8 left-0 z-20 bg-white border border-gray-200 rounded shadow-lg w-72">
+                          <div className="absolute top-8 left-0 z-20 bg-white border border-gray-200 rounded-[18px] shadow-lg w-72">
                             <div className="border-b bg-gray-50 px-3 py-2 text-[11px] text-gray-500">Digite código o nombre en el campo Cuenta. Use ↑/↓ y confirme con Enter.</div>
                             <div className="max-h-40 overflow-y-auto">
                               {!maestrosCargando && filteredCuentas.length === 0 && <div className="px-3 py-3 text-center text-gray-400">No existe una cuenta afectable que coincida en CONMAE.</div>}
@@ -649,7 +648,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                       >
                         {cuentaLinea?.requiereTercero ? (line.nit ? `${line.nit} — ${line.tercero}` : 'Buscar en FADCLI…') : 'No aplica'}
                       </button>
-                      {showTerceroPicker === line.id && cuentaLinea?.requiereTercero && <div className="absolute left-0 top-8 z-20 w-96 rounded border border-gray-200 bg-white shadow-lg" onClick={event => event.stopPropagation()}>
+                      {showTerceroPicker === line.id && cuentaLinea?.requiereTercero && <div className="absolute left-0 top-8 z-20 w-96 rounded-[18px] border border-gray-200 bg-white shadow-lg" onClick={event => event.stopPropagation()}>
                         <div className="flex gap-2 border-b p-2">
                           <input
                             autoFocus
@@ -670,7 +669,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                             placeholder="NIT o nombre (mínimo 2 caracteres)"
                             className="min-w-0 flex-1 rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none"
                           />
-                          <button type="button" disabled={tercerosCargando} onClick={() => void buscarTerceros()} className="rounded bg-petroleum-500 px-3 py-1 text-xs font-medium text-white disabled:opacity-50">{tercerosCargando ? 'Buscando…' : 'Buscar'}</button>
+                          <button type="button" disabled={tercerosCargando} onClick={() => void buscarTerceros()} className="rounded bg-petroleum-500 px-3 py-1 text-xs font-medium text-white disabled:opacity-50 btn-fx">{tercerosCargando ? 'Buscando…' : 'Buscar'}</button>
                         </div>
                         {tercerosError && <div className="border-b border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">{tercerosError}</div>}
                         <div className="max-h-52 overflow-y-auto">
@@ -712,7 +711,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                         data-line-field="documento"
                         readOnly
                         title="Heredado del número de documento de la cabecera"
-                        className="w-full cursor-default bg-gray-50 font-mono text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1"
+                        className="w-full cursor-default bg-gray-50 font-mono text-xs text-gray-600 border border-gray-200 rounded-lg px-1.5 py-1 focus:outline-none focus:ring-1"
                         value={line.documento}
                         onClick={e => e.stopPropagation()}
                         placeholder="Desde cabecera"
@@ -726,7 +725,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                         inputMode="decimal"
                         disabled={parseCOP(line.credito) > 0}
                         title={parseCOP(line.credito) > 0 ? 'Bloqueado porque esta partida tiene valor crédito' : 'Valor débito de la partida'}
-                        className="w-full font-mono text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 text-right disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                        className="w-full font-mono text-xs border border-gray-200 rounded-lg px-1.5 py-1 focus:outline-none focus:ring-1 text-right disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                         value={line.debito}
                         onChange={e => updateLine(line.id, 'debito', e.target.value)}
                         onClick={e => e.stopPropagation()}
@@ -741,7 +740,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                         inputMode="decimal"
                         disabled={parseCOP(line.debito) > 0}
                         title={parseCOP(line.debito) > 0 ? 'Bloqueado porque esta partida tiene valor débito' : 'Valor crédito de la partida'}
-                        className="w-full font-mono text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 text-right disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                        className="w-full font-mono text-xs border border-gray-200 rounded-lg px-1.5 py-1 focus:outline-none focus:ring-1 text-right disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                         value={line.credito}
                         onChange={e => updateLine(line.id, 'credito', e.target.value)}
                         onClick={e => e.stopPropagation()}
@@ -767,7 +766,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
                         data-line-field="concepto"
                         readOnly
                         title="Concepto de la partida; al cargar un documento se conserva el detalle original"
-                        className="w-full cursor-default bg-gray-50 text-xs text-gray-600 border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1"
+                        className="w-full cursor-default bg-gray-50 text-xs text-gray-600 border border-gray-200 rounded-lg px-1.5 py-1 focus:outline-none focus:ring-1"
                         value={line.concepto}
                         onClick={e => e.stopPropagation()}
                         placeholder="Desde cabecera"
@@ -841,16 +840,16 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
 
       {/* Confirm dialog */}
       {showConfirm && !posted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-md mx-4 p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45">
+          <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-md mx-4 p-6">
             <h3 className="text-sm font-semibold text-gray-800 mb-2">Confirmar contabilización</h3>
             <p className="text-xs text-gray-600 mb-1">Comprobante: <strong>{comprobante}</strong></p>
             <p className="text-xs text-gray-600 mb-1">Período: <strong>{periodo}</strong></p>
             <p className="text-xs text-gray-600 mb-1">Líneas: <strong>{lineas.filter(l => parseCOP(l.debito) > 0 || parseCOP(l.credito) > 0).length}</strong></p>
             <p className="text-xs text-gray-600 mb-4">Total: <strong className="font-mono">{fmtCOP(totalDeb)}</strong></p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setShowConfirm(false)} className="text-xs px-4 py-2 rounded border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>
-              <button disabled={contabilizando} onClick={() => void confirmarPost()} className="text-xs px-4 py-2 rounded text-white font-medium disabled:cursor-wait disabled:opacity-60" style={{ backgroundColor: '#0073C0' }}>
+              <button onClick={() => setShowConfirm(false)} className="text-xs px-4 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50">Cancelar</button>
+              <button disabled={contabilizando} onClick={() => void confirmarPost()} className="text-xs px-4 py-2 text-white font-medium disabled:cursor-wait disabled:opacity-60 btn-fx">
                 {contabilizando ? 'Grabando en Advantage…' : 'Contabilizar'}
               </button>
             </div>
@@ -859,8 +858,8 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
       )}
 
       {posted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-sm mx-4 p-6 text-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45">
+          <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-sm mx-4 p-6 text-center">
             <div className="text-4xl mb-3 text-green-500">✓</div>
             <h3 className="text-sm font-semibold text-gray-800 mb-1">Comprobante contabilizado</h3>
             <p className="text-xs text-gray-500">El movimiento fue registrado directamente en Advantage.</p>
@@ -871,8 +870,7 @@ export default function CapturaDirecta({ cia, onCrearLote }: { cia: string; onCr
             )}
             <button
               onClick={nuevaCaptura}
-              className="text-xs px-4 py-2 rounded text-white font-medium"
-              style={{ backgroundColor: '#0073C0' }}
+              className="text-xs px-4 py-2 text-white font-medium btn-fx"
             >
               Nuevo comprobante
             </button>

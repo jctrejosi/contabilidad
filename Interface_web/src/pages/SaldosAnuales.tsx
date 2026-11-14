@@ -74,11 +74,11 @@ export default function SaldosAnuales({ cia }: { cia: string }) {
     <div className="max-w-screen-2xl space-y-4 p-4">
       <div>
         <div className="mb-1 text-xs text-gray-400">Consultas / Saldos anuales</div>
-        <h1 className="text-lg font-semibold text-gray-800">Saldos y comportamiento anual</h1>
+        <h1 className="text-2xl font-semibold text-[#002D49]">Saldos y comportamiento anual</h1>
         <p className="mt-1 text-xs text-gray-500">Consulte el saldo anterior, movimiento y saldo de un período; abra una cuenta para ver su comportamiento del año.</p>
       </div>
 
-      <div className="rounded border border-gray-200 bg-white p-4">
+      <div className="rounded-[18px] border border-gray-200 bg-white p-4">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[110px_170px_220px_1fr_auto]">
           <Field label="Año"><input value={year} readOnly className={`${INPUT} bg-gray-50 font-mono`} /></Field>
           <Field label="Período">
@@ -104,13 +104,13 @@ export default function SaldosAnuales({ cia }: { cia: string }) {
               </label>)}
             </div>
           </fieldset>
-          <div className="flex items-end"><button type="button" onClick={() => consult(1)} disabled={loading} className="rounded bg-petroleum-500 px-5 py-2 text-xs font-medium text-white disabled:opacity-60">{loading ? 'Consultando…' : 'Consultar'}</button></div>
+          <div className="flex items-end"><button type="button" onClick={() => consult(1)} disabled={loading} className="rounded bg-petroleum-500 px-5 py-2 text-xs font-medium text-white disabled:opacity-60 btn-fx">{loading ? 'Consultando…' : 'Consultar'}</button></div>
         </div>
       </div>
 
       {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="overflow-hidden rounded border border-gray-200 bg-white">
+      <div className="overflow-hidden rounded-[18px] border border-gray-200 bg-white">
         <div className="table-fixed-header overflow-auto" style={{ maxHeight: '52vh' }}>
           <table className="w-full text-xs">
             <thead className="border-b border-gray-200 bg-gray-50"><tr>
@@ -143,16 +143,16 @@ export default function SaldosAnuales({ cia }: { cia: string }) {
         <div className="flex items-center gap-3 border-t border-gray-200 px-4 py-2.5">
           <span className="text-xs text-gray-500">{result ? `${items.length} registros · página ${result.page}` : 'Sin consulta'}</span>
           {result && <div className="ml-auto flex gap-2">
-            <button type="button" disabled={result.page <= 1 || loading} onClick={() => consult(result.page - 1)} className="rounded border border-gray-200 px-3 py-1 text-xs disabled:opacity-40">← Anterior</button>
-            <button type="button" disabled={!result.hasMore || loading} onClick={() => consult(result.page + 1)} className="rounded border border-gray-200 px-3 py-1 text-xs disabled:opacity-40">Siguiente →</button>
+            <button type="button" disabled={result.page <= 1 || loading} onClick={() => consult(result.page - 1)} className="rounded-lg border border-gray-200 px-3 py-1 text-xs disabled:opacity-40">← Anterior</button>
+            <button type="button" disabled={!result.hasMore || loading} onClick={() => consult(result.page + 1)} className="rounded-lg border border-gray-200 px-3 py-1 text-xs disabled:opacity-40">Siguiente →</button>
           </div>}
         </div>
       </div>
 
-      {selected && <div className="rounded border border-gray-200 bg-white">
+      {selected && <div className="rounded-[18px] border border-gray-200 bg-white">
         <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-3">
           <div><div className="font-mono text-sm font-semibold text-gray-800">{selected.cuenta}{selected.nit ? ` · ${selected.nit}` : ''}</div><div className="text-xs text-gray-500">{selected.nombre}</div></div>
-          <button type="button" onClick={showMovements} disabled={loadingMovements} className="ml-auto rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-700 disabled:opacity-60">{loadingMovements ? 'Consultando…' : `Ver movimientos de ${MONTHS[month - 1]}`}</button>
+          <button type="button" onClick={showMovements} disabled={loadingMovements} className="ml-auto rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-700 disabled:opacity-60">{loadingMovements ? 'Consultando…' : `Ver movimientos de ${MONTHS[month - 1]}`}</button>
           <button type="button" onClick={() => { setSelected(null); setMovements(null); }} className="px-2 text-lg text-gray-400">×</button>
         </div>
         <div className="overflow-x-auto p-4">
@@ -164,7 +164,7 @@ export default function SaldosAnuales({ cia }: { cia: string }) {
         </div>
       </div>}
 
-      {movements && <div className="rounded border border-gray-200 bg-white p-4">
+      {movements && <div className="rounded-[18px] border border-gray-200 bg-white p-4">
         <div className="mb-3 flex items-center justify-between"><div className="text-sm font-semibold text-gray-800">Movimientos del período</div><button type="button" onClick={() => setMovements(null)} className="text-lg text-gray-400">×</button></div>
         <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b bg-gray-50">
           {['Fecha', 'Comprobante', 'Documento', 'NIT', 'Centro', 'Débito', 'Crédito', 'Concepto'].map((heading, index) => <th key={heading} className={`px-3 py-2 font-semibold text-gray-600 ${index === 5 || index === 6 ? 'text-right' : 'text-left'}`}>{heading}</th>)}

@@ -30,7 +30,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     return () => dialog?.close();
   }, []);
   return (
-    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <dialog ref={ref} aria-labelledby={titleId} onCancel={e => { e.preventDefault(); onClose(); }} className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-lg rounded-[20px] border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-[#002D49]/45">
       <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
         <h2 id={titleId} className="text-sm font-semibold text-gray-800">{title}</h2>
         <button type="button" onClick={onClose} aria-label="Cerrar diálogo" className="rounded px-2 text-xl text-gray-500 hover:bg-gray-100">×</button>
@@ -384,7 +384,7 @@ export default function PlanCuentas({ cia }: { cia: string }) {
       <div className="flex items-center justify-between">
         <div>
           <div className="mb-1 text-xs text-gray-400">Configuración / Plan de cuentas</div>
-          <h1 className="text-lg font-semibold text-gray-800">Plan de cuentas</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Plan de cuentas</h1>
           <p className="mt-1 text-xs text-gray-500">Catálogo maestro de cuentas contables — niveles 1, 2, 4, 6, 9 y 12</p>
         </div>
         <div className="flex items-center gap-2">
@@ -400,7 +400,7 @@ export default function PlanCuentas({ cia }: { cia: string }) {
       {errorConexion && (
         <div role="alert" className="flex items-center justify-between rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span>{errorConexion} Verifique que el servicio Python esté iniciado.</span>
-          <button type="button" onClick={cargarCuentas} className="rounded border border-red-300 bg-white px-3 py-1 text-xs font-medium hover:bg-red-100">Reintentar</button>
+          <button type="button" onClick={cargarCuentas} className="rounded-lg border border-red-300 bg-white px-3 py-1 text-xs font-medium hover:bg-red-100">Reintentar</button>
         </div>
       )}
 
@@ -415,13 +415,13 @@ export default function PlanCuentas({ cia }: { cia: string }) {
         {/* Main panel */}
         <div className="flex-1 min-w-0 space-y-3">
           {/* Toolbar */}
-          <div className="bg-white rounded border border-gray-200 p-3 flex items-center gap-3 flex-wrap">
+          <div className="bg-white rounded-[18px] border border-gray-200 p-3 flex items-center gap-3 flex-wrap">
             <input
               type="text"
               placeholder="Buscar por código o nombre..."
               value={filterText}
               onChange={e => setFilterText(e.target.value)}
-              className="text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 w-56"
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 w-56"
             />
             <div className="flex items-center gap-1">
               {([
@@ -454,7 +454,7 @@ export default function PlanCuentas({ cia }: { cia: string }) {
           </div>
 
           {view === 'table' ? (
-            <div className="bg-white rounded border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
               <div className="table-fixed-header overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b border-gray-200">
@@ -516,13 +516,13 @@ export default function PlanCuentas({ cia }: { cia: string }) {
               <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2 text-xs text-gray-500">
                 <span>{filtered.length} cuenta{filtered.length !== 1 ? 's' : ''} · Página {paginaActual} de {totalPaginas}</span>
                 <div className="flex gap-1">
-                  <button type="button" disabled={paginaActual === 1} onClick={() => setPagina(p => Math.max(1, p - 1))} className="rounded border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
-                  <button type="button" disabled={paginaActual === totalPaginas} onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))} className="rounded border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Siguiente</button>
+                  <button type="button" disabled={paginaActual === 1} onClick={() => setPagina(p => Math.max(1, p - 1))} className="rounded-lg border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Anterior</button>
+                  <button type="button" disabled={paginaActual === totalPaginas} onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))} className="rounded-lg border border-gray-200 px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40">Siguiente</button>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
               <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs">
                 <span className="w-4 shrink-0" />
                 <span className="w-20 shrink-0 font-semibold text-gray-600">Código</span>
@@ -557,7 +557,7 @@ export default function PlanCuentas({ cia }: { cia: string }) {
         {/* Detail panel */}
         {selectedCuenta && (
           <div className="w-80 shrink-0 space-y-3">
-            <div className="bg-white rounded border border-gray-200 p-4">
+            <div className="bg-white rounded-[18px] border border-gray-200 p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="font-mono font-bold text-gray-800">{selectedCuenta.codigo}</div>
@@ -585,7 +585,7 @@ export default function PlanCuentas({ cia }: { cia: string }) {
               </div>
             </div>
 
-            <div className="bg-white rounded border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-[18px] border border-gray-200 overflow-hidden">
               <div className="border-b border-gray-200 bg-petroleum-50 px-3 py-2 text-xs font-medium text-petroleum-700">
                 Saldo inicial y movimientos acumulados
               </div>
@@ -622,7 +622,7 @@ export default function PlanCuentas({ cia }: { cia: string }) {
             </div>
 
             <div className="flex gap-2">
-              <button onClick={() => abrirEditar(selectedCuenta)} className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">Editar</button>
+              <button onClick={() => abrirEditar(selectedCuenta)} className="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">Editar</button>
             </div>
           </div>
         )}

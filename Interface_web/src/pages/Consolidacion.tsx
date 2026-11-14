@@ -11,7 +11,7 @@ export default function Consolidacion() {
     <div className="p-4 space-y-4 max-w-screen-xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-base font-semibold text-gray-800">Consolidación</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Consolidación</h1>
           <p className="text-xs text-gray-500">Consolida múltiples compañías en una compañía destino de solo consolidación</p>
         </div>
       </div>
@@ -40,7 +40,7 @@ export default function Consolidacion() {
               className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded cursor-pointer font-medium ${
                 i === step ? 'text-white' : i < step ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'
               }`}
-              style={i === step ? { backgroundColor: '#0073C0' } : {}}
+              style={i === step ? { backgroundColor: '#0F70FC' } : {}}
             >
               <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs ${i < step ? 'bg-green-100 text-green-700' : i === step ? 'bg-white/30' : 'bg-gray-200'}`}>
                 {i < step ? '✓' : i + 1}
@@ -52,7 +52,7 @@ export default function Consolidacion() {
         ))}
       </div>
 
-      <div className="bg-white rounded border border-gray-200 p-6 min-h-64">
+      <div className="bg-white rounded-[18px] border border-gray-200 p-6 min-h-64">
         {step === 0 && (
           <div className="space-y-4">
             <h3 className="text-xs font-semibold text-gray-700">Seleccionar compañías origen</h3>
@@ -135,7 +135,7 @@ export default function Consolidacion() {
                 value={confirmText}
                 onChange={e => setConfirmText(e.target.value)}
                 placeholder="VACIAR Y CONSOLIDAR"
-                className="w-full font-mono text-xs border border-gray-200 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1"
+                className="w-full font-mono text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1"
               />
             </div>
           </div>
@@ -178,7 +178,7 @@ export default function Consolidacion() {
 
       <div className="flex items-center gap-3">
         {step > 0 && step < 4 && (
-          <button onClick={() => setStep(s => s - 1)} className="text-xs px-4 py-2 border border-gray-200 rounded text-gray-600">← Atrás</button>
+          <button onClick={() => setStep(s => s - 1)} className="text-xs px-4 py-2 border border-gray-200 rounded-xl text-gray-600">← Atrás</button>
         )}
         {step < STEPS.length - 1 && (
           <button
@@ -187,7 +187,7 @@ export default function Consolidacion() {
             className={`text-xs px-4 py-2 rounded font-medium text-white transition-colors ${
               step === 3 && confirmText !== 'VACIAR Y CONSOLIDAR' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
             }`}
-            style={{ backgroundColor: step === 3 ? '#DC2626' : '#0073C0' }}
+            style={{ backgroundColor: step === 3 ? '#DC2626' : '#0F70FC' }}
           >
             {step === 3 ? '⚠ Vaciar y consolidar' : step === STEPS.length - 2 ? 'Finalizar' : 'Siguiente →'}
           </button>

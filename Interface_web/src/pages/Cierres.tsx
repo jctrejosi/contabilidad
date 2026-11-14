@@ -35,14 +35,14 @@ export default function Cierres() {
     <div className="p-4 space-y-4 max-w-screen-xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-base font-semibold text-gray-800">Cierres contables</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Cierres contables</h1>
           <p className="text-xs text-gray-500">Cierre mensual y anual del período contable — Febrero 2026</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Checklist */}
-        <div className="bg-white rounded border border-gray-200">
+        <div className="bg-white rounded-[18px] border border-gray-200">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <h2 className="text-xs font-semibold text-gray-700">Lista de verificación previa al cierre</h2>
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${canClose ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -84,31 +84,30 @@ export default function Cierres() {
         {/* Actions */}
         <div className="space-y-4">
           {/* Comprobante de cierre */}
-          <div className="bg-white rounded border border-gray-200 p-4">
+          <div className="bg-white rounded-[18px] border border-gray-200 p-4">
             <h3 className="text-xs font-semibold text-gray-700 mb-1">Generar comprobante de cierre</h3>
             <p className="text-xs text-gray-400 mb-3">Cancela cuentas de resultado (clases 4-9) contra la cuenta de resultados del ejercicio</p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Cuenta resultado</label>
-                <input defaultValue="330505" className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none" />
+                <input defaultValue="330505" className="w-full font-mono text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Comprobante</label>
-                <input defaultValue="NO" className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 focus:outline-none" />
+                <input defaultValue="NO" className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none" />
               </div>
             </div>
             <button
               onClick={() => setShowCompCierre(true)}
               disabled={!canClose}
-              className={`w-full text-xs py-2 rounded font-medium text-white transition-colors ${canClose ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
-              style={{ backgroundColor: '#0073C0' }}
+              className={`btn-fx w-full text-xs py-2 transition-colors ${canClose ? 'cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
             >
               Previsualizar y generar lote
             </button>
           </div>
 
           {/* Traslado 13-18 */}
-          <div className="bg-white rounded border border-red-200 p-4">
+          <div className="bg-white rounded-[18px] border border-red-200 p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-red-500 text-sm">⚠</span>
               <h3 className="text-xs font-semibold text-red-700">Traslado períodos 13-18 a 01-06</h3>
@@ -116,20 +115,20 @@ export default function Cierres() {
             </div>
             <p className="text-xs text-gray-500 mb-3">Traslada movimientos de períodos especiales al libro regular. Requiere simulación, respaldo y confirmación escrita obligatoria.</p>
             <button
-              className="w-full text-xs py-2 rounded font-medium border border-red-300 text-red-700 hover:bg-red-50 transition-colors"
+              className="w-full text-xs py-2 rounded-xl font-medium border border-red-300 text-red-700 hover:bg-red-50 transition-colors"
             >
               Iniciar asistente de traslado
             </button>
           </div>
 
           {/* Cierre anual */}
-          <div className="bg-white rounded border border-gray-200 p-4">
+          <div className="bg-white rounded-[18px] border border-gray-200 p-4">
             <div className="flex items-center gap-2 mb-2">
               <h3 className="text-xs font-semibold text-gray-700">Cierre anual automático</h3>
               <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-medium">En desarrollo</span>
             </div>
             <p className="text-xs text-gray-400 mb-3">Esta funcionalidad está en desarrollo. Disponible en la próxima versión.</p>
-            <button disabled className="w-full text-xs py-2 rounded border border-gray-200 text-gray-300 cursor-not-allowed">
+            <button disabled className="w-full text-xs py-2 rounded-xl border border-gray-200 text-gray-300 cursor-not-allowed">
               No disponible
             </button>
           </div>
@@ -138,8 +137,8 @@ export default function Cierres() {
 
       {/* Comprobante de cierre preview modal */}
       {showCompCierre && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-lg shadow-2xl w-full max-w-xl mx-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45">
+          <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-xl mx-4">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h3 className="text-sm font-semibold text-gray-800">Vista previa — Comprobante de cierre febrero 2026</h3>
               <button onClick={() => setShowCompCierre(false)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
@@ -175,8 +174,8 @@ export default function Cierres() {
               </div>
             </div>
             <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-100">
-              <button onClick={() => setShowCompCierre(false)} className="text-xs px-4 py-2 border border-gray-200 rounded text-gray-600">Cancelar</button>
-              <button onClick={() => setShowCompCierre(false)} className="text-xs px-4 py-2 rounded text-white font-medium" style={{ backgroundColor: '#0073C0' }}>Generar lote de cierre</button>
+              <button onClick={() => setShowCompCierre(false)} className="text-xs px-4 py-2 border border-gray-200 rounded-xl text-gray-600">Cancelar</button>
+              <button onClick={() => setShowCompCierre(false)} className="text-xs px-4 py-2 text-white font-medium btn-fx">Generar lote de cierre</button>
             </div>
           </div>
         </div>

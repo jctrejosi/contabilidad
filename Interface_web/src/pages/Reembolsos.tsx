@@ -47,8 +47,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  return <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <div className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-2xl">
+  return <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-[#002D49]/45 p-4" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-[20px] bg-white shadow-2xl">
       <div className="flex items-center justify-between border-b px-5 py-3"><h2 className="text-sm font-semibold text-gray-800">{title}</h2><button type="button" onClick={onClose} aria-label="Cerrar" className="text-xl text-gray-500">×</button></div>
       <div className="p-5">{children}</div>
     </div>
@@ -130,7 +130,7 @@ function EditorItem({ initial, centers, onSave, onClose }: {
             <button type="button" disabled={searching} onClick={() => void searchThird()} className={BUTTON}>{searching ? 'Buscando…' : 'Buscar'}</button>
           </div>
         </Field>
-        {results.length > 0 && <div className="absolute left-0 top-full z-20 mt-1 max-h-48 w-full overflow-auto rounded border border-gray-200 bg-white shadow-lg">
+        {results.length > 0 && <div className="absolute left-0 top-full z-20 mt-1 max-h-48 w-full overflow-auto rounded-[18px] border border-gray-200 bg-white shadow-lg">
           <div className="px-3 py-1 text-[11px] text-gray-500">Use ↑/↓ y Enter para seleccionar</div>
           {results.map((third, index) => <button type="button" key={third.nit} onMouseDown={event => event.preventDefault()} onClick={() => selectThird(third)} className={`block w-full px-3 py-2 text-left text-xs ${choice === index ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
             {third.nit} — {third.nombre} {third.estado !== 'Activo' ? '(inactivo)' : ''}
@@ -296,14 +296,14 @@ export default function Reembolsos({ cia, onNavigate }: { cia: string; onNavigat
 
   return <div className="mx-auto max-w-screen-xl space-y-4 p-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><div className="text-xs text-gray-400">Movimientos / Reembolsos · Compañía {cia}</div><h1 className="text-lg font-semibold text-gray-800">Reembolsos</h1><p className="mt-1 text-xs text-gray-500">Registre gastos y genere un lote para su revisión contable.</p></div>
+      <div><div className="text-xs text-gray-400">Movimientos / Reembolsos · Compañía {cia}</div><h1 className="text-2xl font-semibold text-[#002D49]">Reembolsos</h1><p className="mt-1 text-xs text-gray-500">Registre gastos y genere un lote para su revisión contable.</p></div>
       <button type="button" onClick={() => newRefund()} disabled={loading || busy} className={BUTTON}>Nuevo reembolso</button>
     </div>
     {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>}
     {message && <div role="status" className="rounded border border-green-200 bg-green-50 px-4 py-3 text-xs text-green-800">{message}</div>}
-    {loading ? <div className="rounded border bg-white p-6 text-center text-sm text-gray-500">Cargando reembolsos y catálogos…</div> : <>
+    {loading ? <div className="rounded-[18px] border bg-white p-6 text-center text-sm text-gray-500">Cargando reembolsos y catálogos…</div> : <>
       <div className="grid gap-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <aside className="rounded border border-gray-200 bg-white">
+        <aside className="rounded-[18px] border border-gray-200 bg-white">
           <div className="border-b px-4 py-3 text-sm font-semibold text-gray-800">Reembolsos guardados</div>
           {headers.length ? <div className="max-h-80 overflow-auto">{headers.map(row => <button type="button" key={row.lote} onClick={() => void openRefund(row.lote)} className={`block w-full border-b px-4 py-2.5 text-left text-xs hover:bg-gray-50 ${original === row.lote ? 'bg-petroleum-50' : ''}`}>
             <span className="block font-semibold text-gray-800">{row.lote} · {money(row.valor)}</span><span className="block truncate text-gray-500">{row.fecha} · {row.concepto}</span><span className="block text-gray-500">{row.estado}</span>
@@ -328,12 +328,12 @@ export default function Reembolsos({ cia, onNavigate }: { cia: string; onNavigat
             <p className="mt-3 text-xs text-gray-500">Ejercicio {periodo?.anio ?? '—'} · Solo se aceptan fechas de meses habilitados.</p>
             {current.estado === 'Borrador' && <div className="mt-4 flex justify-end"><button type="submit" disabled={busy} className={PRIMARY}>{busy ? 'Guardando…' : 'Guardar reembolso (F4)'}</button></div>}
           </form>
-          <section className="rounded border border-gray-200 bg-white">
+          <section className="rounded-[18px] border border-gray-200 bg-white">
             <div className="flex items-center justify-between border-b px-4 py-3"><h2 className="text-sm font-semibold text-gray-800">Ítems del reembolso</h2>{current.estado === 'Borrador' && <button ref={addItemButtonRef} type="button" onClick={() => setEditing(current.items.length)} className={BUTTON}>Agregar ítem</button>}</div>
             <div className="overflow-x-auto"><table className="w-full text-xs"><thead className="bg-gray-50 text-gray-600"><tr><th className="px-3 py-2 text-left">Tercero</th><th className="px-3 py-2 text-left">Centro</th><th className="px-3 py-2 text-left">Centro cruce</th><th className="px-3 py-2 text-left">Concepto</th><th className="px-3 py-2 text-right">Valor</th><th className="px-3 py-2" /></tr></thead><tbody className="divide-y divide-gray-100">{current.items.map((item, index) => <tr key={index}><td className="px-3 py-2 font-mono">{item.tercero}</td><td className="px-3 py-2">{item.centro}</td><td className="px-3 py-2">{item.centroCruce}</td><td className="max-w-xs truncate px-3 py-2">{item.concepto}</td><td className="px-3 py-2 text-right font-mono">{money(item.valor)}</td><td className="whitespace-nowrap px-3 py-2 text-right">{current.estado === 'Borrador' && <><button type="button" onClick={() => setEditing(index)} className="mr-2 text-petroleum-700 hover:underline">Editar</button><button type="button" onClick={() => setCurrent(previous => ({ ...previous, items: previous.items.filter((_, i) => i !== index), encabezado: { ...previous.encabezado, valorGeneral: Number(previous.items.filter((_, i) => i !== index).reduce((sum, row) => sum + row.valor, 0).toFixed(2)) } }))} className="text-red-600 hover:underline">Quitar</button></>}</td></tr>)}</tbody><tfoot className="border-t bg-gray-50"><tr><td colSpan={4} className="px-3 py-2 font-semibold">Total de ítems</td><td className="px-3 py-2 text-right font-mono font-semibold">{money(itemTotal)}</td><td /></tr></tfoot></table></div>
             {!current.items.length && <div className="p-5 text-center text-xs text-gray-500">Agregue al menos un ítem de gasto.</div>}
           </section>
-          {current.estado === 'Borrador' && original && <section className="rounded border border-gray-200 bg-white p-4"><h2 className="text-sm font-semibold text-gray-800">Generar lote contable</h2><p className="mt-1 text-xs text-gray-500">El lote se crea para revisión; luego podrá verificarlo y actualizarlo desde Lotes.</p><div className="mt-3 flex flex-wrap items-end gap-3"><Field label="Código del lote (4 caracteres)"><input maxLength={4} value={lotCode} onChange={event => setLotCode(event.target.value.toUpperCase())} className={INPUT} /></Field><button type="button" data-enter-action onClick={() => void prepareConfirmation()} disabled={busy || dirty} className={PRIMARY}>{busy ? 'Validando…' : 'Actualizar reembolso (F2)'}</button></div>{dirty && <p className="mt-2 text-xs text-amber-700">Guarde los cambios antes de confirmar.</p>}</section>}
+          {current.estado === 'Borrador' && original && <section className="rounded-[18px] border border-gray-200 bg-white p-4"><h2 className="text-sm font-semibold text-gray-800">Generar lote contable</h2><p className="mt-1 text-xs text-gray-500">El lote se crea para revisión; luego podrá verificarlo y actualizarlo desde Lotes.</p><div className="mt-3 flex flex-wrap items-end gap-3"><Field label="Código del lote (4 caracteres)"><input maxLength={4} value={lotCode} onChange={event => setLotCode(event.target.value.toUpperCase())} className={INPUT} /></Field><button type="button" data-enter-action onClick={() => void prepareConfirmation()} disabled={busy || dirty} className={PRIMARY}>{busy ? 'Validando…' : 'Actualizar reembolso (F2)'}</button></div>{dirty && <p className="mt-2 text-xs text-amber-700">Guarde los cambios antes de confirmar.</p>}</section>}
           {current.estado === 'Lote generado' && <button type="button" onClick={() => onNavigate('movimientos/lotes')} className={PRIMARY}>Ir a lotes</button>}
         </div>
       </div>

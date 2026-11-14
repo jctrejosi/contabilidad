@@ -85,16 +85,16 @@ export default function MovimientoMensual({ cia, onOpenDocumento }: Props) {
     <div className="max-w-screen-2xl space-y-4 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-base font-semibold text-gray-800">Movimiento mensual</h1>
+          <h1 className="text-2xl font-semibold text-[#002D49]">Movimiento mensual</h1>
           <p className="text-xs text-gray-500">Consulta bajo demanda de MOV01 para la compañía {cia}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-full border border-petroleum-100 bg-petroleum-50 px-3 py-1 text-xs font-medium text-petroleum-700">Advantage · MOV01 · CIA {cia}</span>
-          <button type="button" disabled={!items.length} onClick={exportarPaginaCSV} className="rounded border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar página CSV</button>
+          <button type="button" disabled={!items.length} onClick={exportarPaginaCSV} className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">↓ Exportar página CSV</button>
         </div>
       </div>
 
-      <div className="rounded border border-gray-200 bg-white p-3">
+      <div className="rounded-[18px] border border-gray-200 bg-white p-3">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
           <Filter label="Período *"><input type="month" value={periodo} onChange={event => setPeriodo(event.target.value)} className={INPUT_CLASS} /></Filter>
           <Filter label="Cuenta desde"><input inputMode="numeric" value={cuentaDesde} onChange={event => setCuentaDesde(event.target.value)} placeholder="100000" className={`${INPUT_CLASS} font-mono`} /></Filter>
@@ -103,7 +103,7 @@ export default function MovimientoMensual({ cia, onOpenDocumento }: Props) {
           <Filter label="Comprobante"><input value={comprobante} onChange={event => setComprobante(event.target.value)} placeholder="06" className={`${INPUT_CLASS} font-mono`} /></Filter>
           <Filter label="Centro"><input value={centro} onChange={event => setCentro(event.target.value)} placeholder="TFASE" className={`${INPUT_CLASS} font-mono`} /></Filter>
           <Filter label="Documento"><input value={documento} onChange={event => setDocumento(event.target.value)} placeholder="TDOCUM" className={`${INPUT_CLASS} font-mono`} /></Filter>
-          <div className="flex items-end"><button type="button" disabled={cargando} onClick={() => consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-wait disabled:opacity-60">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
+          <div className="flex items-end"><button type="button" disabled={cargando} onClick={() => consultar(1)} className="w-full rounded bg-petroleum-500 py-1.5 text-xs font-medium text-white disabled:cursor-wait disabled:opacity-60 btn-fx">{cargando ? 'Consultando…' : 'Consultar'}</button></div>
         </div>
         <p className="mt-2 text-xs text-gray-400">La base de datos solo se consulta cuando pulsa Consultar. El período y la compañía son filtros obligatorios.</p>
       </div>
@@ -111,7 +111,7 @@ export default function MovimientoMensual({ cia, onOpenDocumento }: Props) {
       {error && <div role="alert" className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="flex gap-4">
-        <div className="min-w-0 flex-1 overflow-hidden rounded border border-gray-200 bg-white">
+        <div className="min-w-0 flex-1 overflow-hidden rounded-[18px] border border-gray-200 bg-white">
           <div className="table-fixed-header overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="border-b border-gray-200 bg-gray-50"><tr>
@@ -146,14 +146,14 @@ export default function MovimientoMensual({ cia, onOpenDocumento }: Props) {
               <span className="text-xs text-gray-500">Débitos de la página: <span className="font-mono font-semibold text-gray-800">{fmtCOP(resultado.pageDebit)}</span></span>
               <span className="text-xs text-gray-500">Créditos de la página: <span className="font-mono font-semibold text-gray-800">{fmtCOP(resultado.pageCredit)}</span></span>
               <div className="ml-auto flex gap-2">
-                <button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => consultar(resultado.page - 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button>
-                <button type="button" disabled={!resultado.hasMore || cargando} onClick={() => consultar(resultado.page + 1)} className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button>
+                <button type="button" disabled={resultado.page <= 1 || cargando} onClick={() => consultar(resultado.page - 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">← Anterior</button>
+                <button type="button" disabled={!resultado.hasMore || cargando} onClick={() => consultar(resultado.page + 1)} className="rounded-lg border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 disabled:opacity-40">Siguiente →</button>
               </div>
             </>}
           </div>
         </div>
 
-        {selected && <aside className="w-72 shrink-0 space-y-3 rounded border border-gray-200 bg-white p-4">
+        {selected && <aside className="w-72 shrink-0 space-y-3 rounded-[18px] border border-gray-200 bg-white p-4">
           <div className="flex items-start justify-between"><div><div className="font-mono font-bold text-gray-800">{selected.comprobante || 'Sin comprobante'}</div><div className="mt-0.5 text-xs text-gray-500">{selected.documento || 'Sin documento'}</div></div><button type="button" onClick={() => setSelected(null)} className="text-lg leading-none text-gray-400 hover:text-gray-600">×</button></div>
           <div className="space-y-2 text-xs">
             {[
@@ -166,7 +166,7 @@ export default function MovimientoMensual({ cia, onOpenDocumento }: Props) {
           </div>
           <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-2"><div><div className="text-xs text-gray-400">Débito</div><div className="font-mono font-bold text-gray-800">{selected.debito ? fmtCOP(selected.debito) : '—'}</div></div><div><div className="text-xs text-gray-400">Crédito</div><div className="font-mono font-bold text-gray-600">{selected.credito ? fmtCOP(selected.credito) : '—'}</div></div></div>
           <div><div className="mb-1 text-xs text-gray-400">Concepto</div><div className="text-xs text-gray-700">{selected.concepto || '—'}</div></div>
-          {onOpenDocumento && <button type="button" onClick={() => onOpenDocumento({ documento: selected.documento, comprobante: selected.comprobante, tipoDocumento: selected.tipoDoc, fecha: selected.fecha })} className="w-full rounded bg-petroleum-500 py-2 text-xs font-medium text-white">Ver documento oficial →</button>}
+          {onOpenDocumento && <button type="button" onClick={() => onOpenDocumento({ documento: selected.documento, comprobante: selected.comprobante, tipoDocumento: selected.tipoDoc, fecha: selected.fecha })} className="w-full rounded bg-petroleum-500 py-2 text-xs font-medium text-white btn-fx">Ver documento oficial →</button>}
         </aside>}
       </div>
     </div>

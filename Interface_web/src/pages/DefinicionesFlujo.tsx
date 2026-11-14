@@ -35,11 +35,11 @@ export default function DefinicionesFlujo({ cia, onClose }: { cia: string; onClo
     finally { setLoading(false); }
   }
 
-  return <section className="rounded border border-gray-200 bg-white">
+  return <section className="rounded-[18px] border border-gray-200 bg-white">
     <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
       <div><h2 className="text-base font-semibold text-petroleum-800">Definición de cuentas — flujo comparativo</h2>
         <p className="text-xs text-gray-500">Configure los niveles, la operación y el presupuesto de esta compañía.</p></div>
-      <button type="button" onClick={onClose} className="rounded border border-gray-300 px-3 py-1.5 text-sm">Volver a informes</button>
+      <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm">Volver a informes</button>
     </div>
     <div className="grid gap-5 p-5 lg:grid-cols-[1fr_350px]">
       <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-petroleum-50 text-petroleum-900"><tr>
@@ -59,8 +59,8 @@ export default function DefinicionesFlujo({ cia, onClose }: { cia: string; onClo
         <label className="block text-xs font-medium text-gray-600">Presupuesto<input required type="number" min={0} step="0.01" className={INPUT} value={edit.presupuesto} onChange={e => setEdit(p => ({ ...p, presupuesto: Number(e.target.value) }))} /></label>
         <label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={edit.valorBase} onChange={e => setEdit(p => ({ ...p, valorBase: e.target.checked }))} />Valor base para porcentajes</label>
         {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
-        <div className="flex gap-2"><button disabled={loading} type="submit" className="rounded bg-petroleum-500 px-4 py-2 text-xs font-medium text-white disabled:opacity-50">Guardar</button>
-          {original && <button type="button" className="rounded border border-gray-300 px-4 py-2 text-xs" onClick={() => { setEdit({ ...EMPTY }); setOriginal(''); }}>Cancelar edición</button>}</div>
+        <div className="flex gap-2"><button disabled={loading} type="submit" className="rounded bg-petroleum-500 px-4 py-2 text-xs font-medium text-white disabled:opacity-50 btn-fx">Guardar</button>
+          {original && <button type="button" className="rounded-xl border border-gray-300 px-4 py-2 text-xs" onClick={() => { setEdit({ ...EMPTY }); setOriginal(''); }}>Cancelar edición</button>}</div>
       </form>
     </div>
     {confirmNivel && <div className="border-t border-red-100 bg-red-50 px-5 py-4 text-sm text-red-900">
@@ -69,7 +69,7 @@ export default function DefinicionesFlujo({ cia, onClose }: { cia: string; onClo
         const item = items.find(row => row.nivel === confirmNivel);
         if (item) remove(item);
       }}>Sí, eliminar</button>
-        <button type="button" className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs" onClick={() => setConfirmNivel('')}>Cancelar</button></div>
+        <button type="button" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs" onClick={() => setConfirmNivel('')}>Cancelar</button></div>
     </div>}
   </section>;
 }

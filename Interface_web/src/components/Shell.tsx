@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { PERIODO } from '../data/mock';
 import { useModuleUser } from './ModuleUser';
 import type { CompaniaSesion } from '../types';
@@ -177,6 +177,43 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+const HEADER_BG = 'radial-gradient(700px 320px at 100% 0%, rgba(31,206,196,.22), transparent 70%), radial-gradient(600px 300px at 0% 100%, rgba(15,112,252,.3), transparent 70%), linear-gradient(120deg, #003760, #002D49)';
+
+/** Opción suelta que va como pestaña directa después de los grupos. */
+const DIRECT_ITEMS: NavItem[] = [
+  { id: 'reprocesos', label: 'Reprocesos y auditoría', icon: '↺' },
+];
+
+/** Grupos que se muestran directamente en la fila 2. */
+const MAIN_GROUPS = NAV_GROUPS.filter(group => group.id !== 'admin');
+
+/**
+ * Lo menos usado pasa a "Más" (sección 7.2): Administración como subgrupo,
+ * Cierres y Consolidación como opciones. Se conserva el orden del menú anterior.
+ */
+const MORE_GROUP: NavGroup = {
+  id: 'mas',
+  label: 'Más',
+  icon: '⋯',
+  items: [
+    ...NAV_GROUPS.filter(group => group.id === 'admin').map(group => ({ label: group.label, icon: group.icon, children: group.items as NavItem[] })),
+    { id: 'cierres', label: 'Cierres', icon: '⊟' },
+    { id: 'consolidacion', label: 'Consolidación', icon: '⊕' },
+  ],
+};
+
+const TAB_BASE = 'relative flex shrink-0 items-center gap-2 whitespace-nowrap px-3 py-3 text-[13px] transition-colors sm:px-4 sm:py-3.5 sm:text-[13.5px]';
+const TAB_ACTIVE = 'font-semibold text-white';
+const TAB_IDLE = 'font-medium text-white/70 hover:bg-white/5 hover:text-white';
+
+function ActiveLine() {
+  return <span className="absolute inset-x-3 bottom-0 h-[3px] rounded-t bg-gradient-to-r from-[#21CC93] to-[#33B1FF]" />;
+}
+
+function countOptions(group: NavGroup): number {
+  return group.items.reduce((total, item) => total + ('children' in item ? item.children.length : 1), 0);
+}
+
 interface ShellProps {
   currentPage: NavPage;
   onNavigate: (page: NavPage) => void;
@@ -186,21 +223,64 @@ interface ShellProps {
   badgeAlerts?: number;
 }
 
+interface OpenMenu {
+  groupId: string;
+  left: number;
+  top: number;
+  /** Menos de 768 px: el desplegable se abre como panel a todo el ancho. */
+  mobile: boolean;
+}
+
 export default function Shell({ currentPage, onNavigate, compania, onChangeCompany, children, badgeAlerts = 0 }: ShellProps) {
   const moduleUser = useModuleUser();
-  // El panel lateral se muestra completo; sus grupos de opciones comienzan
-  // cerrados y el usuario despliega únicamente el que necesita.
-  const [collapsed, setCollapsed] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [showNotif, setShowNotif] = useState(false);
+  // Solo un desplegable de grupo abierto a la vez.
+  const [openMenu, setOpenMenu] = useState<OpenMenu | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLDivElement>(null);
 
-  function toggleGroup(id: string) {
-    setExpandedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  useEffect(() => {
+    const onResize = () => setOpenMenu(null);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const onPointer = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if ((target as Element).closest?.('[data-nav-group]')) return;
+      setOpenMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenMenu(null);
+    };
+    const nav = navRef.current;
+    const onScroll = () => setOpenMenu(null);
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    nav?.addEventListener('scroll', onScroll);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+      nav?.removeEventListener('scroll', onScroll);
+    };
+  }, [openMenu]);
+
+  function toggleGroup(groupId: string, button: HTMLElement) {
+    if (openMenu?.groupId === groupId) {
+      setOpenMenu(null);
+      return;
+    }
+    const rect = button.getBoundingClientRect();
+    setShowNotif(false);
+    setOpenMenu({ groupId, left: rect.left, top: rect.bottom + 6, mobile: window.innerWidth < 768 });
+  }
+
+  function go(page: NavPage) {
+    setOpenMenu(null);
+    onNavigate(page);
   }
 
   const periodoLabel = `${PERIODO.nombre}`;
@@ -208,275 +288,252 @@ export default function Shell({ currentPage, onNavigate, compania, onChangeCompa
     (group.id === 'informes' && currentPage.startsWith('informes/')) ||
     group.items.some(i => 'children' in i ? i.children.some(child => child.id === currentPage) : i.id === currentPage);
 
-  return (
-    <div className="flex h-screen overflow-hidden bg-gray-100 font-sans">
-      {/* Sidebar */}
-      <aside
-        className={`flex flex-col shrink-0 transition-all duration-200 sidebar-scroll overflow-y-auto ${collapsed ? 'w-16' : 'w-64'}`}
-        style={{ backgroundColor: '#001F4C', color: '#C8F0FD' }}
+  const initials = moduleUser.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+  const openGroup = openMenu ? [...NAV_GROUPS, MORE_GROUP].find(group => group.id === openMenu.groupId) ?? null : null;
+
+  function renderMenu(group: NavGroup, anchor: OpenMenu) {
+    const isMobile = anchor.mobile;
+    const total = countOptions(group);
+    const columns = isMobile || total <= 8 ? 1 : total <= 16 ? 2 : 3;
+    const width = isMobile ? undefined : columns === 1 ? 240 : columns === 2 ? 500 : 760;
+    const style: CSSProperties = isMobile
+      ? { left: 12, right: 12, top: anchor.top, maxHeight: '70vh' }
+      : { left: Math.max(16, Math.min(anchor.left, window.innerWidth - (width ?? 240) - 16)), top: anchor.top, width, maxHeight: `calc(100vh - ${anchor.top + 16}px)` };
+
+    const option = (item: NavItem, nested = false) => (
+      <button
+        key={item.id}
+        type="button"
+        role="menuitem"
+        onClick={() => go(item.id)}
+        aria-current={currentPage === item.id ? 'page' : undefined}
+        className={`flex min-h-9 w-full items-center rounded-lg px-3 py-2 text-left text-[13.5px] transition-colors hover:bg-[#F7F7F7] ${
+          nested ? 'pl-6' : ''
+        } ${currentPage === item.id ? 'font-semibold text-[#0F70FC]' : 'font-medium text-[#002D49]'}`}
       >
-        {/* Brand */}
-        <div
-          className={`flex flex-col items-center shrink-0 border-b ${
-            collapsed ? 'px-2 py-4' : 'gap-3 px-4 py-4'
-          }`}
-          style={{ borderColor: 'rgba(255,255,255,0.08)' }}
-        >
-          <div
-            className={`flex items-center justify-center bg-white shadow-sm ${
-              collapsed ? 'h-10 w-12 rounded-md px-1' : 'w-full rounded-lg px-4 py-3'
-            }`}
-          >
-            <img
-              src={`${import.meta.env.BASE_URL}dsi-logo.png`}
-              alt="DSI S.A."
-              width={176}
-              height={51}
-              className={`block h-auto object-contain ${collapsed ? 'w-10' : 'w-44 max-w-full'}`}
-            />
-          </div>
-          {!collapsed && (
-            <div className="w-full min-w-0 text-center">
-              <div className="text-white font-semibold text-sm leading-tight">CONTABDSI</div>
-              <div className="text-xs mt-1" style={{ color: '#7BDCFB' }}>Contabilidad General</div>
+        {item.label}
+      </button>
+    );
+
+    return (
+      <div
+        ref={menuRef}
+        role="menu"
+        aria-label={group.label}
+        className="fixed z-50 overflow-y-auto rounded-[14px] border border-[#E6E9EC] bg-white p-2 shadow-[0_20px_40px_-16px_rgba(0,45,73,.45)]"
+        style={style}
+      >
+        <div className="px-3 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-[#8A97A3]">{group.label}</div>
+        <div style={{ columnCount: columns, columnGap: 8 }}>
+          {group.items.map(item => 'children' in item ? (
+            <div key={item.label} className="break-inside-avoid">
+              <div className="px-3 pb-1 pt-2 text-[12px] font-semibold text-[#5B6B7A]">{item.label}</div>
+              {item.children.map(child => option(child, true))}
             </div>
-          )}
-        </div>
-
-        {/* Company info (collapsed: just icon) */}
-        {!collapsed && (
-          <div className="px-4 py-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)', backgroundColor: 'rgba(0,0,0,0.15)' }}>
-            <div className="text-xs font-medium text-white truncate">{compania.nombre}</div>
-            <div className="text-xs mt-0.5 truncate" style={{ color: '#7BDCFB' }}>NIT {compania.nit || 'No registrado'}</div>
-          </div>
-        )}
-
-        {/* Nav */}
-        <nav className="flex-1 py-2 overflow-y-auto">
-          {/* Inicio */}
-          <button
-            onClick={() => onNavigate('dashboard')}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-              currentPage === 'dashboard'
-                ? 'text-white font-medium'
-                : 'hover:bg-white/5'
-            }`}
-            style={currentPage === 'dashboard' ? { backgroundColor: '#0073C0', color: '#fff' } : {}}
-          >
-            <span className="text-base w-5 text-center shrink-0">⌂</span>
-            {!collapsed && <span>Inicio</span>}
-          </button>
-
-          {/* Reprocesos - standalone */}
-          {NAV_GROUPS.map(group => (
-            <div key={group.id}>
-              <button
-                onClick={() => {
-                  if (collapsed) return;
-                  toggleGroup(group.id);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${
-                  isGroupActive(group) ? 'text-white' : ''
-                }`}
-              >
-                <span className="text-base w-5 text-center shrink-0 font-mono">{group.icon}</span>
-                {!collapsed && (
-                  <>
-                    <span className="flex-1 text-left">{group.label}</span>
-                    <span className="text-xs opacity-60">{expandedGroups.has(group.id) ? '▾' : '▸'}</span>
-                  </>
-                )}
-              </button>
-              {!collapsed && expandedGroups.has(group.id) && (
-                <div className="ml-8 border-l" style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
-                  {group.items.map(item => 'children' in item ? (
-                    <div key={item.label}>
-                      <button type="button" onClick={() => toggleGroup('medios/asignacion')}
-                        className="flex w-full items-center gap-2 py-2 pl-3 pr-4 text-left text-xs transition-colors hover:bg-white/5 hover:text-white"
-                        aria-expanded={expandedGroups.has('medios/asignacion')}>
-                        <span className="flex-1">{item.label}</span><span className="opacity-60">{expandedGroups.has('medios/asignacion') ? '▾' : '▸'}</span>
-                      </button>
-                      {expandedGroups.has('medios/asignacion') && <div className="ml-3 border-l border-white/10">
-                        {item.children.map(child => <button key={child.id} type="button" onClick={() => onNavigate(child.id)}
-                          className={`w-full py-2 pl-3 pr-2 text-left text-xs transition-colors ${currentPage === child.id ? 'bg-white/10 font-medium text-white' : 'hover:bg-white/5 hover:text-white'}`}>
-                          {child.label}
-                        </button>)}
-                      </div>}
-                    </div>
-                  ) : (
-                    <button
-                      key={item.id}
-                      onClick={() => onNavigate(item.id)}
-                      className={`w-full flex items-center gap-2 pl-3 pr-4 py-2 text-xs transition-colors ${
-                        currentPage === item.id
-                          ? 'text-white font-medium border-l-2'
-                          : 'hover:text-white hover:bg-white/5'
-                      }`}
-                      style={
-                        currentPage === item.id
-                          ? { borderLeftColor: '#00B0F2', color: '#fff', backgroundColor: 'rgba(0,176,242,0.14)' }
-                          : {}
-                      }
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          ) : (
+            <div key={item.id} className="break-inside-avoid">{option(item)}</div>
           ))}
-
-          {/* Reprocesos standalone */}
-          {(['reprocesos', 'cierres', 'consolidacion'] as NavPage[]).map(p => {
-            const labels: Record<string, string> = { reprocesos: 'Reprocesos y auditoría', cierres: 'Cierres', consolidacion: 'Consolidación' };
-            const icons: Record<string, string> = { reprocesos: '↺', cierres: '⊟', consolidacion: '⊕' };
-            return (
-              <button
-                key={p}
-                onClick={() => onNavigate(p)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
-                  currentPage === p ? 'text-white font-medium' : 'hover:bg-white/5'
-                }`}
-                style={currentPage === p ? { backgroundColor: '#0073C0' } : {}}
-              >
-                <span className="text-base w-5 text-center shrink-0 font-mono">{icons[p]}</span>
-                {!collapsed && <span>{labels[p]}</span>}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Collapse toggle */}
-        <div className="shrink-0 border-t p-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-          <button
-            onClick={() => setCollapsed(c => !c)}
-            className="w-full flex items-center justify-center gap-2 py-1.5 text-xs rounded transition-colors hover:bg-white/10"
-            style={{ color: '#7BDCFB' }}
-          >
-            <span>{collapsed ? '»' : '«'}</span>
-            {!collapsed && <span>Contraer</span>}
-          </button>
         </div>
-      </aside>
+      </div>
+    );
+  }
 
-      {/* Main area */}
-      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-        {/* Header */}
-        <header className="shrink-0 bg-white border-b border-gray-200 flex items-center gap-3 px-4 h-14 z-20">
-          {/* Company pill */}
-          <button
-            type="button"
-            onClick={onChangeCompany}
-            title="Cambiar compañía"
-            className="group flex items-center gap-2 rounded px-3 py-1.5 text-xs font-medium transition hover:ring-1 hover:ring-[#0073C0]"
-            style={{ backgroundColor: '#EFFAFF', color: '#001F4C' }}
-          >
-            <span className="font-semibold">{compania.codigo}</span>
-            <span className="text-gray-400">|</span>
-            <span className="truncate max-w-40">{compania.nombre}</span>
-            <span className="hidden text-[10px] text-[#0073C0] group-hover:inline">Cambiar</span>
-          </button>
+  return (
+    <div className="flex h-screen flex-col overflow-hidden bg-[#F7F7F7] font-sans">
+      <header className="relative z-30 shrink-0 text-white" style={{ background: HEADER_BG }}>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+          <img src={`${import.meta.env.BASE_URL}fortuner-isotipo.png`} alt="" className="absolute -top-16 right-[6%] w-[180px] select-none opacity-[.08]" />
+        </div>
 
-          <div className="text-gray-300 text-xs">|</div>
-
-          {/* Period + status */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-700">{PERIODO.anio}</span>
-            <span className="text-gray-300 text-xs">·</span>
-            <span className="text-xs text-gray-600">{periodoLabel}</span>
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                PERIODO.estado === 'Abierto'
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-red-100 text-red-700'
-              }`}
-            >
-              {PERIODO.estado}
-            </span>
-          </div>
-
-          {/* Search */}
-          <div className="flex-1 max-w-xs ml-2">
-            <div className="relative">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">⌕</span>
-              <input
-                type="text"
-                placeholder="Buscar cuenta, documento, tercero..."
-                className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded bg-gray-50 focus:outline-none focus:ring-1 focus:border-petroleum-500"
-                style={{ '--tw-ring-color': '#0073C0' } as React.CSSProperties}
+        <div className="relative px-4 sm:px-6">
+          {/* Fila 1: identidad y contexto */}
+          <div className="flex items-center justify-between gap-3 py-3 sm:py-4">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+              <img
+                src={`${import.meta.env.BASE_URL}fortuner-logo-oscuro.png`}
+                alt="Fortuner Software Empresarial"
+                className="h-auto w-[170px] shrink-0 sm:w-[220px]"
               />
+              <span className="hidden h-8 w-px bg-white/15 lg:block" />
+              <span className="hidden truncate text-lg font-semibold lg:block" title="Contabilidad General">Contabilidad</span>
             </div>
-          </div>
 
-          <div className="flex-1" />
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              {/* Chip de compañía: conserva la acción de cambiar compañía */}
+              <button
+                type="button"
+                onClick={onChangeCompany}
+                title={`Cambiar compañía · NIT ${compania.nit || 'No registrado'}`}
+                aria-label={`Compañía ${compania.codigo} ${compania.nombre}. Cambiar compañía`}
+                className="group inline-flex min-w-0 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-white/14"
+              >
+                <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-[#21CC93] shadow-[0_0_0_3px_rgba(33,204,147,.25)]" />
+                <span className="font-semibold">{compania.codigo}</span>
+                <span className="hidden max-w-48 truncate xl:inline">· {compania.nombre}</span>
+              </button>
 
-          {/* Notifications */}
-          <div className="relative">
-            <button
-              onClick={() => setShowNotif(v => !v)}
-              className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-            >
-              <span className="text-base">🔔</span>
-              {badgeAlerts > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                  {badgeAlerts}
+              {/* Chip de periodo */}
+              <span className="hidden items-center gap-2 whitespace-nowrap rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-[12.5px] font-medium lg:inline-flex">
+                {PERIODO.anio} · {periodoLabel}
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    PERIODO.estado === 'Abierto' ? 'bg-[#21CC93]/20 text-[#7FF0CB]' : 'bg-red-500/25 text-red-100'
+                  }`}
+                >
+                  {PERIODO.estado}
                 </span>
-              )}
-            </button>
-            {showNotif && (
-              <div className="absolute right-0 top-10 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-800">Notificaciones</span>
-                </div>
-                <div className="py-1 max-h-60 overflow-y-auto">
-                  <div className="px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50">
-                    <div className="text-xs text-red-600 font-medium">Lote NOM2 tiene 2 errores</div>
-                    <div className="text-xs text-gray-400 mt-0.5">Hace 2 horas</div>
-                  </div>
-                  <div className="px-4 py-2.5 hover:bg-gray-50 border-b border-gray-50">
-                    <div className="text-xs text-amber-600 font-medium">Lote DEP-01 pendiente de aprobación</div>
-                    <div className="text-xs text-gray-400 mt-0.5">Hace 3 días</div>
-                  </div>
-                  <div className="px-4 py-2.5 hover:bg-gray-50">
-                    <div className="text-xs text-blue-600 font-medium">Retenciones sin acumular en feb 2026</div>
-                    <div className="text-xs text-gray-400 mt-0.5">Hoy</div>
-                  </div>
+              </span>
+
+              {/* Buscador existente */}
+              <div className="hidden w-64 2xl:block">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-white/60">⌕</span>
+                  <input
+                    type="text"
+                    placeholder="Buscar cuenta, documento, tercero..."
+                    className="w-full rounded-xl border border-white/10 bg-white/10 py-2 pl-8 pr-3 text-xs text-white placeholder:text-white/50 focus:bg-white focus:text-[#002D49] focus:placeholder:text-[#8A97A3]"
+                  />
                 </div>
               </div>
-            )}
+
+              {/* Notificaciones */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setOpenMenu(null); setShowNotif(v => !v); }}
+                  aria-label="Notificaciones"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-[10px] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                >
+                  <span className="text-base">🔔</span>
+                  {badgeAlerts > 0 && (
+                    <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">
+                      {badgeAlerts}
+                    </span>
+                  )}
+                </button>
+                {showNotif && (
+                  <div className="absolute right-0 top-12 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-[14px] border border-[#E6E9EC] bg-white text-[#002D49] shadow-[0_20px_40px_-16px_rgba(0,45,73,.45)]">
+                    <div className="border-b border-gray-100 px-4 py-3">
+                      <span className="text-sm font-semibold text-gray-800">Notificaciones</span>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto py-1">
+                      <div className="border-b border-gray-50 px-4 py-2.5 hover:bg-gray-50">
+                        <div className="text-xs font-medium text-red-600">Lote NOM2 tiene 2 errores</div>
+                        <div className="mt-0.5 text-xs text-gray-400">Hace 2 horas</div>
+                      </div>
+                      <div className="border-b border-gray-50 px-4 py-2.5 hover:bg-gray-50">
+                        <div className="text-xs font-medium text-amber-600">Lote DEP-01 pendiente de aprobación</div>
+                        <div className="mt-0.5 text-xs text-gray-400">Hace 3 días</div>
+                      </div>
+                      <div className="px-4 py-2.5 hover:bg-gray-50">
+                        <div className="text-xs font-medium text-blue-600">Retenciones sin acumular en feb 2026</div>
+                        <div className="mt-0.5 text-xs text-gray-400">Hoy</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Asistente contable */}
+              <BotChat
+                compania={compania}
+                periodo={`${PERIODO.anio} · ${periodoLabel}`}
+                usuario={moduleUser.name}
+              />
+
+              {/* Usuario */}
+              <div className="flex shrink-0 items-center gap-2.5 rounded-xl bg-white/8 py-1.5 pl-1.5 pr-1.5 md:pr-3">
+                <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-gradient-to-br from-[#21CC93] to-[#0F70FC] text-[13px] font-semibold">
+                  {initials}
+                </span>
+                <span className="hidden md:block">
+                  <span className="block max-w-40 truncate text-[13px] font-semibold leading-tight">{moduleUser.name}</span>
+                  <span className="block text-[11px] text-white/60">{moduleUser.code}{moduleUser.administrator ? ' · Administrador' : ''}</span>
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Asistente contable (botón al lado del usuario) */}
-          <BotChat
-            compania={compania}
-            periodo={`${PERIODO.anio} · ${periodoLabel}`}
-            usuario={moduleUser.name}
-          />
+          {/* Fila 2: navegación del módulo */}
+          <nav aria-label="Navegación de Contabilidad" className="-mx-4 flex border-t border-white/10 sm:-mx-6">
+            <div ref={navRef} className="flex min-w-0 flex-1 gap-0.5 overflow-x-auto px-2 [scrollbar-width:none] sm:px-4">
+              <button
+                type="button"
+                onClick={() => go('dashboard')}
+                aria-current={currentPage === 'dashboard' ? 'page' : undefined}
+                className={`${TAB_BASE} ${currentPage === 'dashboard' ? TAB_ACTIVE : TAB_IDLE}`}
+              >
+                <span className={`text-[17px] leading-none ${currentPage === 'dashboard' ? 'text-[#21CC93]' : ''}`}>⌂</span>
+                Inicio
+                {currentPage === 'dashboard' && <ActiveLine />}
+              </button>
 
-          {/* User */}
-          <div className="flex items-center gap-2 pl-2 border-l border-gray-200">
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-              style={{ backgroundColor: '#0073C0' }}
-            >
-              {moduleUser.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase()}
+              {MAIN_GROUPS.map(group => {
+                const active = isGroupActive(group);
+                const open = openMenu?.groupId === group.id;
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    data-nav-group={group.id}
+                    onClick={event => toggleGroup(group.id, event.currentTarget)}
+                    aria-haspopup="menu"
+                    aria-expanded={open}
+                    className={`${TAB_BASE} ${active ? TAB_ACTIVE : TAB_IDLE} ${open ? 'bg-white/5 text-white' : ''}`}
+                  >
+                    <span className={`font-mono text-[17px] leading-none ${active ? 'text-[#21CC93]' : ''}`}>{group.icon}</span>
+                    {group.label}
+                    <span className={`text-[10px] opacity-70 transition-transform ${open ? 'rotate-180' : ''}`}>▾</span>
+                    {active && <ActiveLine />}
+                  </button>
+                );
+              })}
+
+              {DIRECT_ITEMS.map(item => {
+                const active = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => go(item.id)}
+                    aria-current={active ? 'page' : undefined}
+                    className={`${TAB_BASE} ${active ? TAB_ACTIVE : TAB_IDLE}`}
+                  >
+                    <span className={`font-mono text-[17px] leading-none ${active ? 'text-[#21CC93]' : ''}`}>{item.icon}</span>
+                    {item.label}
+                    {active && <ActiveLine />}
+                  </button>
+                );
+              })}
             </div>
-            <div className="hidden md:block">
-              <div className="text-xs font-medium text-gray-800 leading-tight">{moduleUser.name}</div>
-              <div className="text-xs text-gray-400">{moduleUser.code}{moduleUser.administrator ? ' · Administrador' : ''}</div>
+
+            <div className="shrink-0 border-l border-white/10 pr-2 sm:pr-4">
+              <button
+                type="button"
+                data-nav-group={MORE_GROUP.id}
+                onClick={event => toggleGroup(MORE_GROUP.id, event.currentTarget)}
+                aria-haspopup="menu"
+                aria-expanded={openMenu?.groupId === MORE_GROUP.id}
+                className={`${TAB_BASE} ${isGroupActive(MORE_GROUP) ? TAB_ACTIVE : TAB_IDLE} ${openMenu?.groupId === MORE_GROUP.id ? 'bg-white/5 text-white' : ''}`}
+              >
+                Más
+                <span className={`text-[10px] opacity-70 transition-transform ${openMenu?.groupId === MORE_GROUP.id ? 'rotate-180' : ''}`}>▾</span>
+                {isGroupActive(MORE_GROUP) && <ActiveLine />}
+              </button>
             </div>
-          </div>
-        </header>
+          </nav>
+        </div>
+      </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-auto">
-          {children}
-        </main>
-      </div>
+      {openGroup && openMenu && renderMenu(openGroup, openMenu)}
 
-      {/* Notif backdrop */}
+      {/* Contenido a todo el ancho; solo esta zona se desplaza */}
+      <main className="min-h-0 flex-1 overflow-auto">
+        {children}
+      </main>
+
       {showNotif && (
-        <div className="fixed inset-0 z-40" onClick={() => setShowNotif(false)} />
+        <div className="fixed inset-0 z-20" onClick={() => setShowNotif(false)} />
       )}
     </div>
   );
